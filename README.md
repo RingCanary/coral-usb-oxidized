@@ -140,57 +140,131 @@ cargo run --example delegate_usage
 
 ### TensorFlow Lite Integration
 
-This SDK provides direct integration with TensorFlow Lite through FFI bindings to the TensorFlow Lite C API. This allows you to load TensorFlow Lite models, create interpreters, and run inference with the EdgeTPU delegate for hardware acceleration:
+This SDK provides direct integration with TensorFlow Lite through FFI bindings to the TensorFlow Lite C API. This allows you to load TensorFlow Lite models, create interpreters, and run inference with the EdgeTPU delegate for hardware acceleration.
+
+#### Current Status and Known Issues
+
+We have implemented several examples demonstrating TensorFlow Lite integration with the EdgeTPU:
+
+1. **Basic Model Loading**: Successfully loading TensorFlow Lite models
+2. **Standard TensorFlow Lite Inference**: Running inference with standard (non-EdgeTPU) models works correctly
+3. **EdgeTPU Integration**: We've encountered some challenges when integrating the EdgeTPU delegate with TensorFlow Lite:
+   - Standard TensorFlow Lite models load and run successfully
+   - EdgeTPU-optimized models can be loaded but require the EdgeTPU delegate for inference
+   - When attempting to create a TensorFlow Lite interpreter with the EdgeTPU delegate, a segmentation fault occurs
+
+#### Example Usage
 
 ```rust
-use coral_usb_oxidized::{EdgeTPUDelegate, CoralInterpreter};
+use coral_usb_oxidized::{CoralDevice, version};
 use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Path to your TensorFlow Lite model file
-    let model_path = "model.tflite";
+    // Print the EdgeTPU library version
+    println!("EdgeTPU Library Version: {}", version());
+    
+    // Create a Coral device
+    let device = CoralDevice::new()?;
+    println!("Coral device created successfully!");
     
     // Create an EdgeTPU delegate
-    let delegate = EdgeTPUDelegate::new()?;
+    let delegate = device.create_delegate()?;
+    println!("EdgeTPU delegate created successfully!");
     
-    // Create a TensorFlow Lite interpreter with the EdgeTPU delegate
-    let interpreter = CoralInterpreter::new(model_path, &delegate)?;
-    
-    // Set the number of threads to use for inference
-    interpreter.set_num_threads(4)?;
-    
-    // Get input tensor information
-    let input_count = interpreter.input_tensor_count();
-    println!("Input tensor count: {}", input_count);
-    
-    // Prepare input data (example with zeros)
-    let dims = interpreter.input_tensor_dims(0)?;
-    let total_elements: i32 = dims.iter().product();
-    let input_data = vec![0u8; (total_elements as usize) * 4]; // Assuming float32
-    
-    // Copy data to input tensor
-    interpreter.copy_to_input_tensor(0, &input_data)?;
-    
-    // Run inference
-    interpreter.run()?;
-    
-    // Get output data
-    let dims = interpreter.output_tensor_dims(0)?;
-    let total_elements: i32 = dims.iter().product();
-    let mut output_data = vec![0u8; (total_elements as usize) * 4]; // Assuming float32
-    interpreter.copy_from_output_tensor(0, &mut output_data)?;
-    
-    // Process results...
+    // The delegate can now be used with TensorFlow Lite
+    // Note: Direct integration with TensorFlow Lite interpreter is still being developed
     
     Ok(())
 }
 ```
 
-### Running the Model Inference Example
+#### Working with Standard TensorFlow Lite Models
 
-```bash
-cargo run --example model_inference
+While we continue to develop the EdgeTPU integration, you can use standard TensorFlow Lite models with this SDK:
+
+```rust
+use std::path::Path;
+use std::ffi::CString;
+use std::os::raw::c_char;
+
+// TensorFlow Lite C API types
+pub enum TfLiteModel {}
+pub enum TfLiteInterpreter {}
+pub enum TfLiteInterpreterOptions {}
+
+// FFI declarations for TensorFlow Lite C API
+#[link(name = "tensorflowlite_c")]
+extern "C" {
+    fn TfLiteModelCreateFromFile(model_path: *const c_char) -> *mut TfLiteModel;
+    fn TfLiteModelDelete(model: *mut TfLiteModel);
+    
+    fn TfLiteInterpreterOptionsCreate() -> *mut TfLiteInterpreterOptions;
+    fn TfLiteInterpreterOptionsDelete(options: *mut TfLiteInterpreterOptions);
+    
+    fn TfLiteInterpreterCreate(model: *mut TfLiteModel, options: *mut TfLiteInterpreterOptions) -> *mut TfLiteInterpreter;
+    fn TfLiteInterpreterDelete(interpreter: *mut TfLiteInterpreter);
+    
+    fn TfLiteInterpreterAllocateTensors(interpreter: *mut TfLiteInterpreter) -> i32;
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Path to a standard TensorFlow Lite model
+    let model_path = "path/to/model.tflite";
+    
+    unsafe {
+        // Convert path to C string
+        let c_model_path = CString::new(model_path)?;
+        
+        // Load the model
+        let model = TfLiteModelCreateFromFile(c_model_path.as_ptr());
+        if model.is_null() {
+            return Err("Failed to load model".into());
+        }
+        
+        // Create interpreter options
+        let options = TfLiteInterpreterOptionsCreate();
+        if options.is_null() {
+            TfLiteModelDelete(model);
+            return Err("Failed to create interpreter options".into());
+        }
+        
+        // Create interpreter
+        let interpreter = TfLiteInterpreterCreate(model, options);
+        if interpreter.is_null() {
+            TfLiteInterpreterOptionsDelete(options);
+            TfLiteModelDelete(model);
+            return Err("Failed to create interpreter".into());
+        }
+        
+        // Allocate tensors
+        let status = TfLiteInterpreterAllocateTensors(interpreter);
+        if status != 0 {
+            TfLiteInterpreterDelete(interpreter);
+            TfLiteInterpreterOptionsDelete(options);
+            TfLiteModelDelete(model);
+            return Err(format!("Failed to allocate tensors: {}", status).into());
+        }
+        
+        // Run inference and process results...
+        
+        // Clean up
+        TfLiteInterpreterDelete(interpreter);
+        TfLiteInterpreterOptionsDelete(options);
+        TfLiteModelDelete(model);
+    }
+    
+    Ok(())
+}
 ```
+
+#### Next Steps
+
+We are actively working on resolving the segmentation fault issue when creating a TensorFlow Lite interpreter with the EdgeTPU delegate. Future updates will include:
+
+1. Full integration with the TensorFlow Lite C API
+2. High-level Rust abstractions for TensorFlow Lite operations
+3. Comprehensive examples for image classification and other ML tasks
+4. Improved error handling and debugging capabilities
 
 ### Dependencies
 

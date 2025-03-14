@@ -3,7 +3,8 @@ edgetpu_runtime_20221024.zip
 edgetpu_runtime/
 
 # models
-*.tflite
+# models/
+# *.tflite
 
 # libraries
 *.so
