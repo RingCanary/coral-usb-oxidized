@@ -5,8 +5,15 @@ edgetpu_runtime/
 # models
 *.tflite
 
-# # libraries
+# libraries
 *.so
 *.so.*
 *.a
 *.lib
+
+# archives
+*.zip
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz

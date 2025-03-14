@@ -6,13 +6,15 @@ edition = "2021"
 [dependencies]
 libc = "0.2.171"
 rusb = "0.9.4"
-
-[dev-dependencies]
-chrono = "0.4.40"
+# Optional TensorFlow Lite bindings for Rust
+# Uncomment if you want to use Rust bindings instead of C API
+# tensorflow = { version = "0.21.0", optional = true }
+# moonfire-tflite = { version = "0.4.0", optional = true }
 
 [build-dependencies]
+bindgen = "0.71.1"
 cc = "1.2.16"
 
 [features]
 default = []
-mock = []
+# We're not using mock implementations as per user's preference

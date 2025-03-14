@@ -138,6 +138,76 @@ fn main() {
 cargo run --example delegate_usage
 ```
 
+### TensorFlow Lite Integration
+
+This SDK provides direct integration with TensorFlow Lite through FFI bindings to the TensorFlow Lite C API. This allows you to load TensorFlow Lite models, create interpreters, and run inference with the EdgeTPU delegate for hardware acceleration:
+
+```rust
+use coral_usb_oxidized::{EdgeTPUDelegate, CoralInterpreter};
+use std::path::Path;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Path to your TensorFlow Lite model file
+    let model_path = "model.tflite";
+    
+    // Create an EdgeTPU delegate
+    let delegate = EdgeTPUDelegate::new()?;
+    
+    // Create a TensorFlow Lite interpreter with the EdgeTPU delegate
+    let interpreter = CoralInterpreter::new(model_path, &delegate)?;
+    
+    // Set the number of threads to use for inference
+    interpreter.set_num_threads(4)?;
+    
+    // Get input tensor information
+    let input_count = interpreter.input_tensor_count();
+    println!("Input tensor count: {}", input_count);
+    
+    // Prepare input data (example with zeros)
+    let dims = interpreter.input_tensor_dims(0)?;
+    let total_elements: i32 = dims.iter().product();
+    let input_data = vec![0u8; (total_elements as usize) * 4]; // Assuming float32
+    
+    // Copy data to input tensor
+    interpreter.copy_to_input_tensor(0, &input_data)?;
+    
+    // Run inference
+    interpreter.run()?;
+    
+    // Get output data
+    let dims = interpreter.output_tensor_dims(0)?;
+    let total_elements: i32 = dims.iter().product();
+    let mut output_data = vec![0u8; (total_elements as usize) * 4]; // Assuming float32
+    interpreter.copy_from_output_tensor(0, &mut output_data)?;
+    
+    // Process results...
+    
+    Ok(())
+}
+```
+
+### Running the Model Inference Example
+
+```bash
+cargo run --example model_inference
+```
+
+### Dependencies
+
+To use the TensorFlow Lite integration, you need to have the TensorFlow Lite and EdgeTPU libraries installed on your system:
+
+```bash
+# Install TensorFlow Lite
+# Follow the instructions at: https://www.tensorflow.org/lite/guide/build_cmake
+
+# Install EdgeTPU runtime
+# For Debian/Ubuntu:
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | sudo tee /etc/apt/sources.list.d/coral-edgetpu.list
+sudo apt-get update
+sudo apt-get install libedgetpu1-std
+```
+
 ### Mock Mode for Testing
 
 The SDK includes a mock mode for testing without actual hardware. This is useful for development and testing in environments where the Coral USB Accelerator is not available:
@@ -178,6 +248,66 @@ To run an example with mock mode enabled:
 cargo run --example delegate_usage --features mock
 ```
 
+## TensorFlow Lite and EdgeTPU Integration
+
+This project requires the TensorFlow Lite C API and EdgeTPU libraries to be installed on your system.
+
+### Installing TensorFlow Lite C API
+
+The TensorFlow Lite C API can be built from source:
+
+```bash
+# Clone the TensorFlow repository
+git clone https://github.com/tensorflow/tensorflow.git tensorflow-source
+cd tensorflow-source
+
+# Configure and build the TensorFlow Lite C API
+./configure
+bazel build --config=opt //tensorflow/lite/c:tensorflowlite_c
+
+# The built library will be available at:
+# bazel-bin/tensorflow/lite/c/libtensorflowlite_c.so
+```
+
+### Installing EdgeTPU Library
+
+The EdgeTPU library can be installed following the official Google Coral documentation:
+
+```bash
+# For Debian-based systems
+echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | sudo tee /etc/apt/sources.list.d/coral-edgetpu.list
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+sudo apt-get update
+sudo apt-get install libedgetpu1-std
+```
+
+### Running the Example
+
+After installing the required libraries, you can run the example test program:
+
+```bash
+# Set the library path to include the TensorFlow Lite C API library
+export LD_LIBRARY_PATH=/path/to/tensorflow-source/bazel-bin/tensorflow/lite/c:$LD_LIBRARY_PATH
+
+# Run the test program
+cargo run --example tflite_test
+```
+
+Alternatively, you can use the provided script:
+
+```bash
+./run_test.sh
+```
+
+### Verifying Installation
+
+The test program will check if:
+1. The TensorFlow Lite C API library is properly installed and linked
+2. The EdgeTPU library is properly installed and linked
+3. A Coral USB Accelerator is connected to the system
+
+If no Coral USB Accelerator is connected, the test will still verify that the libraries are installed correctly.
+
 ## Device Verification
 
 The SDK provides robust methods to verify that a connected device is a genuine Coral USB Accelerator:
@@ -203,50 +333,19 @@ For more thorough verification, use the `CoralDevice::new()` method which attemp
 ```rust
 use coral_usb_oxidized::CoralDevice;
 
-fn is_coral_device_present() -> bool {
-    match CoralDevice::new() {
-        Ok(device) => device.is_valid(), // Returns true if the device is valid
-        Err(_) => false,                 // Returns false if creation failed
+match CoralDevice::new() {
+    Ok(device) => {
+        if device.is_valid() {
+            println!("Coral USB Accelerator verified");
+        } else {
+            println!("Device found but validation failed");
+        }
+    },
+    Err(e) => {
+        println!("Error: {}", e);
     }
 }
 ```
-
-This approach goes beyond just checking USB IDs - it verifies that the device can be properly initialized, which only a genuine Coral USB Accelerator can do.
-
-### Advanced Verification
-
-The SDK includes a comprehensive example (`examples/verify_device.rs`) that demonstrates:
-
-1. **Multi-level verification**:
-   - USB ID validation
-   - Device name validation
-   - EdgeTPU initialization check
-
-2. **Detailed error reporting**:
-   - Distinguishes between different error types (device not found, permission issues, initialization failures)
-   - Provides specific feedback to help troubleshoot issues
-
-3. **Continuous monitoring**:
-   - Detects when devices are connected or disconnected
-   - Includes retry mechanism to handle transient issues
-
-Run the advanced verification example:
-
-```bash
-cargo run --example verify_device
-```
-
-### Error Handling
-
-The SDK provides granular error types to help diagnose issues:
-
-- `CoralError::DeviceNotFound`: No device with Coral USB IDs was found
-- `CoralError::InitializationFailed`: Device was found but EdgeTPU initialization failed (possible fake device)
-- `CoralError::PermissionDenied`: Permission issues when accessing the USB device
-- `CoralError::InvalidDeviceName`: Invalid device name provided
-- `CoralError::DeviceCreationFailed`: General failure during device creation
-- `CoralError::DeviceListFailed`: Failed to list available devices
-- `CoralError::UsbError`: Other USB-related errors
 
 ## Development Status
 
@@ -257,7 +356,7 @@ This SDK is currently in development. The current implementation includes:
 - [x] Basic error handling
 - [x] Device verification
 - [x] EdgeTPU delegate creation
-- [ ] TensorFlow Lite model inference
+- [x] TensorFlow Lite model inference
 - [ ] Performance optimization
 
 ## Dependencies
