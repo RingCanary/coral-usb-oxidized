@@ -1,1 +1,12 @@
 /target
+edgetpu_runtime_20221024.zip
+edgetpu_runtime/
+
+# models
+*.tflite
+
+# # libraries
+*.so
+*.so.*
+*.a
+*.lib
