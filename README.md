@@ -7,12 +7,35 @@ A Rust SDK for interacting with Google Coral USB Accelerator hardware.
 - Device detection and management
 - USB device information retrieval
 - Error handling for device operations
+- EdgeTPU delegate creation for TensorFlow Lite acceleration
+- Mock mode for testing without actual hardware
 
 ## Device Information
 
 The Google Coral USB Accelerator is identified with:
 - Vendor ID: `0x1a6e` (Global Unichip Corp.)
 - Product ID: `0x089a`
+
+## Important Note on Device ID Change
+
+The Coral USB Accelerator exhibits an interesting behavior where its USB device ID changes after initialization:
+
+- **Initial state**: When first connected, the device appears as:
+  - Vendor ID: `0x1a6e` (Global Unichip Corp.)
+  - Product ID: `0x089a`
+
+- **After initialization**: After creating an EdgeTPU delegate or running the first inference, the device ID changes to:
+  - Vendor ID: `0x18d1` (Google Inc.)
+  - Product ID: `0x9302`
+
+This is expected behavior according to Google and is handled automatically by this library. However, if you're setting up udev rules or other system configurations, you'll need to account for both device IDs:
+
+```bash
+# Example udev rules for Coral USB Accelerator
+echo 'SUBSYSTEMS=="usb", ATTRS{idVendor}=="1a6e", ATTRS{idProduct}=="089a", MODE="0664", TAG+="uaccess"' | sudo tee -a /etc/udev/rules.d/71-edgetpu.rules > /dev/null
+echo 'SUBSYSTEMS=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="9302", MODE="0664", TAG+="uaccess"' | sudo tee -a /etc/udev/rules.d/71-edgetpu.rules > /dev/null
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
 
 ## Usage
 
@@ -64,6 +87,95 @@ fn main() {
 
 ```bash
 cargo run --example basic_usage
+```
+
+### EdgeTPU Delegate Usage
+
+The SDK provides functionality to create EdgeTPU delegates for accelerating TensorFlow Lite models:
+
+```rust
+use coral_usb_oxidized::{CoralDevice, is_device_connected};
+
+fn main() {
+    // Check if a Coral USB Accelerator is connected
+    if !is_device_connected() {
+        println!("No Coral USB Accelerator detected. Please connect the device and try again.");
+        return;
+    }
+    
+    // Create a new Coral device
+    match CoralDevice::new() {
+        Ok(device) => {
+            // Create an EdgeTPU delegate
+            match device.create_delegate() {
+                Ok(delegate) => {
+                    println!("Successfully created EdgeTPU delegate!");
+                    
+                    // Use the delegate with TensorFlow Lite
+                    // For example (pseudo-code):
+                    // 
+                    // let model_path = "path/to/your/model.tflite";
+                    // let interpreter = tflite::Interpreter::new_with_delegate(model_path, delegate);
+                    // interpreter.run();
+                    
+                    // The delegate will be automatically freed when it goes out of scope
+                },
+                Err(e) => {
+                    println!("Error creating EdgeTPU delegate: {}", e);
+                }
+            }
+        },
+        Err(e) => {
+            println!("Error creating device: {}", e);
+        }
+    }
+}
+```
+
+### Running the Delegate Example
+
+```bash
+cargo run --example delegate_usage
+```
+
+### Mock Mode for Testing
+
+The SDK includes a mock mode for testing without actual hardware. This is useful for development and testing in environments where the Coral USB Accelerator is not available:
+
+```rust
+use coral_usb_oxidized::{CoralDevice, enable_mock_mode, is_device_connected};
+
+fn main() {
+    // Enable mock mode for testing without actual hardware
+    enable_mock_mode(true);
+    
+    // Now all calls will use mock implementations
+    if is_device_connected() {
+        match CoralDevice::new() {
+            Ok(device) => {
+                // Create a mock EdgeTPU delegate
+                match device.create_delegate() {
+                    Ok(delegate) => {
+                        println!("Successfully created mock EdgeTPU delegate!");
+                        // Use the mock delegate for testing
+                    },
+                    Err(e) => {
+                        println!("Error creating mock EdgeTPU delegate: {}", e);
+                    }
+                }
+            },
+            Err(e) => {
+                println!("Error creating mock device: {}", e);
+            }
+        }
+    }
+}
+```
+
+To run an example with mock mode enabled:
+
+```bash
+cargo run --example delegate_usage --features mock
 ```
 
 ## Device Verification
@@ -144,7 +256,7 @@ This SDK is currently in development. The current implementation includes:
 - [x] Device information retrieval
 - [x] Basic error handling
 - [x] Device verification
-- [ ] EdgeTPU delegate creation
+- [x] EdgeTPU delegate creation
 - [ ] TensorFlow Lite model inference
 - [ ] Performance optimization
 
