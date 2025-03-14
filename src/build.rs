@@ -16,7 +16,7 @@ fn main() {
     println!("cargo:rustc-link-lib=edgetpu");
     
     // Tell cargo to invalidate the built crate whenever the wrapper changes
-    println!("cargo:rerun-if-changed=src/wrapper.h");
+    println!("cargo:rerun-if-changed=wrapper.h");
     
     // Add the local edgetpu_runtime directory to the include path
     let edgetpu_include_path = std::path::Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap())

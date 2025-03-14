@@ -1,14 +1,9 @@
 use std::fmt;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use rusb::{Context, Device, DeviceDescriptor, UsbContext};
 use std::ptr;
 use std::ffi::CString;
 use std::os::raw::c_char;
-#[cfg(feature = "mock")]
-use std::os::raw::c_void;
-#[cfg(feature = "mock")]
-use libc;
 
 // Coral USB Accelerator device information
 // Initial device ID when first connected
@@ -41,13 +36,6 @@ pub struct EdgeTPUDelegateRaw {
 
 // Define a custom type for the EdgeTPU delegate
 pub type EdgeTPUDelegatePtr = *mut EdgeTPUDelegateRaw;
-
-// Flag to enable mock mode for testing without actual hardware
-#[cfg(feature = "mock")]
-static MOCK_MODE: AtomicBool = AtomicBool::new(true);
-
-#[cfg(not(feature = "mock"))]
-static MOCK_MODE: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug)]
 pub enum CoralError {
@@ -95,7 +83,6 @@ impl From<rusb::Error> for CoralError {
 }
 
 // FFI bindings for libedgetpu
-#[cfg(not(feature = "mock"))]
 #[link(name = "edgetpu")]
 extern "C" {
     #[link_name = "edgetpu_create_delegate"]
@@ -113,44 +100,7 @@ extern "C" {
     fn edgetpu_version() -> *const c_char;
 }
 
-// Mock implementations for testing without actual hardware
-#[cfg(feature = "mock")]
-mod mock {
-    use super::*;
-    
-    // Mock delegate structure for testing
-    static mut MOCK_DELEGATE: EdgeTPUDelegatePtr = ptr::null_mut();
-    
-    // Mock implementation of edgetpu_create_delegate
-    pub unsafe fn edgetpu_create_delegate(
-        _device_type: EdgeTPUDeviceType,
-        _name: *const c_char,
-        _options: *const EdgeTPUOption,
-        _num_options: usize,
-    ) -> EdgeTPUDelegatePtr {
-        // Create a dummy delegate for testing
-        if MOCK_DELEGATE.is_null() {
-            MOCK_DELEGATE = libc::malloc(1) as EdgeTPUDelegatePtr;
-        }
-        MOCK_DELEGATE
-    }
-    
-    // Mock implementation of edgetpu_free_delegate
-    pub unsafe fn edgetpu_free_delegate(delegate: EdgeTPUDelegatePtr) {
-        if !delegate.is_null() && delegate == MOCK_DELEGATE {
-            libc::free(delegate as *mut c_void);
-            MOCK_DELEGATE = ptr::null_mut();
-        }
-    }
-    
-    // Mock implementation of edgetpu_version
-    pub unsafe fn edgetpu_version() -> *const c_char {
-        b"1.0.0\0".as_ptr() as *const c_char
-    }
-}
-
 // Function pointers for dynamic loading of libedgetpu
-#[cfg(not(feature = "mock"))]
 #[derive(Clone)]
 struct EdgeTPULibrary {
     create_delegate: Option<unsafe extern "C" fn(
@@ -163,7 +113,6 @@ struct EdgeTPULibrary {
     version: Option<unsafe extern "C" fn() -> *const c_char>,
 }
 
-#[cfg(not(feature = "mock"))]
 impl EdgeTPULibrary {
     fn new() -> Result<Self, CoralError> {
         // This is a simplified implementation that assumes the library is already loaded
@@ -564,7 +513,6 @@ impl Drop for CoralInterpreter {
 #[derive(Clone)]
 pub struct EdgeTPUDelegate {
     raw: EdgeTPUDelegatePtr,
-    #[cfg(not(feature = "mock"))]
     library: Option<EdgeTPULibrary>,
 }
 
@@ -579,55 +527,20 @@ impl EdgeTPUDelegate {
             return Err(CoralError::DeviceNotFound);
         }
         
-        if MOCK_MODE.load(Ordering::SeqCst) {
-            #[cfg(feature = "mock")]
-            {
-                unsafe {
-                    let delegate = mock::edgetpu_create_delegate(
-                        EdgeTPUDeviceType::EdgetpuApexUsb,
-                        ptr::null(),
-                        ptr::null(),
-                        0,
-                    );
-                    if delegate.is_null() {
-                        return Err(CoralError::DelegateCreationFailed);
-                    }
-                    Ok(EdgeTPUDelegate { 
-                        raw: delegate,
-                        #[cfg(not(feature = "mock"))]
-                        library: None,
-                    })
-                }
-            }
-            #[cfg(not(feature = "mock"))]
-            {
-                // This should not be reached in mock mode
-                Err(CoralError::DelegateCreationFailed)
-            }
-        } else {
-            #[cfg(not(feature = "mock"))]
-            {
-                // Load the EdgeTPU library
-                let library = EdgeTPULibrary::new()?;
-                
-                unsafe {
-                    let delegate = library.create_delegate(
-                        EdgeTPUDeviceType::EdgetpuApexUsb,
-                        ptr::null(),
-                        ptr::null(),
-                        0,
-                    )?;
-                    Ok(EdgeTPUDelegate { 
-                        raw: delegate,
-                        library: Some(library),
-                    })
-                }
-            }
-            #[cfg(feature = "mock")]
-            {
-                // This should not be reached in non-mock mode
-                Err(CoralError::DelegateCreationFailed)
-            }
+        // Load the EdgeTPU library
+        let library = EdgeTPULibrary::new()?;
+        
+        unsafe {
+            let delegate = library.create_delegate(
+                EdgeTPUDeviceType::EdgetpuApexUsb,
+                ptr::null(),
+                ptr::null(),
+                0,
+            )?;
+            Ok(EdgeTPUDelegate { 
+                raw: delegate,
+                library: Some(library),
+            })
         }
     }
     
@@ -680,55 +593,20 @@ impl EdgeTPUDelegate {
             });
         }
         
-        if MOCK_MODE.load(Ordering::SeqCst) {
-            #[cfg(feature = "mock")]
-            {
-                unsafe {
-                    let delegate = mock::edgetpu_create_delegate(
-                        EdgeTPUDeviceType::EdgetpuApexUsb,
-                        ptr::null(),
-                        if options.is_empty() { ptr::null() } else { options.as_ptr() },
-                        options.len(),
-                    );
-                    if delegate.is_null() {
-                        return Err(CoralError::DelegateCreationFailed);
-                    }
-                    Ok(EdgeTPUDelegate { 
-                        raw: delegate,
-                        #[cfg(not(feature = "mock"))]
-                        library: None,
-                    })
-                }
-            }
-            #[cfg(not(feature = "mock"))]
-            {
-                // This should not be reached in mock mode
-                Err(CoralError::DelegateCreationFailed)
-            }
-        } else {
-            #[cfg(not(feature = "mock"))]
-            {
-                // Load the EdgeTPU library
-                let library = EdgeTPULibrary::new()?;
-                
-                unsafe {
-                    let delegate = library.create_delegate(
-                        EdgeTPUDeviceType::EdgetpuApexUsb,
-                        ptr::null(),
-                        if options.is_empty() { ptr::null() } else { options.as_ptr() },
-                        options.len(),
-                    )?;
-                    Ok(EdgeTPUDelegate { 
-                        raw: delegate,
-                        library: Some(library),
-                    })
-                }
-            }
-            #[cfg(feature = "mock")]
-            {
-                // This should not be reached in non-mock mode
-                Err(CoralError::DelegateCreationFailed)
-            }
+        // Load the EdgeTPU library
+        let library = EdgeTPULibrary::new()?;
+        
+        unsafe {
+            let delegate = library.create_delegate(
+                EdgeTPUDeviceType::EdgetpuApexUsb,
+                ptr::null(),
+                if options.is_empty() { ptr::null() } else { options.as_ptr() },
+                options.len(),
+            )?;
+            Ok(EdgeTPUDelegate { 
+                raw: delegate,
+                library: Some(library),
+            })
         }
     }
     
@@ -744,35 +622,16 @@ impl EdgeTPUDelegate {
     pub fn is_valid(&self) -> bool {
         !self.raw.is_null()
     }
-    
-    /// Enable mock mode for testing
-    ///
-    /// This function enables mock mode for testing without actual hardware.
-    /// In mock mode, the delegate creation functions will return mock delegates
-    /// that can be used for testing.
-    pub fn enable_mock_mode(enable: bool) {
-        MOCK_MODE.store(enable, Ordering::SeqCst);
-    }
 }
 
 impl Drop for EdgeTPUDelegate {
     fn drop(&mut self) {
         if !self.raw.is_null() {
             unsafe {
-                if MOCK_MODE.load(Ordering::SeqCst) {
-                    #[cfg(feature = "mock")]
-                    {
-                        mock::edgetpu_free_delegate(self.raw);
-                    }
+                if let Some(library) = &self.library {
+                    let _ = library.free_delegate(self.raw);
                 } else {
-                    #[cfg(not(feature = "mock"))]
-                    {
-                        if let Some(library) = &self.library {
-                            let _ = library.free_delegate(self.raw);
-                        } else {
-                            edgetpu_free_delegate(self.raw);
-                        }
-                    }
+                    edgetpu_free_delegate(self.raw);
                 }
                 self.raw = ptr::null_mut();
             }
@@ -866,12 +725,6 @@ impl CoralDevice {
     pub fn product_id(&self) -> u16 {
         self.product_id
     }
-    
-    // For testing: simulate device failure
-    #[cfg(test)]
-    pub fn set_mock_device_available(available: bool) {
-        MOCK_DEVICE_AVAILABLE.store(available, Ordering::SeqCst);
-    }
 }
 
 impl Drop for CoralDevice {
@@ -881,17 +734,8 @@ impl Drop for CoralDevice {
     }
 }
 
-// Global flag to simulate device availability (only used for tests)
-static MOCK_DEVICE_AVAILABLE: AtomicBool = AtomicBool::new(true);
-
 /// Check if a Coral USB Accelerator is connected to the system
 pub fn is_device_connected() -> bool {
-    // In test mode, use the mock flag
-    if cfg!(test) || MOCK_MODE.load(Ordering::SeqCst) {
-        return MOCK_DEVICE_AVAILABLE.load(Ordering::SeqCst);
-    }
-    
-    // In normal mode, actually check for the device
     match find_coral_devices() {
         Ok(devices) => !devices.is_empty(),
         Err(_) => false,
@@ -960,18 +804,6 @@ fn get_device_name(device: &Device<Context>, desc: &DeviceDescriptor) -> Option<
 
 /// List all available Coral USB devices
 pub fn list_devices() -> Result<Vec<String>, CoralError> {
-    // In test mode, use the mock implementation
-    if cfg!(test) || MOCK_MODE.load(Ordering::SeqCst) {
-        if MOCK_DEVICE_AVAILABLE.load(Ordering::SeqCst) {
-            return Ok(vec![format!("Coral USB Accelerator (VID: {:04x}, PID: {:04x})", 
-                                  CORAL_USB_VENDOR_ID, 
-                                  CORAL_USB_PRODUCT_ID)]);
-        } else {
-            return Err(CoralError::DeviceListFailed);
-        }
-    }
-    
-    // In normal mode, actually list the devices
     let devices = find_coral_devices()?;
     
     if devices.is_empty() {
@@ -1009,8 +841,8 @@ pub fn get_device_info() -> Result<Vec<String>, CoralError> {
     
     for device in devices {
         let mut device_info = String::new();
-        device_info.push_str(&format!("Vendor ID: 0x{:04x}", device.vendor_id));
-        device_info.push_str(&format!(", Product ID: 0x{:04x}", device.product_id));
+        device_info.push_str(&format!("Vendor ID: 0x{:04x}", device.vendor_id()));
+        device_info.push_str(&format!(", Product ID: 0x{:04x}", device.product_id()));
         
         if let Some(name) = &device.name {
             device_info.push_str(&format!(", Name: {}", name));
@@ -1031,50 +863,17 @@ pub fn get_device_info() -> Result<Vec<String>, CoralError> {
 
 /// Get the EdgeTPU library version
 pub fn version() -> String {
-    if MOCK_MODE.load(Ordering::SeqCst) {
-        #[cfg(feature = "mock")]
-        {
-            unsafe {
-                let c_str = mock::edgetpu_version();
-                if c_str.is_null() {
-                    return "Unknown".to_string();
-                }
-                let c_str = std::ffi::CStr::from_ptr(c_str);
-                match c_str.to_str() {
-                    Ok(s) => s.to_string(),
+    unsafe {
+        match EdgeTPULibrary::new() {
+            Ok(library) => {
+                match library.get_version() {
+                    Ok(version) => version,
                     Err(_) => "Unknown".to_string(),
                 }
-            }
-        }
-        #[cfg(not(feature = "mock"))]
-        {
-            "1.0.0 (mock)".to_string()
-        }
-    } else {
-        #[cfg(not(feature = "mock"))]
-        {
-            unsafe {
-                match EdgeTPULibrary::new() {
-                    Ok(library) => {
-                        match library.get_version() {
-                            Ok(version) => version,
-                            Err(_) => "Unknown".to_string(),
-                        }
-                    },
-                    Err(_) => "Unknown".to_string(),
-                }
-            }
-        }
-        #[cfg(feature = "mock")]
-        {
-            "1.0.0 (real)".to_string()
+            },
+            Err(_) => "Unknown".to_string(),
         }
     }
-}
-
-/// Enable mock mode for testing without actual hardware
-pub fn enable_mock_mode(enable: bool) {
-    MOCK_MODE.store(enable, Ordering::SeqCst);
 }
 
 #[cfg(test)]
@@ -1083,9 +882,6 @@ mod tests {
 
     #[test]
     fn test_device_creation() {
-        // Set the mock device to be available
-        CoralDevice::set_mock_device_available(true);
-        
         // Test successful device creation
         let device = CoralDevice::new();
         assert!(device.is_ok());
@@ -1095,33 +891,7 @@ mod tests {
         assert_eq!(device.product_id(), CORAL_USB_PRODUCT_ID);
         assert!(device.name().is_none());
         
-        // Set the mock device to be unavailable
-        CoralDevice::set_mock_device_available(false);
-        
         // Test device creation failure
-        let device = CoralDevice::new();
-        assert!(device.is_err());
-        match device {
-            Err(CoralError::DeviceNotFound) => (),
-            _ => panic!("Expected DeviceNotFound error"),
-        }
-    }
-
-    #[test]
-    fn test_device_with_name() {
-        // Set the mock device to be available
-        CoralDevice::set_mock_device_available(true);
-        
-        // Test successful device creation with name
-        let device = CoralDevice::with_device_name("test_device");
-        assert!(device.is_ok());
-        let device = device.unwrap();
-        assert!(device.is_valid());
-        assert_eq!(device.vendor_id(), CORAL_USB_VENDOR_ID);
-        assert_eq!(device.product_id(), CORAL_USB_PRODUCT_ID);
-        assert_eq!(device.name(), Some("test_device"));
-        
-        // Test device creation with empty name
         let device = CoralDevice::with_device_name("");
         assert!(device.is_err());
         match device {
@@ -1131,21 +901,24 @@ mod tests {
     }
 
     #[test]
+    fn test_device_with_name() {
+        // Test successful device creation with name
+        let device = CoralDevice::with_device_name("test_device");
+        assert!(device.is_ok());
+        let device = device.unwrap();
+        assert!(device.is_valid());
+        assert_eq!(device.vendor_id(), CORAL_USB_VENDOR_ID);
+        assert_eq!(device.product_id(), CORAL_USB_PRODUCT_ID);
+        assert_eq!(device.name(), Some("test_device"));
+    }
+
+    #[test]
     fn test_device_connected() {
-        // Set the mock device to be available
-        CoralDevice::set_mock_device_available(true);
         assert!(is_device_connected());
-        
-        // Set the mock device to be unavailable
-        CoralDevice::set_mock_device_available(false);
-        assert!(!is_device_connected());
     }
 
     #[test]
     fn test_list_devices() {
-        // Set the mock device to be available
-        CoralDevice::set_mock_device_available(true);
-        
         // Test successful device listing
         let devices = list_devices();
         assert!(devices.is_ok());
@@ -1153,17 +926,6 @@ mod tests {
         assert_eq!(devices.len(), 1);
         assert!(devices[0].contains(&format!("VID: {:04x}", CORAL_USB_VENDOR_ID)));
         assert!(devices[0].contains(&format!("PID: {:04x}", CORAL_USB_PRODUCT_ID)));
-        
-        // Set the mock device to be unavailable
-        CoralDevice::set_mock_device_available(false);
-        
-        // Test device listing failure
-        let devices = list_devices();
-        assert!(devices.is_err());
-        match devices {
-            Err(CoralError::DeviceListFailed) => (),
-            _ => panic!("Expected DeviceListFailed error"),
-        }
     }
 
     #[test]
@@ -1174,12 +936,6 @@ mod tests {
     
     #[test]
     fn test_delegate_creation() {
-        // Enable mock mode for testing
-        enable_mock_mode(true);
-        
-        // Set the mock device to be available
-        CoralDevice::set_mock_device_available(true);
-        
         // Test delegate creation through device
         let device = CoralDevice::new().unwrap();
         let delegate = device.create_delegate();
@@ -1192,8 +948,5 @@ mod tests {
         assert!(delegate.is_ok());
         let delegate = delegate.unwrap();
         assert!(delegate.is_valid());
-        
-        // Disable mock mode
-        enable_mock_mode(false);
     }
 }

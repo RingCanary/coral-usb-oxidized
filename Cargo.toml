@@ -17,4 +17,3 @@ cc = "1.2.16"
 
 [features]
 default = []
-# We're not using mock implementations as per user's preference
