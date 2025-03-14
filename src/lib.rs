@@ -13,6 +13,8 @@ pub enum CoralError {
     DeviceListFailed,
     InvalidDeviceName,
     DeviceNotFound,
+    InitializationFailed,
+    PermissionDenied,
     UsbError(rusb::Error),
 }
 
@@ -23,6 +25,8 @@ impl fmt::Display for CoralError {
             CoralError::DeviceListFailed => write!(f, "Failed to list EdgeTPU devices"),
             CoralError::InvalidDeviceName => write!(f, "Invalid device name"),
             CoralError::DeviceNotFound => write!(f, "No Coral USB Accelerator found"),
+            CoralError::InitializationFailed => write!(f, "EdgeTPU initialization failed - possible fake device"),
+            CoralError::PermissionDenied => write!(f, "Permission denied - check USB access rights"),
             CoralError::UsbError(e) => write!(f, "USB error: {}", e),
         }
     }
@@ -32,7 +36,15 @@ impl std::error::Error for CoralError {}
 
 impl From<rusb::Error> for CoralError {
     fn from(error: rusb::Error) -> Self {
-        CoralError::UsbError(error)
+        match error {
+            rusb::Error::Access => CoralError::PermissionDenied,
+            rusb::Error::NoDevice => CoralError::DeviceNotFound,
+            rusb::Error::NotFound => CoralError::DeviceNotFound,
+            rusb::Error::Io => CoralError::InitializationFailed,
+            rusb::Error::Pipe => CoralError::InitializationFailed,
+            rusb::Error::InvalidParam => CoralError::InitializationFailed,
+            _ => CoralError::UsbError(error),
+        }
     }
 }
 
