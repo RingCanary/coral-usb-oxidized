@@ -151,6 +151,7 @@ mod mock {
 
 // Function pointers for dynamic loading of libedgetpu
 #[cfg(not(feature = "mock"))]
+#[derive(Clone)]
 struct EdgeTPULibrary {
     create_delegate: Option<unsafe extern "C" fn(
         EdgeTPUDeviceType,
@@ -222,10 +223,345 @@ impl EdgeTPULibrary {
     }
 }
 
+// TensorFlow Lite C API types
+pub enum TfLiteModel {}
+pub enum TfLiteInterpreter {}
+pub enum TfLiteTensor {}
+pub enum TfLiteDelegate {}
+
+// TensorFlow Lite C API functions
+extern "C" {
+    fn TfLiteModelCreate(model_data: *const u8, model_size: usize) -> *mut TfLiteModel;
+    fn TfLiteModelDelete(model: *mut TfLiteModel);
+    fn TfLiteInterpreterCreate(model: *mut TfLiteModel, options: *mut std::ffi::c_void) -> *mut TfLiteInterpreter;
+    fn TfLiteInterpreterSetNumThreads(interpreter: *mut TfLiteInterpreter, num_threads: i32) -> i32;
+    fn TfLiteInterpreterAllocateTensors(interpreter: *mut TfLiteInterpreter) -> i32;
+    fn TfLiteInterpreterInvoke(interpreter: *mut TfLiteInterpreter) -> i32;
+    fn TfLiteInterpreterDelete(interpreter: *mut TfLiteInterpreter);
+    fn TfLiteInterpreterGetInputTensorCount(interpreter: *mut TfLiteInterpreter) -> i32;
+    fn TfLiteInterpreterGetOutputTensorCount(interpreter: *mut TfLiteInterpreter) -> i32;
+    fn TfLiteInterpreterGetInputTensor(interpreter: *mut TfLiteInterpreter, input_index: i32) -> *mut TfLiteTensor;
+    fn TfLiteInterpreterGetOutputTensor(interpreter: *mut TfLiteInterpreter, output_index: i32) -> *mut TfLiteTensor;
+    fn TfLiteTensorType(tensor: *mut TfLiteTensor) -> i32;
+    fn TfLiteTensorNumDims(tensor: *mut TfLiteTensor) -> i32;
+    fn TfLiteTensorDim(tensor: *mut TfLiteTensor, dim_index: i32) -> i32;
+    fn TfLiteTensorByteSize(tensor: *mut TfLiteTensor) -> usize;
+    fn TfLiteTensorData(tensor: *mut TfLiteTensor) -> *mut std::ffi::c_void;
+    fn TfLiteTensorName(tensor: *mut TfLiteTensor) -> *const i8;
+    fn TfLiteTensorCopyFromBuffer(tensor: *mut TfLiteTensor, input_data: *const std::ffi::c_void, input_data_size: usize) -> i32;
+    fn TfLiteTensorCopyToBuffer(tensor: *mut TfLiteTensor, output_data: *mut std::ffi::c_void, output_data_size: usize) -> i32;
+    fn TfLiteInterpreterModifyGraphWithDelegate(interpreter: *mut TfLiteInterpreter, delegate: *mut TfLiteDelegate) -> i32;
+}
+
+/// Error types specific to TensorFlow Lite operations
+#[derive(Debug)]
+pub enum TfLiteError {
+    /// Failed to load the model
+    ModelLoadFailed,
+    /// Failed to create the interpreter
+    InterpreterCreationFailed,
+    /// Failed to allocate tensors
+    TensorAllocationFailed,
+    /// Failed to run inference
+    InferenceFailed,
+    /// Failed to copy data to or from tensors
+    TensorCopyFailed,
+    /// Input/output tensor count mismatch
+    TensorCountMismatch,
+    /// Invalid tensor dimensions
+    InvalidTensorDimensions,
+    /// Invalid tensor type
+    InvalidTensorType,
+    /// Failed to modify graph with delegate
+    DelegateModificationFailed,
+    /// Other error with message
+    Other(String),
+}
+
+impl std::fmt::Display for TfLiteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TfLiteError::ModelLoadFailed => write!(f, "Failed to load TensorFlow Lite model"),
+            TfLiteError::InterpreterCreationFailed => write!(f, "Failed to create TensorFlow Lite interpreter"),
+            TfLiteError::TensorAllocationFailed => write!(f, "Failed to allocate TensorFlow Lite tensors"),
+            TfLiteError::InferenceFailed => write!(f, "Failed to run TensorFlow Lite inference"),
+            TfLiteError::TensorCopyFailed => write!(f, "Failed to copy data to or from TensorFlow Lite tensors"),
+            TfLiteError::TensorCountMismatch => write!(f, "Input/output tensor count mismatch"),
+            TfLiteError::InvalidTensorDimensions => write!(f, "Invalid tensor dimensions"),
+            TfLiteError::InvalidTensorType => write!(f, "Invalid tensor type"),
+            TfLiteError::DelegateModificationFailed => write!(f, "Failed to modify graph with delegate"),
+            TfLiteError::Other(msg) => write!(f, "TensorFlow Lite error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for TfLiteError {}
+
+/// TensorFlow Lite model wrapper
+pub struct TfLiteModelWrapper {
+    model: *mut TfLiteModel,
+}
+
+impl TfLiteModelWrapper {
+    /// Create a new TensorFlow Lite model from a file
+    pub fn new_from_file(model_path: &str) -> Result<Self, TfLiteError> {
+        let model_data = std::fs::read(model_path).map_err(|_| TfLiteError::ModelLoadFailed)?;
+        
+        let model = unsafe {
+            let model_ptr = TfLiteModelCreate(model_data.as_ptr(), model_data.len());
+            if model_ptr.is_null() {
+                return Err(TfLiteError::ModelLoadFailed);
+            }
+            model_ptr
+        };
+        
+        Ok(TfLiteModelWrapper { model })
+    }
+    
+    /// Create a new TensorFlow Lite model from memory
+    pub fn new_from_memory(model_data: &[u8]) -> Result<Self, TfLiteError> {
+        let model = unsafe {
+            let model_ptr = TfLiteModelCreate(model_data.as_ptr(), model_data.len());
+            if model_ptr.is_null() {
+                return Err(TfLiteError::ModelLoadFailed);
+            }
+            model_ptr
+        };
+        
+        Ok(TfLiteModelWrapper { model })
+    }
+    
+    /// Get the raw model pointer
+    pub fn as_ptr(&self) -> *mut TfLiteModel {
+        self.model
+    }
+}
+
+impl Drop for TfLiteModelWrapper {
+    fn drop(&mut self) {
+        if !self.model.is_null() {
+            unsafe {
+                TfLiteModelDelete(self.model);
+            }
+        }
+    }
+}
+
+/// TensorFlow Lite interpreter with EdgeTPU delegate
+pub struct CoralInterpreter {
+    interpreter: *mut TfLiteInterpreter,
+    _model: TfLiteModelWrapper, // Keep the model alive as long as the interpreter is alive
+    _delegate: EdgeTPUDelegate, // Keep the delegate alive as long as the interpreter is alive
+}
+
+impl CoralInterpreter {
+    /// Create a new TensorFlow Lite interpreter with an EdgeTPU delegate
+    pub fn new(model_path: &str, delegate: &EdgeTPUDelegate) -> Result<Self, TfLiteError> {
+        let model = TfLiteModelWrapper::new_from_file(model_path)?;
+        
+        let interpreter = unsafe {
+            let interpreter_ptr = TfLiteInterpreterCreate(model.as_ptr(), std::ptr::null_mut());
+            if interpreter_ptr.is_null() {
+                return Err(TfLiteError::InterpreterCreationFailed);
+            }
+            
+            // Add the EdgeTPU delegate to the interpreter
+            let status = TfLiteInterpreterModifyGraphWithDelegate(
+                interpreter_ptr, 
+                delegate.as_ptr() as *mut TfLiteDelegate
+            );
+            
+            if status != 0 {
+                TfLiteInterpreterDelete(interpreter_ptr);
+                return Err(TfLiteError::DelegateModificationFailed);
+            }
+            
+            interpreter_ptr
+        };
+        
+        // Allocate tensors
+        let status = unsafe { TfLiteInterpreterAllocateTensors(interpreter) };
+        if status != 0 {
+            unsafe { TfLiteInterpreterDelete(interpreter) };
+            return Err(TfLiteError::TensorAllocationFailed);
+        }
+        
+        // Clone the delegate to keep it alive
+        let delegate_clone = delegate.clone();
+        
+        Ok(CoralInterpreter { 
+            interpreter,
+            _model: model,
+            _delegate: delegate_clone,
+        })
+    }
+    
+    /// Set the number of threads to use for inference
+    pub fn set_num_threads(&self, num_threads: i32) -> Result<(), TfLiteError> {
+        let status = unsafe { TfLiteInterpreterSetNumThreads(self.interpreter, num_threads) };
+        if status != 0 {
+            return Err(TfLiteError::Other(format!("Failed to set number of threads: {}", status)));
+        }
+        Ok(())
+    }
+    
+    /// Get the number of input tensors
+    pub fn input_tensor_count(&self) -> i32 {
+        unsafe { TfLiteInterpreterGetInputTensorCount(self.interpreter) }
+    }
+    
+    /// Get the number of output tensors
+    pub fn output_tensor_count(&self) -> i32 {
+        unsafe { TfLiteInterpreterGetOutputTensorCount(self.interpreter) }
+    }
+    
+    /// Copy data to an input tensor
+    pub fn copy_to_input_tensor(&self, input_index: i32, input_data: &[u8]) -> Result<(), TfLiteError> {
+        let tensor = unsafe { TfLiteInterpreterGetInputTensor(self.interpreter, input_index) };
+        if tensor.is_null() {
+            return Err(TfLiteError::Other(format!("Input tensor at index {} not found", input_index)));
+        }
+        
+        let tensor_size = unsafe { TfLiteTensorByteSize(tensor) };
+        if tensor_size != input_data.len() {
+            return Err(TfLiteError::TensorCopyFailed);
+        }
+        
+        let status = unsafe {
+            TfLiteTensorCopyFromBuffer(
+                tensor,
+                input_data.as_ptr() as *const std::ffi::c_void,
+                input_data.len()
+            )
+        };
+        
+        if status != 0 {
+            return Err(TfLiteError::TensorCopyFailed);
+        }
+        
+        Ok(())
+    }
+    
+    /// Copy data from an output tensor
+    pub fn copy_from_output_tensor(&self, output_index: i32, output_data: &mut [u8]) -> Result<(), TfLiteError> {
+        let tensor = unsafe { TfLiteInterpreterGetOutputTensor(self.interpreter, output_index) };
+        if tensor.is_null() {
+            return Err(TfLiteError::Other(format!("Output tensor at index {} not found", output_index)));
+        }
+        
+        let tensor_size = unsafe { TfLiteTensorByteSize(tensor) };
+        if tensor_size != output_data.len() {
+            return Err(TfLiteError::TensorCopyFailed);
+        }
+        
+        let status = unsafe {
+            TfLiteTensorCopyToBuffer(
+                tensor,
+                output_data.as_mut_ptr() as *mut std::ffi::c_void,
+                output_data.len()
+            )
+        };
+        
+        if status != 0 {
+            return Err(TfLiteError::TensorCopyFailed);
+        }
+        
+        Ok(())
+    }
+    
+    /// Get input tensor dimensions
+    pub fn input_tensor_dims(&self, input_index: i32) -> Result<Vec<i32>, TfLiteError> {
+        let tensor = unsafe { TfLiteInterpreterGetInputTensor(self.interpreter, input_index) };
+        if tensor.is_null() {
+            return Err(TfLiteError::Other(format!("Input tensor at index {} not found", input_index)));
+        }
+        
+        let num_dims = unsafe { TfLiteTensorNumDims(tensor) };
+        let mut dims = Vec::with_capacity(num_dims as usize);
+        
+        for i in 0..num_dims {
+            let dim = unsafe { TfLiteTensorDim(tensor, i) };
+            dims.push(dim);
+        }
+        
+        Ok(dims)
+    }
+    
+    /// Get output tensor dimensions
+    pub fn output_tensor_dims(&self, output_index: i32) -> Result<Vec<i32>, TfLiteError> {
+        let tensor = unsafe { TfLiteInterpreterGetOutputTensor(self.interpreter, output_index) };
+        if tensor.is_null() {
+            return Err(TfLiteError::Other(format!("Output tensor at index {} not found", output_index)));
+        }
+        
+        let num_dims = unsafe { TfLiteTensorNumDims(tensor) };
+        let mut dims = Vec::with_capacity(num_dims as usize);
+        
+        for i in 0..num_dims {
+            let dim = unsafe { TfLiteTensorDim(tensor, i) };
+            dims.push(dim);
+        }
+        
+        Ok(dims)
+    }
+    
+    /// Get input tensor name
+    pub fn input_tensor_name(&self, input_index: i32) -> Result<String, TfLiteError> {
+        let tensor = unsafe { TfLiteInterpreterGetInputTensor(self.interpreter, input_index) };
+        if tensor.is_null() {
+            return Err(TfLiteError::Other(format!("Input tensor at index {} not found", input_index)));
+        }
+        
+        let name_ptr = unsafe { TfLiteTensorName(tensor) };
+        if name_ptr.is_null() {
+            return Ok(String::new());
+        }
+        
+        let name = unsafe { std::ffi::CStr::from_ptr(name_ptr) };
+        Ok(name.to_string_lossy().into_owned())
+    }
+    
+    /// Get output tensor name
+    pub fn output_tensor_name(&self, output_index: i32) -> Result<String, TfLiteError> {
+        let tensor = unsafe { TfLiteInterpreterGetOutputTensor(self.interpreter, output_index) };
+        if tensor.is_null() {
+            return Err(TfLiteError::Other(format!("Output tensor at index {} not found", output_index)));
+        }
+        
+        let name_ptr = unsafe { TfLiteTensorName(tensor) };
+        if name_ptr.is_null() {
+            return Ok(String::new());
+        }
+        
+        let name = unsafe { std::ffi::CStr::from_ptr(name_ptr) };
+        Ok(name.to_string_lossy().into_owned())
+    }
+    
+    /// Run inference
+    pub fn run(&self) -> Result<(), TfLiteError> {
+        let status = unsafe { TfLiteInterpreterInvoke(self.interpreter) };
+        if status != 0 {
+            return Err(TfLiteError::InferenceFailed);
+        }
+        Ok(())
+    }
+}
+
+impl Drop for CoralInterpreter {
+    fn drop(&mut self) {
+        if !self.interpreter.is_null() {
+            unsafe {
+                TfLiteInterpreterDelete(self.interpreter);
+            }
+        }
+    }
+}
+
 /// EdgeTPU Delegate for TensorFlow Lite
 ///
 /// This struct encapsulates the EdgeTPU delegate used to offload
-/// TensorFlow Lite model computations to the Coral USB Accelerator hardware.
+/// TensorFlow Lite operations to the EdgeTPU hardware.
+#[derive(Clone)]
 pub struct EdgeTPUDelegate {
     raw: EdgeTPUDelegatePtr,
     #[cfg(not(feature = "mock"))]
@@ -396,15 +732,11 @@ impl EdgeTPUDelegate {
         }
     }
     
-    /// Get the raw delegate pointer
-    ///
-    /// This function returns the raw delegate pointer for use with
-    /// TensorFlow Lite C API. This is useful when integrating with
-    /// TensorFlow Lite FFI bindings.
+    /// Get the raw pointer to the EdgeTPU delegate
     pub fn as_ptr(&self) -> EdgeTPUDelegatePtr {
         self.raw
     }
-    
+
     /// Check if the delegate is valid
     ///
     /// This function returns true if the delegate is valid and can be used
