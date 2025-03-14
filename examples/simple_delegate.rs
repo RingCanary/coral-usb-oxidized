@@ -1,4 +1,4 @@
-use coral_usb_oxidized::{CoralDevice, EdgeTPUDelegate, version, is_device_connected};
+use coral_usb_oxidized::{CoralDevice, version, is_device_connected};
 
 fn main() {
     // Print the EdgeTPU library version

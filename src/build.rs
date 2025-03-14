@@ -12,8 +12,8 @@ fn main() {
     println!("cargo:rustc-link-search=native=/home/bhavesh/Devmnt/ai-dev/CORAL/tensorflow-source/bazel-bin/tensorflow/lite/c");
     
     // Link with the real libraries
-    println!("cargo:rustc-link-lib=tensorflowlite_c");
-    println!("cargo:rustc-link-lib=edgetpu");
+    println!("cargo:rustc-link-lib=dylib=tensorflowlite_c");
+    println!("cargo:rustc-link-lib=dylib=edgetpu");
     
     // Tell cargo to invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed=wrapper.h");

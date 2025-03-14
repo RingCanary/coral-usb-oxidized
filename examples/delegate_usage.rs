@@ -1,5 +1,4 @@
 use coral_usb_oxidized::{CoralDevice, is_device_connected, version, get_device_info};
-use std::env;
 use std::thread;
 use std::time::Duration;
 
@@ -44,11 +43,7 @@ fn main() {
     println!("  Vendor ID: 0x{:04x}", device.vendor_id());
     println!("  Product ID: 0x{:04x}", device.product_id());
     
-    // Check if we should enable mock mode for testing
-    if env::var("CORAL_MOCK_MODE").is_ok() {
-        println!("\nEnabling mock mode for testing...");
-        coral_usb_oxidized::enable_mock_mode(true);
-    }
+    // Remove the mock mode check as it's not needed
     
     // Try to create an EdgeTPU delegate
     println!("\nCreating EdgeTPU delegate...");

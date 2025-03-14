@@ -1,6 +1,7 @@
 use coral_usb_oxidized::{CoralDevice, list_devices, version, CoralError};
 use std::time::Duration;
 use std::thread;
+use chrono;
 
 // Expected device name for validation
 const EXPECTED_DEVICE_NAME: &str = "Coral USB Accelerator";

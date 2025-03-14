@@ -8,7 +8,7 @@ A Rust SDK for interacting with Google Coral USB Accelerator hardware.
 - USB device information retrieval
 - Error handling for device operations
 - EdgeTPU delegate creation for TensorFlow Lite acceleration
-- Mock mode for testing without actual hardware
+- Real hardware testing with no mock code
 
 ## Device Information
 
@@ -83,10 +83,39 @@ fn main() {
 }
 ```
 
-### Running the Example
+### Running the Examples
+
+We provide several examples that demonstrate different aspects of the SDK:
 
 ```bash
+# Basic device detection and information
 cargo run --example basic_usage
+
+# Verify device connection and monitor connection status
+cargo run --example verify_device
+
+# Create and use EdgeTPU delegate
+cargo run --example delegate_usage
+
+# Simple delegate creation example
+cargo run --example simple_delegate
+
+# Test TensorFlow Lite integration
+cargo run --example tflite_test
+
+# Standard TensorFlow Lite example
+cargo run --example tflite_standard_example
+```
+
+You can also use the custom commands defined in `.cargo/config.toml`:
+
+```bash
+cargo test-basic-usage
+cargo test-verify-device
+cargo test-delegate-usage
+cargo test-simple-delegate
+cargo test-tflite-test
+cargo test-tflite-standard
 ```
 
 ### EdgeTPU Delegate Usage
@@ -132,312 +161,61 @@ fn main() {
 }
 ```
 
-### Running the Delegate Example
+## TensorFlow Lite Integration
+
+This SDK provides integration with TensorFlow Lite through FFI bindings to the TensorFlow Lite C API. This allows you to load TensorFlow Lite models, create interpreters, and run inference with the EdgeTPU delegate for hardware acceleration.
+
+### Current Status
+
+The SDK successfully supports:
+- Device detection and management
+- EdgeTPU delegate creation
+- Basic TensorFlow Lite integration
+
+## Development and Testing
+
+This project requires real Coral USB Accelerator hardware for testing. No mock code is used, ensuring that all functionality is tested against actual hardware.
+
+### Running Tests
+
+To run the unit tests:
 
 ```bash
-cargo run --example delegate_usage
+cargo test-lib
 ```
 
-### TensorFlow Lite Integration
+## Prerequisites
 
-This SDK provides direct integration with TensorFlow Lite through FFI bindings to the TensorFlow Lite C API. This allows you to load TensorFlow Lite models, create interpreters, and run inference with the EdgeTPU delegate for hardware acceleration.
+### EdgeTPU Runtime
 
-#### Current Status and Known Issues
-
-We have implemented several examples demonstrating TensorFlow Lite integration with the EdgeTPU:
-
-1. **Basic Model Loading**: Successfully loading TensorFlow Lite models
-2. **Standard TensorFlow Lite Inference**: Running inference with standard (non-EdgeTPU) models works correctly
-3. **EdgeTPU Integration**: We've encountered some challenges when integrating the EdgeTPU delegate with TensorFlow Lite:
-   - Standard TensorFlow Lite models load and run successfully
-   - EdgeTPU-optimized models can be loaded but require the EdgeTPU delegate for inference
-   - When attempting to create a TensorFlow Lite interpreter with the EdgeTPU delegate, a segmentation fault occurs
-
-#### Example Usage
-
-```rust
-use coral_usb_oxidized::{CoralDevice, version};
-use std::path::Path;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Print the EdgeTPU library version
-    println!("EdgeTPU Library Version: {}", version());
-    
-    // Create a Coral device
-    let device = CoralDevice::new()?;
-    println!("Coral device created successfully!");
-    
-    // Create an EdgeTPU delegate
-    let delegate = device.create_delegate()?;
-    println!("EdgeTPU delegate created successfully!");
-    
-    // The delegate can now be used with TensorFlow Lite
-    // Note: Direct integration with TensorFlow Lite interpreter is still being developed
-    
-    Ok(())
-}
-```
-
-#### Working with Standard TensorFlow Lite Models
-
-While we continue to develop the EdgeTPU integration, you can use standard TensorFlow Lite models with this SDK:
-
-```rust
-use std::path::Path;
-use std::ffi::CString;
-use std::os::raw::c_char;
-
-// TensorFlow Lite C API types
-pub enum TfLiteModel {}
-pub enum TfLiteInterpreter {}
-pub enum TfLiteInterpreterOptions {}
-
-// FFI declarations for TensorFlow Lite C API
-#[link(name = "tensorflowlite_c")]
-extern "C" {
-    fn TfLiteModelCreateFromFile(model_path: *const c_char) -> *mut TfLiteModel;
-    fn TfLiteModelDelete(model: *mut TfLiteModel);
-    
-    fn TfLiteInterpreterOptionsCreate() -> *mut TfLiteInterpreterOptions;
-    fn TfLiteInterpreterOptionsDelete(options: *mut TfLiteInterpreterOptions);
-    
-    fn TfLiteInterpreterCreate(model: *mut TfLiteModel, options: *mut TfLiteInterpreterOptions) -> *mut TfLiteInterpreter;
-    fn TfLiteInterpreterDelete(interpreter: *mut TfLiteInterpreter);
-    
-    fn TfLiteInterpreterAllocateTensors(interpreter: *mut TfLiteInterpreter) -> i32;
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Path to a standard TensorFlow Lite model
-    let model_path = "path/to/model.tflite";
-    
-    unsafe {
-        // Convert path to C string
-        let c_model_path = CString::new(model_path)?;
-        
-        // Load the model
-        let model = TfLiteModelCreateFromFile(c_model_path.as_ptr());
-        if model.is_null() {
-            return Err("Failed to load model".into());
-        }
-        
-        // Create interpreter options
-        let options = TfLiteInterpreterOptionsCreate();
-        if options.is_null() {
-            TfLiteModelDelete(model);
-            return Err("Failed to create interpreter options".into());
-        }
-        
-        // Create interpreter
-        let interpreter = TfLiteInterpreterCreate(model, options);
-        if interpreter.is_null() {
-            TfLiteInterpreterOptionsDelete(options);
-            TfLiteModelDelete(model);
-            return Err("Failed to create interpreter".into());
-        }
-        
-        // Allocate tensors
-        let status = TfLiteInterpreterAllocateTensors(interpreter);
-        if status != 0 {
-            TfLiteInterpreterDelete(interpreter);
-            TfLiteInterpreterOptionsDelete(options);
-            TfLiteModelDelete(model);
-            return Err(format!("Failed to allocate tensors: {}", status).into());
-        }
-        
-        // Run inference and process results...
-        
-        // Clean up
-        TfLiteInterpreterDelete(interpreter);
-        TfLiteInterpreterOptionsDelete(options);
-        TfLiteModelDelete(model);
-    }
-    
-    Ok(())
-}
-```
-
-#### Next Steps
-
-We are actively working on resolving the segmentation fault issue when creating a TensorFlow Lite interpreter with the EdgeTPU delegate. Future updates will include:
-
-1. Full integration with the TensorFlow Lite C API
-2. High-level Rust abstractions for TensorFlow Lite operations
-3. Comprehensive examples for image classification and other ML tasks
-4. Improved error handling and debugging capabilities
-
-### Dependencies
-
-To use the TensorFlow Lite integration, you need to have the TensorFlow Lite and EdgeTPU libraries installed on your system:
+You'll need to install the EdgeTPU runtime:
 
 ```bash
-# Install TensorFlow Lite
-# Follow the instructions at: https://www.tensorflow.org/lite/guide/build_cmake
-
-# Install EdgeTPU runtime
-# For Debian/Ubuntu:
 curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | sudo tee /etc/apt/sources.list.d/coral-edgetpu.list
 sudo apt-get update
 sudo apt-get install libedgetpu1-std
 ```
 
-### Mock Mode for Testing
+### TensorFlow Lite
 
-The SDK includes a mock mode for testing without actual hardware. This is useful for development and testing in environments where the Coral USB Accelerator is not available:
-
-```rust
-use coral_usb_oxidized::{CoralDevice, enable_mock_mode, is_device_connected};
-
-fn main() {
-    // Enable mock mode for testing without actual hardware
-    enable_mock_mode(true);
-    
-    // Now all calls will use mock implementations
-    if is_device_connected() {
-        match CoralDevice::new() {
-            Ok(device) => {
-                // Create a mock EdgeTPU delegate
-                match device.create_delegate() {
-                    Ok(delegate) => {
-                        println!("Successfully created mock EdgeTPU delegate!");
-                        // Use the mock delegate for testing
-                    },
-                    Err(e) => {
-                        println!("Error creating mock EdgeTPU delegate: {}", e);
-                    }
-                }
-            },
-            Err(e) => {
-                println!("Error creating mock device: {}", e);
-            }
-        }
-    }
-}
-```
-
-To run an example with mock mode enabled:
+For TensorFlow Lite integration, you'll need to build the TensorFlow Lite C API from source:
 
 ```bash
-cargo run --example delegate_usage --features mock
-```
-
-## TensorFlow Lite and EdgeTPU Integration
-
-This project requires the TensorFlow Lite C API and EdgeTPU libraries to be installed on your system.
-
-### Installing TensorFlow Lite C API
-
-The TensorFlow Lite C API can be built from source:
-
-```bash
-# Clone the TensorFlow repository
-git clone https://github.com/tensorflow/tensorflow.git tensorflow-source
-cd tensorflow-source
-
-# Configure and build the TensorFlow Lite C API
+git clone https://github.com/tensorflow/tensorflow.git
+cd tensorflow
 ./configure
-bazel build --config=opt //tensorflow/lite/c:tensorflowlite_c
-
-# The built library will be available at:
-# bazel-bin/tensorflow/lite/c/libtensorflowlite_c.so
+bazel build //tensorflow/lite/c:libtensorflowlite_c.so
 ```
 
-### Installing EdgeTPU Library
-
-The EdgeTPU library can be installed following the official Google Coral documentation:
-
-```bash
-# For Debian-based systems
-echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | sudo tee /etc/apt/sources.list.d/coral-edgetpu.list
-curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-sudo apt-get update
-sudo apt-get install libedgetpu1-std
-```
-
-### Running the Example
-
-After installing the required libraries, you can run the example test program:
-
-```bash
-# Set the library path to include the TensorFlow Lite C API library
-export LD_LIBRARY_PATH=/path/to/tensorflow-source/bazel-bin/tensorflow/lite/c:$LD_LIBRARY_PATH
-
-# Run the test program
-cargo run --example tflite_test
-```
-
-Alternatively, you can use the provided script:
-
-```bash
-./run_test.sh
-```
-
-### Verifying Installation
-
-The test program will check if:
-1. The TensorFlow Lite C API library is properly installed and linked
-2. The EdgeTPU library is properly installed and linked
-3. A Coral USB Accelerator is connected to the system
-
-If no Coral USB Accelerator is connected, the test will still verify that the libraries are installed correctly.
-
-## Device Verification
-
-The SDK provides robust methods to verify that a connected device is a genuine Coral USB Accelerator:
-
-### Basic Verification
-
-The simplest way to verify a device is to use the `is_device_connected()` function:
-
-```rust
-use coral_usb_oxidized::is_device_connected;
-
-if is_device_connected() {
-    println!("Coral USB Accelerator detected");
-} else {
-    println!("No Coral USB Accelerator found");
-}
-```
-
-### Comprehensive Verification
-
-For more thorough verification, use the `CoralDevice::new()` method which attempts to create a device instance:
-
-```rust
-use coral_usb_oxidized::CoralDevice;
-
-match CoralDevice::new() {
-    Ok(device) => {
-        if device.is_valid() {
-            println!("Coral USB Accelerator verified");
-        } else {
-            println!("Device found but validation failed");
-        }
-    },
-    Err(e) => {
-        println!("Error: {}", e);
-    }
-}
-```
-
-## Development Status
-
-This SDK is currently in development. The current implementation includes:
-
-- [x] USB device detection
-- [x] Device information retrieval
-- [x] Basic error handling
-- [x] Device verification
-- [x] EdgeTPU delegate creation
-- [x] TensorFlow Lite model inference
-- [ ] Performance optimization
-
-## Dependencies
-
-- `rusb`: For USB device communication
-- `libc`: For C library integration
+Then, update the build.rs file to point to your TensorFlow Lite C API library path.
 
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Google Coral team for the EdgeTPU hardware and software
+- TensorFlow team for TensorFlow Lite
+- Rust community for the excellent ecosystem
