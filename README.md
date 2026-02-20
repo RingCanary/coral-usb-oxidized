@@ -99,6 +99,7 @@ cargo run --example delegate_usage
 cargo run --example simple_delegate
 cargo run --example tflite_test
 cargo run --example tflite_standard_example
+cargo run --example cpu_vs_edgetpu_mvp -- --help
 ```
 
 ### Real inference benchmark example
@@ -117,6 +118,23 @@ Run repeated inference:
 cargo run --example inference_benchmark -- \
   models/mobilenet_v1_1.0_224_quant.tflite 100 10
 ```
+
+### MVP CPU vs EdgeTPU comparison harness
+
+Run a minimal two-workload comparison (`sanity_model` + `matrix_model`) across
+`cpu_int8` and `edgetpu_int8`, with warmup `10`, runs `100`, repeats `3`:
+
+```bash
+cargo run --example cpu_vs_edgetpu_mvp -- \
+  --sanity-model models/mobilenet_v1_1.0_224_quant.tflite \
+  --matrix-model models/mobilenet_v1_1.0_224_quant.tflite \
+  --warmup 10 \
+  --runs 100 \
+  --repeats 3 \
+  --csv mvp_results.csv
+```
+
+Output includes per-scenario `RESULT ...` lines and one CSV file with repeat-level summaries.
 
 ## Validation snapshot (2026-02-20, Raspberry Pi 5)
 
