@@ -186,6 +186,7 @@ pub enum TfLiteTensor {}
 pub enum TfLiteDelegate {}
 
 // TensorFlow Lite C API functions
+#[link(name = "tensorflowlite_c")]
 extern "C" {
     fn TfLiteModelCreate(model_data: *const u8, model_size: usize) -> *mut TfLiteModel;
     fn TfLiteModelDelete(model: *mut TfLiteModel);
