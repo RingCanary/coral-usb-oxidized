@@ -1,7 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Set the library path to include the TensorFlow Lite C API library
-export LD_LIBRARY_PATH=/home/bhavesh/Devmnt/ai-dev/CORAL/tensorflow-source/bazel-bin/tensorflow/lite/c:$LD_LIBRARY_PATH
+# Optional override if tensorflowlite_c is installed in a non-standard path.
+# Example (Raspberry Pi 5):
+#   TFLITE_LIB_DIR=/usr/lib/aarch64-linux-gnu ./run_test.sh
+if [[ -n "${TFLITE_LIB_DIR:-}" ]]; then
+  export LD_LIBRARY_PATH="${TFLITE_LIB_DIR}:${LD_LIBRARY_PATH:-}"
+fi
 
-# Run the test program
 cargo run --example tflite_test
