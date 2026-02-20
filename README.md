@@ -120,7 +120,7 @@ cargo run --example inference_benchmark -- \
 
 ## Validation snapshot (2026-02-20, Raspberry Pi 5)
 
-Host: `rpc@rpilm3.local` with Coral USB attached.
+Hardware: Raspberry Pi 5 (aarch64, Debian-based Raspberry Pi OS) with Coral USB Accelerator attached.
 
 | Case | Command | Result |
 |---|---|---|
