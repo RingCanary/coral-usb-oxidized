@@ -2,40 +2,12 @@
 
 Rust SDK/driver layer for Google Coral USB Accelerator discovery, delegate creation, and TensorFlow Lite C API interop.
 
-## Raspberry Pi 5 compatibility
+## What this crate provides
 
-This project is now set up to build on Raspberry Pi 5 (64-bit Raspberry Pi OS / Debian-based Linux) without hardcoded workstation paths.
-
-### Supported runtime layout
-
-The build now searches standard library locations for both x86_64 and ARM:
-
-- `/usr/lib`
-- `/usr/local/lib`
-- `/usr/lib/x86_64-linux-gnu`
-- `/usr/lib/aarch64-linux-gnu` (Pi 5)
-- `/usr/lib/arm-linux-gnueabihf`
-
-You can also override library lookup with environment variables:
-
-- `CORAL_LIB_DIR`
-- `EDGETPU_LIB_DIR`
-- `TFLITE_LIB_DIR`
-
-## Device behavior
-
-Coral USB commonly appears as:
-
-- Initial: `1a6e:089a`
-- After delegate/init/inference: `18d1:9302`
-
-Both IDs are handled by this library, and should both be in udev rules.
-
-```bash
-echo 'SUBSYSTEMS=="usb", ATTRS{idVendor}=="1a6e", ATTRS{idProduct}=="089a", MODE="0664", TAG+="uaccess"' | sudo tee /etc/udev/rules.d/71-edgetpu.rules
-echo 'SUBSYSTEMS=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="9302", MODE="0664", TAG+="uaccess"' | sudo tee -a /etc/udev/rules.d/71-edgetpu.rules
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
+- Coral USB detection (`1a6e:089a` and `18d1:9302`)
+- EdgeTPU delegate creation through `edgetpu_c.h`
+- TensorFlow Lite C API wrappers for model/interpreter/tensor operations
+- Example programs for device verification and delegate/TFLite flows
 
 ## Raspberry Pi 5 setup
 
@@ -44,38 +16,81 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
-  git curl build-essential pkg-config libusb-1.0-0-dev clang llvm-dev libclang-dev
+  git curl build-essential pkg-config libusb-1.0-0-dev clang llvm-dev libclang-dev gnupg
 ```
 
-### 2) Install EdgeTPU runtime
+### 2) Install EdgeTPU runtime (modern apt keyring flow)
 
 ```bash
-curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | sudo tee /etc/apt/sources.list.d/coral-edgetpu.list
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/coral-edgetpu.gpg
+echo "deb [signed-by=/etc/apt/keyrings/coral-edgetpu.gpg] https://packages.cloud.google.com/apt coral-edgetpu-stable main" | \
+  sudo tee /etc/apt/sources.list.d/coral-edgetpu.list >/dev/null
 sudo apt-get update
-sudo apt-get install -y libedgetpu1-std
+sudo apt-get install -y libedgetpu1-std libedgetpu-dev
 ```
 
-### 3) Install TensorFlow Lite C library
-
-You need `libtensorflowlite_c.so` installed in a standard linker path (recommended), or provide `TFLITE_LIB_DIR`.
-
-If installed in a non-standard location:
+### 3) Install TensorFlow Lite runtime/dev library
 
 ```bash
-export TFLITE_LIB_DIR=/path/to/tflite/lib
-export LD_LIBRARY_PATH="$TFLITE_LIB_DIR:$LD_LIBRARY_PATH"
+sudo apt-get install -y libtensorflow-lite-dev
 ```
 
-### 4) Build
+On Debian/Raspberry Pi OS this typically installs `libtensorflow-lite.so` under `/usr/lib/aarch64-linux-gnu`.
+
+### 4) USB permissions (required for non-root delegate creation)
 
 ```bash
-cargo build
+cat <<'EOF' | sudo tee /etc/udev/rules.d/71-edgetpu.rules >/dev/null
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="1a6e", ATTRS{idProduct}=="089a", MODE="0664", GROUP="plugdev", TAG+="uaccess"
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="9302", MODE="0664", GROUP="plugdev", TAG+="uaccess"
+EOF
+sudo usermod -aG plugdev "$USER"
+sudo udevadm control --reload-rules
+sudo udevadm trigger
 ```
 
-## Usage
+You need a new login session after `usermod -aG`.
 
-### Examples
+### 5) Build and smoke test
+
+```bash
+cargo check --lib
+cargo run --example basic_usage
+cargo run --example simple_delegate
+cargo run --example tflite_test
+```
+
+## Linking behavior
+
+The build script checks these library locations:
+
+- `/usr/lib`
+- `/usr/local/lib`
+- `/usr/lib/x86_64-linux-gnu`
+- `/usr/lib/aarch64-linux-gnu`
+- `/usr/lib/arm-linux-gnueabihf`
+
+Overrides:
+
+- `CORAL_LIB_DIR`
+- `EDGETPU_LIB_DIR`
+- `TFLITE_LIB_DIR`
+- `TFLITE_LINK_LIB` (explicitly choose link name, for example `tensorflowlite_c` or `tensorflow-lite`)
+
+By default, TensorFlow Lite linking prefers `libtensorflowlite_c.so` when present, otherwise falls back to distro naming (`libtensorflow-lite.so`).
+
+## Device behavior
+
+Coral USB commonly appears as:
+
+- Initial: `1a6e:089a`
+- After delegate/init/inference: `18d1:9302`
+
+Both IDs are expected and should be included in udev rules.
+
+## Examples
 
 ```bash
 cargo run --example basic_usage
@@ -86,15 +101,25 @@ cargo run --example tflite_test
 cargo run --example tflite_standard_example
 ```
 
-### Optional helper script
+### Real inference benchmark example
 
-`run_test.sh` now supports an optional `TFLITE_LIB_DIR` override:
+Download a quantized TensorFlow Lite model:
 
 ```bash
-TFLITE_LIB_DIR=/usr/lib/aarch64-linux-gnu ./run_test.sh
+mkdir -p models
+curl -L -o models/mobilenet_v1_1.0_224_quant.tflite \
+  https://github.com/google-coral/test_data/raw/master/mobilenet_v1_1.0_224_quant.tflite
+```
+
+Run repeated inference:
+
+```bash
+cargo run --example inference_benchmark -- \
+  models/mobilenet_v1_1.0_224_quant.tflite 100 10
 ```
 
 ## Notes
 
-- Real hardware validation is expected for meaningful verification.
-- API behavior for `CoralDevice`, `EdgeTPUDelegate`, and `CoralInterpreter` remains unchanged.
+- Real hardware validation is required for meaningful results.
+- API behavior for `CoralDevice`, `EdgeTPUDelegate`, and `CoralInterpreter` remains stable.
+- Some distro/runtime combinations can crash when loading certain `*_edgetpu.tflite` models. If you hit that, align `libedgetpu` and TensorFlow Lite versions from the same Coral compatibility set.

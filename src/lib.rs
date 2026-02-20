@@ -29,6 +29,13 @@ pub struct EdgeTPUOption {
     value: *const c_char,
 }
 
+// EdgeTPU device information returned by the C API.
+#[repr(C)]
+struct EdgeTPUDevice {
+    device_type: i32,
+    path: *const c_char,
+}
+
 // Raw EdgeTPU delegate type from C API
 #[repr(C)]
 pub struct EdgeTPUDelegateRaw {
@@ -90,6 +97,12 @@ impl From<rusb::Error> for CoralError {
 // FFI bindings for libedgetpu
 #[link(name = "edgetpu")]
 extern "C" {
+    #[link_name = "edgetpu_list_devices"]
+    fn edgetpu_list_devices(num_devices: *mut usize) -> *mut EdgeTPUDevice;
+
+    #[link_name = "edgetpu_free_devices"]
+    fn edgetpu_free_devices(devices: *mut EdgeTPUDevice);
+
     #[link_name = "edgetpu_create_delegate"]
     fn edgetpu_create_delegate(
         device_type: EdgeTPUDeviceType,
@@ -179,21 +192,68 @@ impl EdgeTPULibrary {
     }
 }
 
+fn first_edgetpu_device_path() -> Option<CString> {
+    let mut num_devices: usize = 0;
+    let devices_ptr = unsafe { edgetpu_list_devices(&mut num_devices as *mut usize) };
+    if devices_ptr.is_null() || num_devices == 0 {
+        return None;
+    }
+
+    let selected_path = unsafe {
+        let devices = std::slice::from_raw_parts(devices_ptr, num_devices);
+        let mut path = None;
+
+        // Prefer an explicit USB device path when available.
+        for dev in devices {
+            if dev.device_type == EdgeTPUDeviceType::EdgetpuApexUsb as i32 && !dev.path.is_null() {
+                let raw = std::ffi::CStr::from_ptr(dev.path).to_bytes();
+                if let Ok(device_path) = CString::new(raw) {
+                    path = Some(device_path);
+                    break;
+                }
+            }
+        }
+
+        if path.is_none() {
+            for dev in devices {
+                if !dev.path.is_null() {
+                    let raw = std::ffi::CStr::from_ptr(dev.path).to_bytes();
+                    if let Ok(device_path) = CString::new(raw) {
+                        path = Some(device_path);
+                        break;
+                    }
+                }
+            }
+        }
+
+        edgetpu_free_devices(devices_ptr);
+        path
+    };
+
+    selected_path
+}
+
 // TensorFlow Lite C API types
 pub enum TfLiteModel {}
 pub enum TfLiteInterpreter {}
+pub enum TfLiteInterpreterOptions {}
 pub enum TfLiteTensor {}
 pub enum TfLiteDelegate {}
 
 // TensorFlow Lite C API functions
-#[link(name = "tensorflowlite_c")]
 extern "C" {
     fn TfLiteModelCreate(model_data: *const u8, model_size: usize) -> *mut TfLiteModel;
     fn TfLiteModelDelete(model: *mut TfLiteModel);
     fn TfLiteInterpreterCreate(
         model: *mut TfLiteModel,
-        options: *mut std::ffi::c_void,
+        options: *mut TfLiteInterpreterOptions,
     ) -> *mut TfLiteInterpreter;
+    fn TfLiteInterpreterOptionsCreate() -> *mut TfLiteInterpreterOptions;
+    fn TfLiteInterpreterOptionsDelete(options: *mut TfLiteInterpreterOptions);
+    fn TfLiteInterpreterOptionsAddDelegate(
+        options: *mut TfLiteInterpreterOptions,
+        delegate: *mut TfLiteDelegate,
+    );
     fn TfLiteInterpreterSetNumThreads(interpreter: *mut TfLiteInterpreter, num_threads: i32)
         -> i32;
     fn TfLiteInterpreterAllocateTensors(interpreter: *mut TfLiteInterpreter) -> i32;
@@ -214,7 +274,7 @@ extern "C" {
     fn TfLiteTensorDim(tensor: *mut TfLiteTensor, dim_index: i32) -> i32;
     fn TfLiteTensorByteSize(tensor: *mut TfLiteTensor) -> usize;
     fn TfLiteTensorData(tensor: *mut TfLiteTensor) -> *mut std::ffi::c_void;
-    fn TfLiteTensorName(tensor: *mut TfLiteTensor) -> *const i8;
+    fn TfLiteTensorName(tensor: *mut TfLiteTensor) -> *const c_char;
     fn TfLiteTensorCopyFromBuffer(
         tensor: *mut TfLiteTensor,
         input_data: *const std::ffi::c_void,
@@ -224,10 +284,6 @@ extern "C" {
         tensor: *mut TfLiteTensor,
         output_data: *mut std::ffi::c_void,
         output_data_size: usize,
-    ) -> i32;
-    fn TfLiteInterpreterModifyGraphWithDelegate(
-        interpreter: *mut TfLiteInterpreter,
-        delegate: *mut TfLiteDelegate,
     ) -> i32;
 }
 
@@ -354,20 +410,20 @@ impl CoralInterpreter {
         let model = TfLiteModelWrapper::new_from_file(model_path)?;
 
         let interpreter = unsafe {
-            let interpreter_ptr = TfLiteInterpreterCreate(model.as_ptr(), std::ptr::null_mut());
-            if interpreter_ptr.is_null() {
+            let options = TfLiteInterpreterOptionsCreate();
+            if options.is_null() {
                 return Err(TfLiteError::InterpreterCreationFailed);
             }
 
-            // Add the EdgeTPU delegate to the interpreter
-            let status = TfLiteInterpreterModifyGraphWithDelegate(
-                interpreter_ptr,
+            TfLiteInterpreterOptionsAddDelegate(
+                options,
                 delegate.as_ptr() as *mut TfLiteDelegate,
             );
 
-            if status != 0 {
-                TfLiteInterpreterDelete(interpreter_ptr);
-                return Err(TfLiteError::DelegateModificationFailed);
+            let interpreter_ptr = TfLiteInterpreterCreate(model.as_ptr(), options);
+            TfLiteInterpreterOptionsDelete(options);
+            if interpreter_ptr.is_null() {
+                return Err(TfLiteError::InterpreterCreationFailed);
             }
 
             interpreter_ptr
@@ -410,6 +466,32 @@ impl CoralInterpreter {
     /// Get the number of output tensors
     pub fn output_tensor_count(&self) -> i32 {
         unsafe { TfLiteInterpreterGetOutputTensorCount(self.interpreter) }
+    }
+
+    /// Get the input tensor byte size
+    pub fn input_tensor_byte_size(&self, input_index: i32) -> Result<usize, TfLiteError> {
+        let tensor = unsafe { TfLiteInterpreterGetInputTensor(self.interpreter, input_index) };
+        if tensor.is_null() {
+            return Err(TfLiteError::Other(format!(
+                "Input tensor at index {} not found",
+                input_index
+            )));
+        }
+
+        Ok(unsafe { TfLiteTensorByteSize(tensor) })
+    }
+
+    /// Get the output tensor byte size
+    pub fn output_tensor_byte_size(&self, output_index: i32) -> Result<usize, TfLiteError> {
+        let tensor = unsafe { TfLiteInterpreterGetOutputTensor(self.interpreter, output_index) };
+        if tensor.is_null() {
+            return Err(TfLiteError::Other(format!(
+                "Output tensor at index {} not found",
+                output_index
+            )));
+        }
+
+        Ok(unsafe { TfLiteTensorByteSize(tensor) })
     }
 
     /// Copy data to an input tensor
@@ -614,11 +696,14 @@ impl EdgeTPUDelegate {
 
         // Load the EdgeTPU library
         let library = EdgeTPULibrary::new()?;
+        let device_name = first_edgetpu_device_path();
 
         unsafe {
             let delegate = library.create_delegate(
                 EdgeTPUDeviceType::EdgetpuApexUsb,
-                ptr::null(),
+                device_name
+                    .as_ref()
+                    .map_or(ptr::null(), |name| name.as_ptr()),
                 ptr::null(),
                 0,
             )?;
@@ -685,11 +770,14 @@ impl EdgeTPUDelegate {
 
         // Load the EdgeTPU library
         let library = EdgeTPULibrary::new()?;
+        let device_name = first_edgetpu_device_path();
 
         unsafe {
             let delegate = library.create_delegate(
                 EdgeTPUDeviceType::EdgetpuApexUsb,
-                ptr::null(),
+                device_name
+                    .as_ref()
+                    .map_or(ptr::null(), |name| name.as_ptr()),
                 if options.is_empty() {
                     ptr::null()
                 } else {
