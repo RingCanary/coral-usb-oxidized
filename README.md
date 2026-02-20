@@ -118,6 +118,21 @@ cargo run --example inference_benchmark -- \
   models/mobilenet_v1_1.0_224_quant.tflite 100 10
 ```
 
+## Validation snapshot (2026-02-20, Raspberry Pi 5)
+
+Host: `rpc@rpilm3.local` with Coral USB attached.
+
+| Case | Command | Result |
+|---|---|---|
+| Build check | `cargo check --lib` | Pass |
+| Device smoke | `cargo run --example basic_usage` | Pass |
+| Delegate smoke | `cargo run --example simple_delegate` | Pass |
+| TFLite + delegate creation | `cargo run --example tflite_test` | Pass |
+| Benchmark (100 runs) | `inference_benchmark mobilenet_v1_1.0_224_quant.tflite 100 10` | Pass, avg `15.133 ms`, p95 `15.203 ms` |
+| Benchmark (500 runs) | `inference_benchmark mobilenet_v1_1.0_224_quant.tflite 500 20` | Pass, avg `15.086 ms`, p95 `15.157 ms` |
+| EdgeTPU model load | `inference_benchmark mobilenet_v1_1.0_224_quant_edgetpu.tflite 1 0` | Fail (`SIGSEGV`) at interpreter creation |
+| EdgeTPU model load | `inference_benchmark mobilenet_v2_1.0_224_inat_bird_quant_edgetpu.tflite 1 0` | Fail (`SIGSEGV`) at interpreter creation |
+
 ## Notes
 
 - Real hardware validation is required for meaningful results.
