@@ -147,6 +147,11 @@ For each extracted package:
    payload), which explains its steeper per-invoke USB slope class.
 4. The parser now provides a schema-backed basis for a tensorizer pipeline.
 
+Tensorizer MVP status:
+
+- in-place parameter patching on model A is now implemented and validated:
+  `docs/tensorizer_mvp.md`.
+
 ## Reproduction commands
 
 ```bash

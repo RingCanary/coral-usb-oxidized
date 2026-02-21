@@ -391,3 +391,33 @@ All runs exited with `command_exit=0`.
      `BASE_ADDRESS_INPUT_ACTIVATION`, `BASE_ADDRESS_OUTPUT_ACTIVATION`
    appear in `EXECUTION_ONLY` executable field offsets, with layer names carried
    on input/output relocations.
+
+## 2026-02-21 (tensorizer MVP: in-place parameter patching)
+
+### New tooling
+
+1. Added `tools/tensorizer_patch_edgetpu.py`:
+   - `inspect` subcommand finds package/executable layout and absolute
+     `Executable.parameters` byte ranges inside compiled `*_edgetpu.tflite`
+   - `patch` subcommand rewrites selected parameter regions in-place while
+     preserving file size and FlatBuffer offsets
+   - patch modes: `zero`, `byte`, `ramp`, `xor`, `random`
+
+### New docs
+
+1. Added `docs/tensorizer_mvp.md`:
+   - end-to-end commands and observed results for model A tensorizer sanity test
+
+### New findings
+
+1. Model A patch target located:
+   - `exe[1]` (`PARAMETER_CACHING`) parameter region
+   - absolute range `[13276, 4477276)` (`4464000` bytes)
+2. Baseline inference (`runs=5`, `warmup=1`):
+   - top output `index=905 score=38`
+3. Patched inference (three patterns: `zero`, `ramp`, `xorff`):
+   - model still runs on EdgeTPU
+   - top output collapses to `index=1000 score=0`
+4. Interpretation:
+   - parameter payload mutation is sufficient to alter behavior while keeping
+     compiled execution stream runnable, validating the tensorizer direction.

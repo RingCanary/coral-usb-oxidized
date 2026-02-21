@@ -145,6 +145,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `tools/usbmon_bulk_signature.py` (bulk payload header/signature extraction by phase)
 - `tools/usbmon_three_stage_signature.py` (dedicated 3-stage bulk loop signature parser)
 - `tools/parse_edgetpu_executable.py` (schema-aware parser for serialized executables)
+- `tools/tensorizer_patch_edgetpu.py` (in-place parameter patcher for compiled `*_edgetpu.tflite`)
 - `tools/strace_usb_scaling.py` (USBDEVFS submit/reap scaling fit from strace summaries)
 - `tools/edgetpu_delegate_smoke.sh` (minimal delegate exercise without TensorFlow Lite C libs)
 
@@ -157,6 +158,7 @@ Current reverse-engineering notes:
 - `docs/next_usbmon_capture_matrix.md`
 - `docs/usb_register_map_candidates.md`
 - `docs/usb_executable_transport_correlation.md`
+- `docs/tensorizer_mvp.md`
 - `docs/schema/libedgetpu_executable.fbs`
 - `docs/external_research_2026-02-21.md`
 - `traces/re-matrix-20260221T092342Z/USBMON_PACKET_VALIDATION_20260221T1035Z.md`
