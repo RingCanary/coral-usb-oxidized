@@ -84,3 +84,39 @@ Runtime verification logs:
 
 This is strong evidence the recovered mapping is correct for structured
 `W @ x`-style behavior on this template.
+
+## Quantization byte mapping verification
+
+Added probe tool:
+
+- `tools/dense_quant_value_probe.py`
+
+Artifact:
+
+- `traces/dense-quant-value-probe-20260221T122533Z/value_probe.txt`
+
+Observed for single-hot `(row=0,col=0)` sweeps:
+
+1. TFLite weight tensor is signed `INT8` (`zero_point=0`).
+2. Compiled payload byte is exactly quant byte shifted by `+128`.
+   - examples:
+     - quant `127` -> compiled `255`
+     - quant `0` -> compiled `128`
+     - quant `-127` (raw byte `129`) -> compiled `1`
+3. This matches:
+   - `q_i8 = clamp(round(real / scale) + zp, -128, 127)`
+   - `payload_u8 = (q_i8 + 128) & 0xff`
+
+Note on single-hot value sweeps:
+
+- each individually-compiled model re-calibrates weight scale, so many tested
+  float magnitudes saturated to `q_i8=+/-127`.
+- for tensorizer usage, the relevant path is fixed-template encoding:
+  use the template's fixed scale/zero-point and write `payload_u8` directly.
+
+Fixed-template byte sweep validation (`value_byte_sweep`):
+
+- using `tools/dense_template_matrix_patch.py` (`mode=single_hot`, `(0,0)`)
+- bytes `255,224,192,160,128,96,...` produced output lane-0 values
+  `127,96,64,32,0,-32,...` under `inference_dump alt`
+- confirms linear interpretation of payload byte around center `128`.

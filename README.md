@@ -151,6 +151,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `tools/dense_template_pipeline.sh` (generate -> compile -> extract -> parse -> inspect pipeline)
 - `tools/dense_layout_probe.py` (single-hot parameter-layout probe and offset mapping extractor)
 - `tools/dense_template_matrix_patch.py` (structured Dense matrix patcher using recovered layout map)
+- `tools/dense_quant_value_probe.py` (single-hot float->quant->compiled byte mapping verifier)
 - `tools/strace_usb_scaling.py` (USBDEVFS submit/reap scaling fit from strace summaries)
 - `tools/edgetpu_delegate_smoke.sh` (minimal delegate exercise without TensorFlow Lite C libs)
 - `examples/inference_dump.rs` (single-invoke deterministic output dump for tensorizer validation)

@@ -135,6 +135,7 @@ Recovered layout map and structured patch validation now live in:
 - `docs/dense_layout_probe.md`
 - `tools/dense_layout_probe.py`
 - `tools/dense_template_matrix_patch.py`
+- `tools/dense_quant_value_probe.py`
 
 Next step for GEMM path:
 

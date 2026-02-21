@@ -534,3 +534,31 @@ All runs exited with `command_exit=0`.
    - `shift_plus1` patch rotates ramp output by +1
    - `shift_minus1` patch rotates ramp output by -1
    - confirms recovered mapping drives expected `W @ x`-style behavior.
+
+## 2026-02-21 (quantization byte mapping verification)
+
+### New tooling
+
+1. Added `tools/dense_quant_value_probe.py`:
+   - compiles repeated single-hot float-value probes
+   - extracts weight tensor quant params (`scale`, `zero_point`)
+   - compares expected signed-int8 quantization vs raw quant bytes vs compiled
+     payload bytes at recovered offset
+
+### New analysis artifacts
+
+1. `traces/dense-quant-value-probe-20260221T122533Z/value_probe.{txt,json}`
+2. `traces/dense-template-20260221T120206Z/value_byte_sweep/*`
+
+### New findings
+
+1. Weight tensor quantization is signed `INT8` with `zero_point=0`.
+2. Compiled payload byte mapping is:
+   - `payload_u8 = (q_i8 + 128) & 0xff`
+3. Sweep verification matched exactly for all tested values:
+   - quant `127` -> compiled `255`
+   - quant `0` -> compiled `128`
+   - quant `-127` (raw byte `129`) -> compiled `1`
+4. Fixed-template byte sweeps (same compiled template, varying patched bytes)
+   showed linear lane-0 output progression around center `128`, validating
+   direct byte-level control for tensorizer weight encoding.
