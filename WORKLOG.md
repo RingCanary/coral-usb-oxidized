@@ -345,3 +345,49 @@ All runs exited with `command_exit=0`.
    `Bo 393664` and `Bi 1008`.
 4. `U7` and `U4` do not auto-select a 3-stage signature under
    `min_count=3` (expected for plain path and 2-stage baseline class).
+
+## 2026-02-21 (schema-aware executable parser)
+
+### New tooling
+
+1. Added `tools/parse_edgetpu_executable.py`:
+   - parses `serialized_executable_*.bin` directly as FlatBuffers
+   - extracts instruction chunks, relocation metadata (`field_offsets`), layer
+     metadata, parameter sizes, and DMA-hint summaries
+   - scans known transport-marker byte patterns with offsets/counts
+2. Added vendored schema reference:
+   - `docs/schema/libedgetpu_executable.fbs`
+   - provenance: `docs/schema/README.md`
+
+### New analysis artifacts
+
+1. `traces/re-matrix-20260221T092342Z/EXEC_PARSE_MOBILENET_V1.{txt,json}`
+2. `traces/re-matrix-20260221T092342Z/EXEC_PARSE_BIRD_V2.{txt,json}`
+3. `traces/re-matrix-20260221T092342Z/EXEC_PARSE_INCEPTION_V1.{txt,json}`
+
+### New findings
+
+1. Model A (`mobilenet_v1..._edgetpu`):
+   - `EXECUTION_ONLY` chunk: `225824`
+   - `PARAMETER_CACHING` chunk: `7248`
+   - `PARAMETER_CACHING` params: `4464000`
+2. Model B (`mobilenet_v2...bird..._edgetpu`):
+   - `EXECUTION_ONLY` chunks: `261920`, `10224`
+   - `PARAMETER_CACHING` chunk: `10064`
+   - `PARAMETER_CACHING` params: `3947392`
+3. Model C (`inception_v1..._edgetpu`):
+   - `EXECUTION_ONLY` chunks: `254656`, `103200`
+   - `EXECUTION_ONLY` params: `393664`
+   - `PARAMETER_CACHING` chunk: `9680`
+   - `PARAMETER_CACHING` params: `6581440`
+4. Cross-correlation to usbmon loops:
+   - model A loop stage `Bo225824` maps to exec0 chunk
+   - model B loop stages `Bo261920` + `Bo10224` map to exec0 chunks
+   - model C loop stages `Bo254656` + `Bo393664` + `Bo103200` map to
+     exec0 chunk + exec0 params + exec0 chunk respectively, with `Bo150528`
+     as input activation transfer
+5. Relocation metadata confirms address patch points are explicit:
+   - `BASE_ADDRESS_PARAMETER`, `BASE_ADDRESS_SCRATCH`,
+     `BASE_ADDRESS_INPUT_ACTIVATION`, `BASE_ADDRESS_OUTPUT_ACTIVATION`
+   appear in `EXECUTION_ONLY` executable field offsets, with layer names carried
+   on input/output relocations.

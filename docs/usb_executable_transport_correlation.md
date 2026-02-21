@@ -2,124 +2,161 @@
 
 Date: 2026-02-21
 
-This note correlates extracted `DWN1` serialized executable blobs with observed
-usbmon bulk signature markers.
+This note correlates extracted serialized executables with packet-level USB loop
+signatures and moves from marker-only scans to schema-aware parsing.
 
 ## Inputs
 
-- Model: `models/mobilenet_v1_1.0_224_quant_edgetpu.tflite`
-- Extracted package metadata: `/tmp/edgetpu_extract/metadata.json`
-- Executables:
-  - `/tmp/edgetpu_extract/package_000/serialized_executable_000.bin`
-  - `/tmp/edgetpu_extract/package_000/serialized_executable_001.bin`
-  - `/tmp/edgetpu_extract/package_000/serialized_multi_executable.bin`
-- USB signatures:
-  - `traces/re-matrix-20260221T092342Z/U4_BULK_SIG.txt`
-  - `traces/re-matrix-20260221T092342Z/BASE_BULK_SIG.txt`
+Models:
 
-## Size context
+- `models/mobilenet_v1_1.0_224_quant_edgetpu.tflite` (model A)
+- `models/mobilenet_v2_1.0_224_inat_bird_quant_edgetpu.tflite` (model B)
+- `models/inception_v1_224_quant_edgetpu.tflite` (model C)
 
-From metadata:
+Extraction outputs:
 
-- `serialized_executable_000.bin`: `233472`
-- `serialized_executable_001.bin`: `4476928`
-- `serialized_multi_executable.bin`: `4722688`
+- `/tmp/edgetpu_extract_v1/package_000/*`
+- `/tmp/edgetpu_extract_bird/package_000/*`
+- `/tmp/edgetpu_extract_inception/package_000/*`
 
-From usbmon phase report (`U4`):
+USB packet-level references:
 
-- `pre_first_bo_b_bulk_out_bytes`: `4697104`
+- `traces/re-matrix-20260221T092342Z/U4_*` (model A)
+- `traces/re-matrix-20260221T092342Z/U5_*` (model B)
+- `traces/re-matrix-20260221T092342Z/U6_*` (model C)
 
-## Marker hits in extracted executables
+Schema-aware parser outputs:
 
-Searched for loop/burst marker words observed in usbmon payload signatures.
+- `traces/re-matrix-20260221T092342Z/EXEC_PARSE_MOBILENET_V1.{txt,json}`
+- `traces/re-matrix-20260221T092342Z/EXEC_PARSE_BIRD_V2.{txt,json}`
+- `traces/re-matrix-20260221T092342Z/EXEC_PARSE_INCEPTION_V1.{txt,json}`
 
-### Markers tied to `Bo 225824`
+Schema source (vendored):
 
-usbmon loop marker:
+- `docs/schema/libedgetpu_executable.fbs`
 
-- `20720300 00000000` (8-byte command)
-- `800f0080 dc000000` (start of `Bo 225824` payload signature)
+## New parser capability
 
-Found in `serialized_executable_000.bin`:
+`tools/parse_edgetpu_executable.py` decodes:
 
-- offset `0x00001dd8`: `20720300`
-- offset `0x00001ddc`: `800f0080 dc000000`
+1. Executable type split (`EXECUTION_ONLY` vs `PARAMETER_CACHING`)
+2. Instruction chunk sizes (`instruction_bitstreams[].bitstream`)
+3. Relocation table (`field_offsets[].meta.{desc,name,position}`)
+4. Parameter payload size (`parameters`)
+5. Input/output layer metadata (`Layer`, `TensorShape`, numerics)
+6. DMA hint structure (`dma_hints`)
 
-This pairing appears exactly once in `serialized_executable_000.bin`.
+## Cross-model executable matrix
 
-### Markers tied to `Bo 7248`
-
-usbmon preload marker:
-
-- `501c0000 00000000` (8-byte command)
-- `800f000c 07000000` (start of `Bo 7248` payload signature)
-
-Found in `serialized_executable_001.bin` near the tail:
-
-- offset `0x004433a8`: `501c0000`
-- offset `0x004433ac`: `800f000c 07000000`
-
-This pairing appears exactly once in `serialized_executable_001.bin`.
-
-### Marker distribution summary
+### Model A (`mobilenet_v1_1.0_224_quant_edgetpu`)
 
 - `serialized_executable_000.bin`:
-  - contains `20720300` and `800f0080dc000000`
-  - does not contain `501c0000` or `800f000c07000000`
+  - type: `EXECUTION_ONLY`
+  - instruction chunks: `[225824]`
+  - parameters: `0`
+  - input/output dims: `224x224x3` -> `1001`
 - `serialized_executable_001.bin`:
-  - contains `501c0000` and `800f000c07000000`
-  - does not contain `20720300` or `800f0080dc000000`
+  - type: `PARAMETER_CACHING`
+  - instruction chunks: `[7248]`
+  - parameters: `4464000`
 
-## Interpretation (current confidence: medium-high)
+USB correlation:
 
-1. The usbmon loop/preload headers are not random runtime-only values; they are
-   embedded in serialized executable payloads.
-2. `serialized_executable_000.bin` likely carries descriptors/data tied to the
-   recurring `Bo 225824` per-invoke stream.
-3. `serialized_executable_001.bin` likely carries descriptors/data tied to the
-   preload `Bo 7248` sequence and other setup payloads.
-4. The stable 8-byte command word `004c0200 01000000` from loop traffic was not
-   matched as a unique contiguous 8-byte pattern in these three blobs (the
-   leading dword appears in multiple metadata-like contexts with different
-   trailing dwords).
+- loop stage: `Bo 225824` (matches exec0 chunk size)
+- preload stage: `Bo 7248` (matches exec1 chunk size)
 
-## Cross-model variant probe (`mobilenet_v2_1.0_224_inat_bird_quant_edgetpu`)
+### Model B (`mobilenet_v2_1.0_224_inat_bird_quant_edgetpu`)
 
-A second EdgeTPU model was extracted (`/tmp/edgetpu_extract_bird`) and scanned
-with the same marker set.
+- `serialized_executable_000.bin`:
+  - type: `EXECUTION_ONLY`
+  - instruction chunks: `[261920, 10224]`
+  - parameters: `0`
+  - input/output dims: `224x224x3` -> `965`
+- `serialized_executable_001.bin`:
+  - type: `PARAMETER_CACHING`
+  - instruction chunks: `[10064]`
+  - parameters: `3947392`
 
-Observed:
+USB correlation:
 
-1. The exact model-A marker pairs above are absent.
-2. New structured marker pairs appear:
-   - `f0270000` + `800f00f4 09000000` in `serialized_executable_000.bin`
-     (around `0x000017a0`)
-   - `50270000` + `800f00cc 09000000` in `serialized_executable_001.bin`
-     (around `0x003c58a8`)
+- loop stages: `Bo 261920` and `Bo 10224` (match exec0 chunk sizes)
+- preload stage: `Bo 10064` (matches exec1 chunk size)
 
-Interpretation:
+### Model C (`inception_v1_224_quant_edgetpu`)
 
-- Header words embedded in serialized executables are model-specific, consistent
-  with the observed model-dependent USB syscall scaling.
-- Packet-level confirmation for these new markers still needs usbmon capture on
-  the second model.
+- `serialized_executable_000.bin`:
+  - type: `EXECUTION_ONLY`
+  - instruction chunks: `[254656, 103200]`
+  - parameters: `393664`
+  - input/output dims: `224x224x3` -> `1001`
+- `serialized_executable_001.bin`:
+  - type: `PARAMETER_CACHING`
+  - instruction chunks: `[9680]`
+  - parameters: `6581440`
+
+USB correlation:
+
+- loop stages observed in packet capture:
+  - explicit anchor path: `Bo 254656 -> Bo 150528 -> Bo 393664 -> Bi 1008`
+  - dedicated 3-stage tail parser: `Bo 150528 -> Bo 393664 -> Bo 103200 -> Bi 1008`
+- correlation:
+  - `254656` matches exec0 instruction chunk 0
+  - `393664` matches exec0 parameters payload size
+  - `103200` matches exec0 instruction chunk 1
+  - `150528` remains host input activation transfer (common across models)
+
+This resolves the previously ambiguous U6 capture and explains why the model C
+loop has extra per-invoke transport work.
+
+## Relocation metadata findings
+
+For all three models, `EXECUTION_ONLY` executable relocations include:
+
+- `BASE_ADDRESS_PARAMETER`
+- `BASE_ADDRESS_SCRATCH`
+- `BASE_ADDRESS_INPUT_ACTIVATION`
+- `BASE_ADDRESS_OUTPUT_ACTIVATION`
+
+Pattern:
+
+- 2 relocations per base (lower/upper 32-bit) in these captures
+- input/output relocations carry layer names (for example `input`, `prediction`,
+  `InceptionV1/Logits/Predictions/Softmax`)
+
+For all `PARAMETER_CACHING` executables in this set:
+
+- relocations are `BASE_ADDRESS_PARAMETER` only
+
+## MultiExecutable size consistency
+
+For each extracted package:
+
+- `serialized_multi_executable.bin` declared executable sizes match extracted
+  `serialized_executable_*.bin` sizes exactly.
+- This confirms extractor integrity and supports byte-accurate correlation to
+  usbmon payload lengths.
+
+## Interpretation
+
+1. Transport headers/payload sizes are compiled artifact structure, not
+   runtime-generated magic.
+2. The `exec0`/`exec1` split consistently maps to:
+   - `exec0`: inference-time instruction path (plus model-dependent extras)
+   - `exec1`: parameter-caching/preload path
+3. Model C introduces mixed `EXECUTION_ONLY` content (instructions + parameter
+   payload), which explains its steeper per-invoke USB slope class.
+4. The parser now provides a schema-backed basis for a tensorizer pipeline.
 
 ## Reproduction commands
 
 ```bash
-# Marker count scan
-for f in \
-  /tmp/edgetpu_extract/package_000/serialized_executable_000.bin \
-  /tmp/edgetpu_extract/package_000/serialized_executable_001.bin \
-  /tmp/edgetpu_extract/package_000/serialized_multi_executable.bin; do
-  echo "$f"
-  LC_ALL=C grep -aobP '\x20\x72\x03\x00' "$f" | wc -l
-  LC_ALL=C grep -aobP '\x50\x1c\x00\x00' "$f" | wc -l
-  LC_ALL=C grep -aobP '\x80\x0f\x00\x80\xdc\x00\x00\x00' "$f" | wc -l
-  LC_ALL=C grep -aobP '\x80\x0f\x00\x0c\x07\x00\x00\x00' "$f" | wc -l
-done
+# Extract model packages
+python3 tools/extract_edgetpu_package.py extract models/mobilenet_v1_1.0_224_quant_edgetpu.tflite --out /tmp/edgetpu_extract_v1 --overwrite
+python3 tools/extract_edgetpu_package.py extract models/mobilenet_v2_1.0_224_inat_bird_quant_edgetpu.tflite --out /tmp/edgetpu_extract_bird --overwrite
+python3 tools/extract_edgetpu_package.py extract models/inception_v1_224_quant_edgetpu.tflite --out /tmp/edgetpu_extract_inception --overwrite
 
-# Offset context dump
-xxd -g 4 -s 7600 -l 96 /tmp/edgetpu_extract/package_000/serialized_executable_000.bin
-xxd -g 4 -s 4469640 -l 120 /tmp/edgetpu_extract/package_000/serialized_executable_001.bin
+# Parse executables
+python3 tools/parse_edgetpu_executable.py /tmp/edgetpu_extract_v1/package_000
+python3 tools/parse_edgetpu_executable.py /tmp/edgetpu_extract_bird/package_000
+python3 tools/parse_edgetpu_executable.py /tmp/edgetpu_extract_inception/package_000
 ```

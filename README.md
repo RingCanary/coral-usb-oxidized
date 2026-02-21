@@ -125,6 +125,15 @@ Quick self-test (skips if default model is absent):
 python3 tools/extract_edgetpu_package.py self-test
 ```
 
+Parse extracted executables into schema-aware summaries:
+
+```bash
+python3 tools/parse_edgetpu_executable.py /tmp/edgetpu_extract/package_000
+```
+
+This decodes instruction chunk sizes, relocation metadata (`field_offsets`),
+layer metadata, and parameter payload sizes from `serialized_executable_*.bin`.
+
 ## USB tracing toolkit
 
 For protocol-level and syscall-level capture helpers, use:
@@ -135,6 +144,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `tools/usbmon_register_map.py` (usbmon control/register extraction and run matrix)
 - `tools/usbmon_bulk_signature.py` (bulk payload header/signature extraction by phase)
 - `tools/usbmon_three_stage_signature.py` (dedicated 3-stage bulk loop signature parser)
+- `tools/parse_edgetpu_executable.py` (schema-aware parser for serialized executables)
 - `tools/strace_usb_scaling.py` (USBDEVFS submit/reap scaling fit from strace summaries)
 - `tools/edgetpu_delegate_smoke.sh` (minimal delegate exercise without TensorFlow Lite C libs)
 
@@ -147,6 +157,7 @@ Current reverse-engineering notes:
 - `docs/next_usbmon_capture_matrix.md`
 - `docs/usb_register_map_candidates.md`
 - `docs/usb_executable_transport_correlation.md`
+- `docs/schema/libedgetpu_executable.fbs`
 - `docs/external_research_2026-02-21.md`
 - `traces/re-matrix-20260221T092342Z/USBMON_PACKET_VALIDATION_20260221T1035Z.md`
 

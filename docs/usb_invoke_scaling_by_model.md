@@ -125,11 +125,16 @@ Validated with usbmon captures at `2026-02-21T10:35Z`:
 See:
 
 - `traces/re-matrix-20260221T092342Z/USBMON_PACKET_VALIDATION_20260221T1035Z.md`
+- `traces/re-matrix-20260221T092342Z/EXEC_PARSE_MOBILENET_V1.json`
+- `traces/re-matrix-20260221T092342Z/EXEC_PARSE_BIRD_V2.json`
+- `traces/re-matrix-20260221T092342Z/EXEC_PARSE_INCEPTION_V1.json`
 
 Outcome:
 
 - syscall slope classes are now backed by distinct packet-level bulk loop
   signatures for the EdgeTPU-compiled models.
+- schema-aware executable parse explains those loop classes by compiled
+  `instruction_bitstreams` and model-specific parameter payload placement.
 
 ## Next packet-level step
 
