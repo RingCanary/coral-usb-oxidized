@@ -11,6 +11,9 @@ Primary captures:
 - `traces/re-matrix-20260221T092342Z/U2_simple_delegate_usbmon/usbmon-bus4-20260221T093432Z.log`
 - `traces/re-matrix-20260221T092342Z/U3_infer_plain_usbmon/usbmon-bus4-20260221T093512Z.log`
 - `traces/re-matrix-20260221T092342Z/U4_infer_edgetpu_usbmon/usbmon-bus4-20260221T093544Z.log`
+- `traces/usbmon-20260221T103521Z-bus4/usbmon-bus4-20260221T103521Z.log` (`U5`, bird edgetpu)
+- `traces/usbmon-20260221T103552Z-bus4/usbmon-bus4-20260221T103552Z.log` (`U6`, inception edgetpu)
+- `traces/usbmon-20260221T103631Z-bus4/usbmon-bus4-20260221T103631Z.log` (`U7`, inception plain)
 - baseline: `traces/usbmon-20260221T090004Z-bus4/usbmon-bus4-20260221T090004Z.log`
 
 Generated artifacts:
@@ -20,6 +23,8 @@ Generated artifacts:
 - `traces/re-matrix-20260221T092342Z/U4_REGISTER_REPORT.txt`
 - `traces/re-matrix-20260221T092342Z/U4_BULK_SIG.txt`
 - `traces/re-matrix-20260221T092342Z/USBMON_BULK_SIGNATURE_SUMMARY.md`
+- `traces/re-matrix-20260221T092342Z/REGISTER_MAP_MATRIX_U1_U7.md`
+- `traces/re-matrix-20260221T092342Z/USBMON_PACKET_VALIDATION_20260221T1035Z.md`
 
 ## Operation-class inference
 
@@ -39,6 +44,8 @@ From setup fields (`bmRequestType`, `bRequest`, `wIndex`, `wLength`):
    - `U4/baseline`: full bulk inference signature
 3. `U4` and baseline are signature-identical for bulk payload headers (after
    normalization), including per-invoke loop command prefixes.
+4. `U5`/`U6` add model-specific bulk loop signatures while preserving identical
+   control/register address-op counts seen in `U1..U4`.
 
 ## Phase behavior (U4/baseline)
 

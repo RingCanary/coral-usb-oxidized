@@ -281,3 +281,36 @@ All runs exited with `command_exit=0`.
    - plain-model path remains flat at setup-level USB counts in this environment.
 5. Added privileged packet-capture next-step matrix:
    - `docs/next_usbmon_capture_matrix.md`
+
+## 2026-02-21 (packet-level validation from new usbmon captures)
+
+### New privileged captures
+
+1. `traces/usbmon-20260221T103521Z-bus4/usbmon-bus4-20260221T103521Z.log`
+   - `mobilenet_v2_1.0_224_inat_bird_quant_edgetpu.tflite` (`warmup=5`, `runs=20`)
+2. `traces/usbmon-20260221T103552Z-bus4/usbmon-bus4-20260221T103552Z.log`
+   - `inception_v1_224_quant_edgetpu.tflite` (`warmup=0`, `runs=20`)
+3. `traces/usbmon-20260221T103631Z-bus4/usbmon-bus4-20260221T103631Z.log`
+   - `inception_v1_224_quant.tflite` (`warmup=0`, `runs=20`)
+
+### New analysis artifacts
+
+1. `traces/re-matrix-20260221T092342Z/U5_*`
+2. `traces/re-matrix-20260221T092342Z/U6_*`
+3. `traces/re-matrix-20260221T092342Z/U7_*`
+4. `traces/re-matrix-20260221T092342Z/REGISTER_MAP_MATRIX_U1_U7.{md,json}`
+5. `traces/re-matrix-20260221T092342Z/USBMON_PACKET_VALIDATION_20260221T1035Z.md`
+
+### New findings
+
+1. Bird EdgeTPU run (`U5`) shows repeating 3-stage loop:
+   - `Bo 261920 -> Bo 150528 -> Bo 10224 -> Bi 968` (`count=25`)
+2. Inception EdgeTPU run (`U6`) shows a distinct 3-stage loop:
+   - `Bo 254656 -> Bo 150528 -> Bo 393664 -> Bi 1008` (`count=20`)
+3. Inception plain run (`U7`) remains bulk-submit-free (control/interrupt only).
+4. Control/register address-op counts remain invariant across `U1..U7`; model
+   differences are isolated to bulk transport choreography.
+5. Packet-level data now confirms the syscall-level model classes:
+   - model A: `+6/+10`
+   - model B: `+8/+12`
+   - model C: about `+10/+15`

@@ -114,6 +114,23 @@ Notes:
 4. The slope class appears model-dependent and likely reflects different
    per-invoke transport choreography.
 
+## Packet-level validation status
+
+Validated with usbmon captures at `2026-02-21T10:35Z`:
+
+- `mobilenet_v2_1.0_224_inat_bird_quant_edgetpu.tflite` (`U5`)
+- `inception_v1_224_quant_edgetpu.tflite` (`U6`)
+- `inception_v1_224_quant.tflite` (`U7`)
+
+See:
+
+- `traces/re-matrix-20260221T092342Z/USBMON_PACKET_VALIDATION_20260221T1035Z.md`
+
+Outcome:
+
+- syscall slope classes are now backed by distinct packet-level bulk loop
+  signatures for the EdgeTPU-compiled models.
+
 ## Next packet-level step
 
 To turn this from syscall-level to protocol-level certainty, capture usbmon for

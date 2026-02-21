@@ -147,6 +147,7 @@ Current reverse-engineering notes:
 - `docs/usb_register_map_candidates.md`
 - `docs/usb_executable_transport_correlation.md`
 - `docs/external_research_2026-02-21.md`
+- `traces/re-matrix-20260221T092342Z/USBMON_PACKET_VALIDATION_20260221T1035Z.md`
 
 ## Arch bootstrap (local prefix)
 
