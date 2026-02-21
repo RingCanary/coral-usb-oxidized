@@ -235,3 +235,30 @@ All runs exited with `command_exit=0`.
 2. Key conclusion:
    - practical path is constrained TFLite graph compilation (int8/static/op-set),
      not arbitrary custom-kernel USB dispatch via public APIs.
+
+### Executable-vs-transport correlation pass
+
+1. Added note:
+   - `docs/usb_executable_transport_correlation.md`
+2. New finding:
+   - `U4` bulk signature markers (`20720300`, `800f0080dc...`, `501c0000`,
+     `800f000c07...`) are present at specific offsets inside extracted
+     serialized executables (`exec0` vs `exec1` split), strengthening the
+     hypothesis that loop/preload transport headers are compiled artifact data.
+
+### Cross-model invoke scaling extension
+
+1. Added additional strace runs:
+   - `R16_infer_edgetpu_bird_10_2`
+   - `R17_infer_plain_bird_10_2`
+   - `R18_infer_edgetpu_bird_1_0`
+   - `R19_infer_edgetpu_bird_20_5`
+   - `R20_infer_edgetpu_bird_5_1`
+2. Added summary note:
+   - `docs/usb_invoke_scaling_by_model.md`
+3. New finding:
+   - EdgeTPU ioctl scaling differs by model:
+     - model A (`mobilenet_v1..._edgetpu`): exact `+6 submit / +10 reap` per invoke
+     - model B (`mobilenet_v2...inat_bird..._edgetpu`): approximately
+       `+8 submit / +12 reap` per invoke (small offset jitter)
+   - plain-model path remains flat at setup-level USB counts in this environment.

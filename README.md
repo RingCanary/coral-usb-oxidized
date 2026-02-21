@@ -141,7 +141,9 @@ Detailed workflow and caveats are documented in `docs/usb_tracing.md`.
 Current reverse-engineering notes:
 
 - `WORKLOG.md`
+- `docs/usb_invoke_scaling_by_model.md`
 - `docs/usb_register_map_candidates.md`
+- `docs/usb_executable_transport_correlation.md`
 - `docs/external_research_2026-02-21.md`
 
 ## Arch bootstrap (local prefix)
