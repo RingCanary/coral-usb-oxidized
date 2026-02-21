@@ -102,6 +102,59 @@ cargo run --example tflite_standard_example
 cargo run --example cpu_vs_edgetpu_mvp -- --help
 ```
 
+## Offline EdgeTPU package extractor
+
+Use the standalone extractor to inspect `DWN1` package(s) embedded inside
+`*_edgetpu.tflite` files and dump serialized executable blobs.
+
+```bash
+python3 tools/extract_edgetpu_package.py extract \
+  /tmp/mobilenet_v1_1.0_224_quant_edgetpu.tflite \
+  --out /tmp/edgetpu_extract
+```
+
+Outputs include:
+
+- `/tmp/edgetpu_extract/metadata.json`
+- `/tmp/edgetpu_extract/package_000/serialized_multi_executable.bin`
+- `/tmp/edgetpu_extract/package_000/serialized_executable_000.bin` (and more)
+
+Quick self-test (skips if default model is absent):
+
+```bash
+python3 tools/extract_edgetpu_package.py self-test
+```
+
+## USB tracing toolkit
+
+For protocol-level and syscall-level capture helpers, use:
+
+- `tools/usbmon_capture.sh` (root, kernel usbmon capture)
+- `tools/usb_syscall_trace.sh` (unprivileged `strace` fallback)
+- `tools/usbmon_phase_report.py` (phase-oriented usbmon report and diff)
+- `tools/usbmon_register_map.py` (usbmon control/register extraction and run matrix)
+- `tools/usbmon_bulk_signature.py` (bulk payload header/signature extraction by phase)
+- `tools/edgetpu_delegate_smoke.sh` (minimal delegate exercise without TensorFlow Lite C libs)
+
+Detailed workflow and caveats are documented in `docs/usb_tracing.md`.
+
+Current reverse-engineering notes:
+
+- `WORKLOG.md`
+- `docs/usb_register_map_candidates.md`
+- `docs/external_research_2026-02-21.md`
+
+## Arch bootstrap (local prefix)
+
+If distro/AUR packages are out of sync, build the runtime stack into
+`$HOME/.local`:
+
+```bash
+./tools/bootstrap_arch_stack.sh build-libedgetpu
+./tools/bootstrap_arch_stack.sh build-tflite-c
+eval "$(./tools/bootstrap_arch_stack.sh print-env)"
+```
+
 ### Real inference benchmark example
 
 Download a quantized TensorFlow Lite model:

@@ -20,3 +20,8 @@ models/
 *.tar.xz
 
 .cargo/
+traces/
+
+# python cache artifacts
+__pycache__/
+*.pyc

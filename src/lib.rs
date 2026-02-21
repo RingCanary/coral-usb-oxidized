@@ -834,17 +834,10 @@ pub struct CoralDevice {
 impl CoralDevice {
     /// Create a new Coral device using the default device
     pub fn new() -> Result<Self, CoralError> {
-        // Check if the device is actually connected
-        if !is_device_connected() {
-            return Err(CoralError::DeviceNotFound);
-        }
-
-        Ok(CoralDevice {
-            is_valid: true,
-            name: None,
-            vendor_id: CORAL_USB_VENDOR_ID,
-            product_id: CORAL_USB_PRODUCT_ID,
-        })
+        find_coral_devices()?
+            .into_iter()
+            .next()
+            .ok_or(CoralError::DeviceNotFound)
     }
 
     /// Create a new Coral device with a specific device name
@@ -853,17 +846,12 @@ impl CoralDevice {
             return Err(CoralError::InvalidDeviceName);
         }
 
-        // Check if the device is actually connected
-        if !is_device_connected() {
-            return Err(CoralError::DeviceNotFound);
-        }
-
-        Ok(CoralDevice {
-            is_valid: true,
-            name: Some(device_name.to_string()),
-            vendor_id: CORAL_USB_VENDOR_ID,
-            product_id: CORAL_USB_PRODUCT_ID,
-        })
+        let mut device = find_coral_devices()?
+            .into_iter()
+            .next()
+            .ok_or(CoralError::DeviceNotFound)?;
+        device.name = Some(device_name.to_string());
+        Ok(device)
     }
 
     /// Create an EdgeTPU delegate for this device
