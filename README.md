@@ -146,8 +146,12 @@ For protocol-level and syscall-level capture helpers, use:
 - `tools/usbmon_three_stage_signature.py` (dedicated 3-stage bulk loop signature parser)
 - `tools/parse_edgetpu_executable.py` (schema-aware parser for serialized executables)
 - `tools/tensorizer_patch_edgetpu.py` (in-place parameter patcher for compiled `*_edgetpu.tflite`)
+- `tools/generate_dense_quant_tflite.py` (single-layer Dense INT8 model generator)
+- `tools/bootstrap_edgetpu_compiler.sh` (local `edgetpu_compiler` bootstrap from Coral apt repo)
+- `tools/dense_template_pipeline.sh` (generate -> compile -> extract -> parse -> inspect pipeline)
 - `tools/strace_usb_scaling.py` (USBDEVFS submit/reap scaling fit from strace summaries)
 - `tools/edgetpu_delegate_smoke.sh` (minimal delegate exercise without TensorFlow Lite C libs)
+- `examples/inference_dump.rs` (single-invoke deterministic output dump for tensorizer validation)
 
 Detailed workflow and caveats are documented in `docs/usb_tracing.md`.
 
@@ -159,6 +163,7 @@ Current reverse-engineering notes:
 - `docs/usb_register_map_candidates.md`
 - `docs/usb_executable_transport_correlation.md`
 - `docs/tensorizer_mvp.md`
+- `docs/tensorizer_dense_template.md`
 - `docs/schema/libedgetpu_executable.fbs`
 - `docs/external_research_2026-02-21.md`
 - `traces/re-matrix-20260221T092342Z/USBMON_PACKET_VALIDATION_20260221T1035Z.md`
@@ -172,6 +177,37 @@ If distro/AUR packages are out of sync, build the runtime stack into
 ./tools/bootstrap_arch_stack.sh build-libedgetpu
 ./tools/bootstrap_arch_stack.sh build-tflite-c
 eval "$(./tools/bootstrap_arch_stack.sh print-env)"
+```
+
+Bootstrap `edgetpu_compiler` locally (no distro package required):
+
+```bash
+./tools/bootstrap_edgetpu_compiler.sh install
+eval "$(./tools/bootstrap_edgetpu_compiler.sh print-env)"
+```
+
+### Single-layer Dense template workflow (uv-managed)
+
+Generate a compiler-compatible single-op Dense template and run extraction +
+schema parsing in one command:
+
+```bash
+./tools/dense_template_pipeline.sh --patch-mode zero
+```
+
+Notes:
+
+- Pipeline defaults to `python 3.9` + `tensorflow-cpu 2.10.1` via `uv`.
+- This converter/runtime pairing is currently required for reliable
+  `edgetpu_compiler` acceptance of minimal Dense templates on this repo setup.
+
+Quick output check on hardware:
+
+```bash
+latest="$(ls -1dt traces/dense-template-* | head -n1)"
+eval "$(./tools/bootstrap_arch_stack.sh print-env)"
+cargo run --example inference_dump -- "$latest/dense_256x256_quant_edgetpu.tflite" ramp
+cargo run --example inference_dump -- "$latest/dense_256x256_quant_edgetpu_patched_zero.tflite" ramp
 ```
 
 ### Real inference benchmark example

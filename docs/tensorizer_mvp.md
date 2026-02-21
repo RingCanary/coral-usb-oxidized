@@ -111,9 +111,15 @@ Interpretation:
 
 ## Immediate next step
 
-Move from arbitrary corruption to structured replacement:
+Dense single-op template is now implemented and validated:
 
-1. Isolate layer-specific parameter subranges inside `exe[1].parameters`.
-2. Replace with controlled INT8 matrices and evaluate output deltas.
-3. Add deterministic input vectors and host-side expected-value checks for a
-   constrained GEMM-like template.
+- workflow: `docs/tensorizer_dense_template.md`
+- pipeline script: `tools/dense_template_pipeline.sh`
+
+Next progression (for GEMM):
+
+1. Keep the Dense template instruction stream fixed.
+2. Replace selected parameter subranges with structured matrix writes (not full
+   corruption).
+3. Add row/column-targeted expected-value checks to recover exact layout /
+   stride transform used by the compiled payload.

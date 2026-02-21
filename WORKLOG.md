@@ -421,3 +421,65 @@ All runs exited with `command_exit=0`.
 4. Interpretation:
    - parameter payload mutation is sufficient to alter behavior while keeping
      compiled execution stream runnable, validating the tensorizer direction.
+
+## 2026-02-21 (single-op Dense template tensorizer path)
+
+### New tooling
+
+1. Added `tools/bootstrap_edgetpu_compiler.sh`:
+   - installs `edgetpu_compiler` from Coral apt package into local prefix
+   - installs both wrapper and runtime bundle (`edgetpu_compiler_bin`)
+2. Added `tools/generate_dense_quant_tflite.py`:
+   - generates a single-layer Dense quantized `.tflite` with deterministic
+     kernel initialization
+   - supports `identity`, `permutation`, `ones`, `random_uniform`
+3. Added `tools/dense_template_pipeline.sh`:
+   - end-to-end `uv` flow: generate -> compile -> extract -> parse -> inspect
+   - optional parameter patch generation
+4. Added `examples/inference_dump.rs`:
+   - single-invoke deterministic input/output dump (`zeros|ones|ramp|alt`)
+   - prints full int8 output preview for tensorizer verification
+
+### New docs
+
+1. Added `docs/tensorizer_dense_template.md`.
+2. Updated `README.md` with compiler bootstrap + dense template workflow.
+3. Updated `docs/tensorizer_mvp.md` to link the single-op template track.
+
+### Toolchain compatibility finding
+
+1. Dense templates generated with `tensorflow-cpu==2.18.0` failed
+   `edgetpu_compiler` acceptance in this environment.
+2. Dense templates generated with:
+   - `python 3.9`
+   - `tensorflow-cpu 2.10.1`
+   - `numpy 1.23.5`
+   compile successfully and map `FULLY_CONNECTED` to EdgeTPU.
+
+### New analysis artifacts
+
+1. `traces/dense-template-20260221T120206Z/PIPELINE_SUMMARY.txt`
+2. `traces/dense-template-20260221T120206Z/exec_parse.{txt,json}`
+3. `traces/dense-template-20260221T120206Z/tensorizer_inspect.{txt,json}`
+4. `traces/dense-template-20260221T120206Z/inference_dump_*.log`
+5. `traces/dense-template-20260221T120206Z/inference_benchmark_*.log`
+6. `traces/usb-syscall-20260221T120304Z/*.summary.txt`
+7. `traces/usb-syscall-20260221T120317Z/*.summary.txt`
+
+### New findings
+
+1. Single-op compiled model (`dense_256x256_quant_edgetpu.tflite`) contains:
+   - `EXECUTION_ONLY` executable with instruction chunk `4112`
+   - `PARAMETER_CACHING` executable with params `65536` bytes
+2. Baseline deterministic runtime output (`inference_dump`, `ramp` input):
+   - output vector preserves ramp `[-128..127]` for 256 lanes
+3. Parameter patch impact (same instruction stream):
+   - `zero`: near-constant high saturated output (`127`-dominant)
+   - `ramp`: periodic transformed pattern
+   - `xorff`: descending transformed pattern
+4. Latency remains stable despite payload mutation:
+   - baseline avg `0.210 ms` (`runs=30`, `warmup=5`)
+   - patched_zero avg `0.210 ms`
+5. USB syscall profile is transport-invariant across baseline vs patched:
+   - `SUBMITURB` stayed `320`
+   - `REAPURBNDELAY` differed only slightly (`456` vs `466`)
