@@ -7,6 +7,7 @@ Practical tracing helpers for Coral USB traffic are available under `tools/`:
 - `tools/usbmon_phase_report.py`: phase-oriented analyzer and diff tool for usbmon logs.
 - `tools/usbmon_register_map.py`: control-transfer/register access extractor for usbmon logs.
 - `tools/usbmon_bulk_signature.py`: bulk payload header/signature extractor by phase.
+- `tools/usbmon_three_stage_signature.py`: dedicated parser for repeated `Bo->Bo->Bo->Bi` cycle signatures.
 - `tools/strace_usb_scaling.py`: linear-fit summary for `USBDEVFS_SUBMITURB`/`REAPURBNDELAY`.
 
 ## 1) Privileged usbmon capture
@@ -196,7 +197,34 @@ Highlights:
 - top payload signatures (for example recurring 8-byte loop commands)
 - phase attribution (`setup_only` / `pre_loop` / `loop` / `post_loop`)
 
-## 6) Strace ioctl scaling fit
+## 6) Dedicated 3-stage signature parser
+
+Use this when the model loop includes at least three major `Bo` completion
+stages before `Bi` output completion (for example U5/U6 classes).
+
+```bash
+python3 tools/usbmon_three_stage_signature.py \
+  traces/usbmon-20260221T103521Z-bus4/usbmon-bus4-20260221T103521Z.log \
+  --bus 4 --device 005
+```
+
+Optional explicit pattern matching:
+
+```bash
+python3 tools/usbmon_three_stage_signature.py \
+  traces/usbmon-20260221T103552Z-bus4/usbmon-bus4-20260221T103552Z.log \
+  --bus 4 --device 005 \
+  --bo-1 254656 --bo-2 150528 --bo-3 393664 --bi-out 1008
+```
+
+Highlights:
+
+- auto-discovered top `Bo/Bo/Bo/Bi` candidates
+- non-overlapping cycle extraction with timing stats
+- per-stage gap counts (useful to detect hidden intermediate completions)
+- cycle interval statistics anchored to a selected stage
+
+## 7) Strace ioctl scaling fit
 
 Use this to summarize and fit USBDEVFS ioctl counts vs invoke count across
 `usb_syscall_trace.sh` run folders.
@@ -219,5 +247,6 @@ python3 tools/strace_usb_scaling.py --include-prefix R1 --include-prefix R2
 - `usbmon_phase_report.py` infers phases from traffic patterns; it does not decode proprietary EdgeTPU protocol fields.
 - `usbmon_register_map.py` infers register semantics from USB setup fields; address meanings remain hypotheses.
 - `usbmon_bulk_signature.py` uses prefix signatures only; it does not decode full payload semantics.
+- `usbmon_three_stage_signature.py` models repeated completion choreography; it does not decode payload semantics.
 - `strace` can miss activity if USB interactions happen in processes you are not tracing.
 - `strace` adds overhead and can alter timing-sensitive behavior.

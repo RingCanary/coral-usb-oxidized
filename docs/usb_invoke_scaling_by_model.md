@@ -145,5 +145,6 @@ Then analyze with:
 ```bash
 python3 tools/usbmon_phase_report.py report <usbmon.log> --bus 4
 python3 tools/usbmon_bulk_signature.py <usbmon.log> --bus 4
+python3 tools/usbmon_three_stage_signature.py <usbmon.log> --bus 4
 python3 tools/usbmon_register_map.py report <usbmon.log> --bus 4
 ```

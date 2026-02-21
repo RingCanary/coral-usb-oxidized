@@ -314,3 +314,34 @@ All runs exited with `command_exit=0`.
    - model A: `+6/+10`
    - model B: `+8/+12`
    - model C: about `+10/+15`
+
+## 2026-02-21 (dedicated 3-stage signature parser)
+
+### New tooling
+
+1. Added `tools/usbmon_three_stage_signature.py`:
+   - auto-discovers repeated `Bo -> Bo -> Bo -> Bi` completion candidates
+   - extracts non-overlapping cycles with per-leg timing stats
+   - reports inter-stage gap-event counts to surface hidden intermediate steps
+   - supports explicit pattern forcing (`--bo-1/--bo-2/--bo-3/--bi-out`)
+
+### New analysis artifacts
+
+1. `traces/re-matrix-20260221T092342Z/U4_STAGE3_SIG.{txt,json}`
+2. `traces/re-matrix-20260221T092342Z/U5_STAGE3_SIG.{txt,json}`
+3. `traces/re-matrix-20260221T092342Z/U6_STAGE3_SIG.{txt,json}`
+4. `traces/re-matrix-20260221T092342Z/U6_STAGE3_SIG_254K_150K_393K.{txt,json}`
+5. `traces/re-matrix-20260221T092342Z/U7_STAGE3_SIG.{txt,json}`
+
+### New findings
+
+1. `U5` auto-detected 3-stage signature:
+   - `Bo 261920 -> Bo 150528 -> Bo 10224 -> Bi 968` (`count=25`)
+2. `U6` auto-detected 3-stage tail signature:
+   - `Bo 150528 -> Bo 393664 -> Bo 103200 -> Bi 1008` (`count=20`)
+3. Explicit `U6` match for prior hypothesis
+   (`Bo 254656 -> Bo 150528 -> Bo 393664 -> Bi 1008`) still yields `count=20`,
+   but with `gap_events_3_4=2`, indicating additional completions between
+   `Bo 393664` and `Bi 1008`.
+4. `U7` and `U4` do not auto-select a 3-stage signature under
+   `min_count=3` (expected for plain path and 2-stage baseline class).

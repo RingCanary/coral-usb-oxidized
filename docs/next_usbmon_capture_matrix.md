@@ -41,6 +41,7 @@ For each captured `usbmon-bus<BUS>-*.log`:
 ```bash
 python3 tools/usbmon_phase_report.py report <log> --bus <BUS>
 python3 tools/usbmon_bulk_signature.py <log> --bus <BUS>
+python3 tools/usbmon_three_stage_signature.py <log> --bus <BUS>
 python3 tools/usbmon_register_map.py report <log> --bus <BUS>
 ```
 

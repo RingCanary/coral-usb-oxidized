@@ -134,6 +134,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `tools/usbmon_phase_report.py` (phase-oriented usbmon report and diff)
 - `tools/usbmon_register_map.py` (usbmon control/register extraction and run matrix)
 - `tools/usbmon_bulk_signature.py` (bulk payload header/signature extraction by phase)
+- `tools/usbmon_three_stage_signature.py` (dedicated 3-stage bulk loop signature parser)
 - `tools/strace_usb_scaling.py` (USBDEVFS submit/reap scaling fit from strace summaries)
 - `tools/edgetpu_delegate_smoke.sh` (minimal delegate exercise without TensorFlow Lite C libs)
 
