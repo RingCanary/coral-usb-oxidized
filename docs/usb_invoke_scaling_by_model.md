@@ -8,7 +8,8 @@ Scope: `tools/usb_syscall_trace.sh` summaries for `examples/inference_benchmark`
 
 1. `mobilenet_v1_1.0_224_quant_edgetpu.tflite` (output `1001`)
 2. `mobilenet_v2_1.0_224_inat_bird_quant_edgetpu.tflite` (output `965`)
-3. plain quantized variants (non-EdgeTPU-compiled)
+3. `inception_v1_224_quant_edgetpu.tflite` (output `1001`)
+4. plain quantized variants (non-EdgeTPU-compiled)
 
 ## Observed counts
 
@@ -68,13 +69,50 @@ Across plain-model runs (`mobilenet_v1_*_quant.tflite` and
 
 These counts remained effectively constant despite large invoke-count changes.
 
+### EdgeTPU model C (`inception_v1_224_quant_edgetpu.tflite`)
+
+| run | total invokes (warmup + measured) | SUBMITURB | REAPURBNDELAY |
+|---|---:|---:|---:|
+| `R26` | 1 | 126 | 234 |
+| `R27` | 10 | 216 | 369 |
+| `R30` | 20 | 318 | 524 |
+
+Primary fit (near-linear, small jitter):
+
+- `SUBMITURB ≈ 116 + 10 * invokes`
+- `REAPURBNDELAY ≈ 219 + 15 * invokes`
+
+Notes:
+
+- Least-squares fit over these points gives:
+  - `submit ≈ 115.56 + 10.11 * invokes`
+  - `reap ≈ 217.90 + 15.27 * invokes`
+- This is a steeper slope class than models A and B.
+
+### Plain inception (`inception_v1_224_quant.tflite`)
+
+| run | total invokes (warmup + measured) | SUBMITURB | REAPURBNDELAY |
+|---|---:|---:|---:|
+| `R29` | 1 | 105 | 201 |
+| `R28` | 10 | 107 | 205 |
+| `R31` | 20 | 105 | 201 |
+
+Notes:
+
+- Baseline remains `105/201` on two of three runs.
+- `R28` appears as a one-off outlier (`+2/+4`).
+
 ## Interpretation
 
 1. USB syscall growth is strongly model-dependent for EdgeTPU-compiled graphs.
 2. The plain model path stays near fixed setup-level USB activity in this
    environment.
-3. The stable slope difference between model A and model B suggests different
-   per-invoke transport choreography (`+6/+10` vs `+8/+12`).
+3. Three EdgeTPU slope classes are now observed:
+   - model A: `+6/+10`
+   - model B: `+8/+12`
+   - model C: approximately `+10/+15`
+4. The slope class appears model-dependent and likely reflects different
+   per-invoke transport choreography.
 
 ## Next packet-level step
 

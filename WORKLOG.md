@@ -259,6 +259,12 @@ All runs exited with `command_exit=0`.
    - `R23_infer_edgetpu_bird_10_0`
    - `R24_infer_edgetpu_bird_1_2`
    - `R25_infer_edgetpu_bird_10_2_repeat`
+   - `R26_infer_inception_edgetpu_1_0`
+   - `R27_infer_inception_edgetpu_10_0`
+   - `R28_infer_inception_plain_10_0`
+   - `R29_infer_inception_plain_1_0`
+   - `R30_infer_inception_edgetpu_20_0`
+   - `R31_infer_inception_plain_20_0`
 2. Added summary note:
    - `docs/usb_invoke_scaling_by_model.md`
 3. Added automation tool:
@@ -270,4 +276,6 @@ All runs exited with `command_exit=0`.
      - model B (`mobilenet_v2...inat_bird..._edgetpu`): exact
        `+8 submit / +12 reap` on primary fit, with one outlier run (`R16`)
        that did not reproduce in `R25` repeat
+     - model C (`inception_v1..._edgetpu`): approximately
+       `+10 submit / +15 reap` per invoke (small jitter)
    - plain-model path remains flat at setup-level USB counts in this environment.
