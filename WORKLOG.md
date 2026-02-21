@@ -279,3 +279,5 @@ All runs exited with `command_exit=0`.
      - model C (`inception_v1..._edgetpu`): approximately
        `+10 submit / +15 reap` per invoke (small jitter)
    - plain-model path remains flat at setup-level USB counts in this environment.
+5. Added privileged packet-capture next-step matrix:
+   - `docs/next_usbmon_capture_matrix.md`
