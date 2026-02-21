@@ -14,13 +14,13 @@ Scope: `tools/usb_syscall_trace.sh` summaries for `examples/inference_benchmark`
 
 ### EdgeTPU model A (`mobilenet_v1_1.0_224_quant_edgetpu.tflite`)
 
-| total invokes (warmup + measured) | SUBMITURB | REAPURBNDELAY |
-|---:|---:|---:|
-| 1 | 120 | 225 |
-| 6 | 150 | 275 |
-| 10 | 174 | 315 |
-| 25 | 264 | 465 |
-| 35 | 324 | 565 |
+| run | total invokes (warmup + measured) | SUBMITURB | REAPURBNDELAY |
+|---|---:|---:|---:|
+| `R8` | 1 | 120 | 225 |
+| `R12` | 6 | 150 | 275 |
+| `R13` | 10 | 174 | 315 |
+| `R14` | 25 | 264 | 465 |
+| `R9` | 35 | 324 | 565 |
 
 Exact fit in this run set:
 
@@ -29,23 +29,34 @@ Exact fit in this run set:
 
 ### EdgeTPU model B (`mobilenet_v2_1.0_224_inat_bird_quant_edgetpu.tflite`)
 
-| total invokes (warmup + measured) | SUBMITURB | REAPURBNDELAY |
-|---:|---:|---:|
-| 1 | 121 | 225 |
-| 6 | 161 | 285 |
-| 12 | 211 | 361 |
-| 25 | 315 | 517 |
+| run | total invokes (warmup + measured) | SUBMITURB | REAPURBNDELAY |
+|---|---:|---:|---:|
+| `R18` | 1 | 121 | 225 |
+| `R24` | 3 | 137 | 249 |
+| `R20` | 6 | 161 | 285 |
+| `R23` | 10 | 193 | 333 |
+| `R25` | 12 | 209 | 357 |
+| `R19` | 25 | 315 | 517 |
+| `R21` | 35 | 395 | 637 |
 
-Approximate fit (low-jitter, model-dependent slope):
+Primary fit:
 
-- `SUBMITURB ≈ 113 + 8 * invokes`
-- `REAPURBNDELAY ≈ 213 + 12 * invokes`
+- `SUBMITURB = 113 + 8 * invokes`
+- `REAPURBNDELAY = 213 + 12 * invokes`
 
 Notes:
 
-- The 6-invoke point matches the approximate fit exactly.
-- 12 and 25 invoke points show a small positive offset (`+2` submit, `+4` reap)
-  relative to that fit, likely from polling/reap timing effects.
+- `R16_infer_edgetpu_bird_10_2` is a repeatable outlier at total invokes `12`:
+  - observed `SUBMITURB=211`, `REAPURBNDELAY=361`
+  - expected `209` / `357` from the primary fit
+- Repeat run `R25_infer_edgetpu_bird_10_2_repeat` returned exactly to fit,
+  indicating occasional run-level jitter rather than a different steady-state slope.
+
+Automated fit/report command used:
+
+```bash
+python3 tools/strace_usb_scaling.py
+```
 
 ### Plain quantized model path
 
@@ -62,9 +73,8 @@ These counts remained effectively constant despite large invoke-count changes.
 1. USB syscall growth is strongly model-dependent for EdgeTPU-compiled graphs.
 2. The plain model path stays near fixed setup-level USB activity in this
    environment.
-3. The difference between model A and model B slopes suggests different
-   per-invoke transport choreography (for example different numbers of URB
-   submissions/reaps per inference cycle).
+3. The stable slope difference between model A and model B suggests different
+   per-invoke transport choreography (`+6/+10` vs `+8/+12`).
 
 ## Next packet-level step
 

@@ -7,6 +7,7 @@ Practical tracing helpers for Coral USB traffic are available under `tools/`:
 - `tools/usbmon_phase_report.py`: phase-oriented analyzer and diff tool for usbmon logs.
 - `tools/usbmon_register_map.py`: control-transfer/register access extractor for usbmon logs.
 - `tools/usbmon_bulk_signature.py`: bulk payload header/signature extractor by phase.
+- `tools/strace_usb_scaling.py`: linear-fit summary for `USBDEVFS_SUBMITURB`/`REAPURBNDELAY`.
 
 ## 1) Privileged usbmon capture
 
@@ -194,6 +195,21 @@ Highlights:
 - submit/complete counts by transfer and size
 - top payload signatures (for example recurring 8-byte loop commands)
 - phase attribution (`setup_only` / `pre_loop` / `loop` / `post_loop`)
+
+## 6) Strace ioctl scaling fit
+
+Use this to summarize and fit USBDEVFS ioctl counts vs invoke count across
+`usb_syscall_trace.sh` run folders.
+
+```bash
+python3 tools/strace_usb_scaling.py
+```
+
+Optional filtering:
+
+```bash
+python3 tools/strace_usb_scaling.py --include-prefix R1 --include-prefix R2
+```
 
 ## Known limits
 

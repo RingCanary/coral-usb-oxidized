@@ -254,11 +254,20 @@ All runs exited with `command_exit=0`.
    - `R18_infer_edgetpu_bird_1_0`
    - `R19_infer_edgetpu_bird_20_5`
    - `R20_infer_edgetpu_bird_5_1`
+   - `R21_infer_edgetpu_bird_30_5`
+   - `R22_infer_plain_bird_1_0`
+   - `R23_infer_edgetpu_bird_10_0`
+   - `R24_infer_edgetpu_bird_1_2`
+   - `R25_infer_edgetpu_bird_10_2_repeat`
 2. Added summary note:
    - `docs/usb_invoke_scaling_by_model.md`
-3. New finding:
+3. Added automation tool:
+   - `tools/strace_usb_scaling.py`
+   - emits per-model linear fits and residuals from `R*/` strace summaries
+4. New finding:
    - EdgeTPU ioctl scaling differs by model:
      - model A (`mobilenet_v1..._edgetpu`): exact `+6 submit / +10 reap` per invoke
-     - model B (`mobilenet_v2...inat_bird..._edgetpu`): approximately
-       `+8 submit / +12 reap` per invoke (small offset jitter)
+     - model B (`mobilenet_v2...inat_bird..._edgetpu`): exact
+       `+8 submit / +12 reap` on primary fit, with one outlier run (`R16`)
+       that did not reproduce in `R25` repeat
    - plain-model path remains flat at setup-level USB counts in this environment.
