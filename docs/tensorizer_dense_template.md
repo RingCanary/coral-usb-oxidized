@@ -130,8 +130,16 @@ come from data payload content.
 
 ## Immediate next step for GEMM path
 
-1. Keep this Dense template fixed as instruction-stream anchor.
-2. Build structured parameter replacement (row/column-addressed matrix writes)
-   instead of whole-blob corruption.
-3. Add host-side expected-value checks for selected rows/columns to recover
-   exact layout/stride transform.
+Recovered layout map and structured patch validation now live in:
+
+- `docs/dense_layout_probe.md`
+- `tools/dense_layout_probe.py`
+- `tools/dense_template_matrix_patch.py`
+
+Next step for GEMM path:
+
+1. Move from binary (`128`/`255`) payload patterns to calibrated multi-level
+   quantized payload writes.
+2. Add host-side dequantized expected-value checks for representative matrix
+   blocks.
+3. Wrap into a stable tensorizer API around template reuse.

@@ -149,6 +149,8 @@ For protocol-level and syscall-level capture helpers, use:
 - `tools/generate_dense_quant_tflite.py` (single-layer Dense INT8 model generator)
 - `tools/bootstrap_edgetpu_compiler.sh` (local `edgetpu_compiler` bootstrap from Coral apt repo)
 - `tools/dense_template_pipeline.sh` (generate -> compile -> extract -> parse -> inspect pipeline)
+- `tools/dense_layout_probe.py` (single-hot parameter-layout probe and offset mapping extractor)
+- `tools/dense_template_matrix_patch.py` (structured Dense matrix patcher using recovered layout map)
 - `tools/strace_usb_scaling.py` (USBDEVFS submit/reap scaling fit from strace summaries)
 - `tools/edgetpu_delegate_smoke.sh` (minimal delegate exercise without TensorFlow Lite C libs)
 - `examples/inference_dump.rs` (single-invoke deterministic output dump for tensorizer validation)
@@ -164,6 +166,7 @@ Current reverse-engineering notes:
 - `docs/usb_executable_transport_correlation.md`
 - `docs/tensorizer_mvp.md`
 - `docs/tensorizer_dense_template.md`
+- `docs/dense_layout_probe.md`
 - `docs/schema/libedgetpu_executable.fbs`
 - `docs/external_research_2026-02-21.md`
 - `traces/re-matrix-20260221T092342Z/USBMON_PACKET_VALIDATION_20260221T1035Z.md`

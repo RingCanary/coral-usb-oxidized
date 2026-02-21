@@ -483,3 +483,54 @@ All runs exited with `command_exit=0`.
 5. USB syscall profile is transport-invariant across baseline vs patched:
    - `SUBMITURB` stayed `320`
    - `REAPURBNDELAY` differed only slightly (`456` vs `466`)
+
+## 2026-02-21 (single-hot layout recovery + structured matrix patch)
+
+### New tooling
+
+1. Added `tools/dense_layout_probe.py`:
+   - generates/compiles repeated single-hot Dense probes
+   - extracts `PARAMETER_CACHING` payload bytes
+   - diffs against reference probe and emits `(row,col)->offset` candidates
+2. Added `tools/dense_template_matrix_patch.py`:
+   - patches Dense template payload with structured matrix modes
+   - supports `identity`, `zero`, `single_hot`, `shift_plus1`, `shift_minus1`
+   - uses recovered offset map for deterministic row/col addressing
+3. Updated `tools/generate_dense_quant_tflite.py`:
+   - added init modes `zero` and `single_hot`
+   - added `--hot-row/--hot-col/--hot-value`
+
+### New docs
+
+1. Added `docs/dense_layout_probe.md`.
+2. Updated `docs/tensorizer_dense_template.md` with follow-on path after layout
+   recovery.
+3. Updated `README.md` tool/docs indexes for layout-probe and matrix patch tools.
+
+### New analysis artifacts
+
+1. `traces/dense-layout-probe-20260221T121033Z/*`
+2. `traces/dense-layout-probe-20260221T121109Z/*`
+3. `traces/dense-layout-probe-20260221T121249Z/*`
+4. `traces/dense-layout-probe-20260221T121345Z/*`
+5. `traces/dense-layout-probe-20260221T121612Z/*`
+6. `traces/dense-template-20260221T120206Z/patch_shift_plus1.json`
+7. `traces/dense-template-20260221T120206Z/patch_shift_minus1.json`
+8. `traces/dense-template-20260221T120206Z/inference_dump_shift_plus1.log`
+9. `traces/dense-template-20260221T120206Z/inference_dump_shift_minus1.log`
+
+### New findings
+
+1. Single-hot payload behavior:
+   - background byte: `128`
+   - active byte: `255`
+   - each probe changes exactly one payload byte (`65536`-byte region)
+2. Recovered offset map for Dense(256x256):
+   - `offset = (col//64)*16384 + (row//64)*4096 + ((row%64)//4)*256 + (col%64)*4 + (row%4)`
+3. Formula validation:
+   - matched all sampled points across multi-run probe sets (small grid,
+     boundary points, random points)
+4. Structured runtime verification:
+   - `shift_plus1` patch rotates ramp output by +1
+   - `shift_minus1` patch rotates ramp output by -1
+   - confirms recovered mapping drives expected `W @ x`-style behavior.

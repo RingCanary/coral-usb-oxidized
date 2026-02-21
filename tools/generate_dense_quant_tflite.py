@@ -23,6 +23,9 @@ def _make_kernel(
     output_dim: int,
     seed: int,
     diag_scale: float,
+    hot_row: int,
+    hot_col: int,
+    hot_value: float,
 ) -> np.ndarray:
     rng = np.random.default_rng(seed)
     kernel = np.zeros((input_dim, output_dim), dtype=np.float32)
@@ -39,6 +42,15 @@ def _make_kernel(
         return kernel
     if init_mode == "ones":
         kernel.fill(diag_scale)
+        return kernel
+    if init_mode == "zero":
+        return kernel
+    if init_mode == "single_hot":
+        if not (0 <= hot_row < input_dim):
+            raise ValueError(f"--hot-row out of range: {hot_row} (input_dim={input_dim})")
+        if not (0 <= hot_col < output_dim):
+            raise ValueError(f"--hot-col out of range: {hot_col} (output_dim={output_dim})")
+        kernel[hot_row, hot_col] = hot_value
         return kernel
     if init_mode == "random_uniform":
         return rng.uniform(-1.0, 1.0, size=(input_dim, output_dim)).astype(np.float32)
@@ -71,7 +83,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--output-dim", type=int, default=256)
     p.add_argument(
         "--init-mode",
-        choices=["identity", "permutation", "ones", "random_uniform"],
+        choices=["identity", "permutation", "ones", "zero", "single_hot", "random_uniform"],
         default="identity",
         help="Kernel initialization mode.",
     )
@@ -82,6 +94,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Diagonal/fill scale for identity/permutation/ones init.",
     )
     p.add_argument("--use-bias", action="store_true", help="Enable Dense bias.")
+    p.add_argument("--hot-row", type=int, default=0, help="Row index for --init-mode single_hot.")
+    p.add_argument("--hot-col", type=int, default=0, help="Column index for --init-mode single_hot.")
+    p.add_argument("--hot-value", type=float, default=1.0, help="Value for --init-mode single_hot.")
     p.add_argument("--seed", type=int, default=1337, help="RNG seed.")
     p.add_argument("--rep-samples", type=int, default=256)
     p.add_argument("--rep-range", type=float, default=1.0)
@@ -123,6 +138,9 @@ def main() -> int:
         output_dim=args.output_dim,
         seed=args.seed,
         diag_scale=args.diag_scale,
+        hot_row=args.hot_row,
+        hot_col=args.hot_col,
+        hot_value=args.hot_value,
     )
     dense_layer = model.layers[-1]
     if args.use_bias:
@@ -160,6 +178,9 @@ def main() -> int:
         "output_dim": args.output_dim,
         "init_mode": args.init_mode,
         "diag_scale": args.diag_scale,
+        "hot_row": args.hot_row,
+        "hot_col": args.hot_col,
+        "hot_value": args.hot_value,
         "use_bias": args.use_bias,
         "seed": args.seed,
         "rep_samples": args.rep_samples,

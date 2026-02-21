@@ -115,6 +115,7 @@ Dense single-op template is now implemented and validated:
 
 - workflow: `docs/tensorizer_dense_template.md`
 - pipeline script: `tools/dense_template_pipeline.sh`
+- layout recovery: `docs/dense_layout_probe.md`
 
 Next progression (for GEMM):
 
