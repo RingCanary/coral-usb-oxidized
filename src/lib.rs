@@ -3,6 +3,7 @@ mod delegate;
 mod device;
 mod error;
 mod flatbuffer;
+mod function_gemma;
 mod gemm;
 mod interpreter;
 
@@ -14,6 +15,10 @@ pub use crate::clip::{
 pub use crate::delegate::{version, EdgeTPUDelegate};
 pub use crate::device::{is_device_connected, CoralDevice};
 pub use crate::error::{CoralError, DenseGemmError, TfLiteError};
+pub use crate::function_gemma::{
+    FunctionGemmaDims, FunctionGemmaError, FunctionGemmaLayerLinearNames, FunctionGemmaLinearStage,
+    FunctionGemmaLinearStageMeta, FunctionGemmaSafeTensorFile,
+};
 pub use crate::gemm::{
     dense_256_param_offset, dense_param_offset, DenseGemmTemplate, PreparedDenseGemm,
     DENSE_GEMM256_DIM, DENSE_GEMM256_WEIGHT_BYTES, DENSE_GEMM256_WEIGHT_COUNT,

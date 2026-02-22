@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 chrono = "0.4.40"
+half = "2.7.1"
 libc = "0.2.171"
 rusb = "0.9.4"
 safetensors = "0.6.2"
