@@ -393,7 +393,7 @@ impl PreparedDenseGemm {
     }
 
     pub fn execute_batch_rows(&self, inputs_row_major_q: &[i8]) -> Result<Vec<i8>, DenseGemmError> {
-        if !inputs_row_major_q.len().is_multiple_of(self.input_dim) {
+        if inputs_row_major_q.len() % self.input_dim != 0 {
             return Err(DenseGemmError::BatchInputSizeMismatch {
                 input_dim: self.input_dim,
                 actual: inputs_row_major_q.len(),

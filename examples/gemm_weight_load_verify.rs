@@ -406,7 +406,7 @@ fn verify_against_per_output_affine(
     if acc_i32.len() != tpu_q.len() || acc_i32.is_empty() || maps.len() != DIM {
         return VerifyStats::default();
     }
-    if !acc_i32.len().is_multiple_of(DIM) {
+    if acc_i32.len() % DIM != 0 {
         return VerifyStats::default();
     }
 
