@@ -157,6 +157,10 @@ build_tflite_c() {
   bazelisk build -c opt \
     --repo_env=HERMETIC_PYTHON_VERSION="${TF_HERMETIC_PYTHON_VERSION}" \
     --repo_env=TF_PYTHON_VERSION="${TF_HERMETIC_PYTHON_VERSION}" \
+    --copt=-Wno-error=incompatible-pointer-types \
+    --copt=-Wno-incompatible-pointer-types \
+    --host_copt=-Wno-error=incompatible-pointer-types \
+    --host_copt=-Wno-incompatible-pointer-types \
     //tensorflow/lite/c:libtensorflowlite_c.so
   install -Dm755 bazel-bin/tensorflow/lite/c/libtensorflowlite_c.so "${PREFIX}/lib/libtensorflowlite_c.so"
 
