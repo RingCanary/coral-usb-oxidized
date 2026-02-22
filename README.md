@@ -108,6 +108,7 @@ cargo run --example transformer_linear_block -- 8 5 1
 cargo run --example transformer_linear_block -- 16 3 1 --no-attention --weight-source f32
 cargo run --example gemm_weight_load_verify -- 8 3 1 2
 cargo run --example clip_vit_safetensors_report -- /path/to/model.safetensors 0 127
+cargo run --example clip_vit_layer_tpu_probe -- /path/to/model.safetensors /path/to/template_edgetpu.tflite 0 q 20 127
 ```
 
 ## Offline EdgeTPU package extractor
@@ -175,6 +176,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `examples/transformer_linear_block.rs` (six-stage `2304x2304` transformer-like block benchmark with stage timing and model-switch baseline)
 - `examples/gemm_weight_load_verify.rs` (f32 weight/input quantize->patch->execute bridge with CPU reference verification)
 - `examples/clip_vit_safetensors_report.rs` (CLIP ViT SafeTensors parser + layer mapping/quantization preflight)
+- `examples/clip_vit_layer_tpu_probe.rs` (patch a real CLIP ViT layer into a rectangular template and execute on TPU)
 
 Detailed workflow and caveats are documented in `docs/usb_tracing.md`.
 
@@ -194,6 +196,7 @@ Current reverse-engineering notes:
 - `docs/transformer_linear_block.md`
 - `docs/gemm_weight_load_verify.md`
 - `docs/clip_vit_safetensors_report.md`
+- `docs/clip_vit_layer_tpu_probe.md`
 - `docs/schema/libedgetpu_executable.fbs`
 - `docs/external_research_2026-02-21.md`
 - `traces/re-matrix-20260221T092342Z/USBMON_PACKET_VALIDATION_20260221T1035Z.md`
