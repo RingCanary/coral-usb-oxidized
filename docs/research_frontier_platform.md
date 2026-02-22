@@ -12,6 +12,7 @@ Dense template path.
 3. Row-tiled large matrix-vector example using bundled `2688x2688` template.
 4. New Conv2D template toolchain with `uv` + `edgetpu_compiler`.
 5. New Conv2D layout probe and mixed Conv2D->Dense multi-op pipeline.
+6. Transformer-like six-stage linear block benchmark at `d_model=2304`.
 
 ## 1) Fast restride path
 
@@ -110,6 +111,31 @@ Mixed-op graph path:
 
 This adds a combined Conv2D + Dense graph workflow for chaining operator classes
 in one compiled model, closer to practical lightweight network blocks.
+
+## 5) Transformer-like linear block harness
+
+New example:
+
+- `examples/transformer_linear_block.rs`
+
+Companion note:
+
+- `docs/transformer_linear_block.md`
+
+Purpose:
+
+- benchmark six `2304x2304` GEMMs (`Q/K/V/O/MLP_up/MLP_down`) in one block
+- capture per-stage setup and execution timings
+- compare stage-switched execution against a same-stage baseline to estimate
+  model-switch overhead
+- support prefill-style input (`seq_len` rows) with optional CPU single-head
+  attention in the middle
+
+Run:
+
+```bash
+cargo run --example transformer_linear_block -- 8 5 1
+```
 
 ## Immediate next experiments
 

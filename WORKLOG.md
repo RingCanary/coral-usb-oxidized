@@ -895,3 +895,72 @@ Executed pipeline runs (`warmup=1`, `runs=5`) for:
      - `FULLY_CONNECTED=1`
    - benchmark avg `0.286 ms` (`1x16x16x16 -> 1x256`)
    - artifacts: `traces/multiop-template-20260222T071951Z/*`
+
+## 2026-02-22 (transformer-linear milestone harness, 2304)
+
+### Objective
+
+Bridge the Dense tensorizer path to a transformer-like block benchmark focused
+on Coral integration questions:
+
+- six same-size linear stages (`Q/K/V/O/MLP_up/MLP_down`)
+- `d_model=2304` to stay in the on-chip regime
+- prefill-style row batches (`seq_len` rows)
+- explicit model-switch overhead baseline
+
+### Added benchmark example
+
+1. Added `examples/transformer_linear_block.rs`.
+2. Uses six separately patched `DenseGemmTemplate::from_bundled_2304()` models
+   with stage-specific matrices:
+   - `q_proj`: identity
+   - `k_proj`: shift+1
+   - `v_proj`: shift-1
+   - `o_proj`: identity
+   - `mlp_up`: shift+1
+   - `mlp_down`: shift-1
+3. Reports:
+   - per-stage setup timing (`prepare_ms`, `first_invoke_ms`)
+   - per-stage average latency (`q/k/v/attn/o/up/down`)
+   - linear-only and end-to-end totals
+   - derived throughput (`linear_gmac_per_s`, `end_to_end_gmac_per_s`)
+4. Includes a model-switch baseline:
+   - `same_stage6_ms` (runs one prepared stage six times) versus full
+     stage-switched linear path.
+
+### Attention path in milestone
+
+1. Includes optional CPU single-head attention (`softmax(QK^T/sqrt(d))V`) between
+   `V` and `O` to mimic transformer block flow.
+2. Can be disabled with `--no-attention` to isolate pure linear-stage timing.
+
+### Documentation updates
+
+1. Added `docs/transformer_linear_block.md`.
+2. Updated `README.md`:
+   - example command list includes `transformer_linear_block`
+   - tooling/example index includes the new benchmark
+   - reverse-engineering notes list includes the new doc
+   - added a dedicated milestone usage section
+
+### Hardware runs
+
+1. Ran:
+   - `cargo run --example transformer_linear_block -- 4 1 0`
+   - results:
+     - `linear_only_ms=10.621`, `total_ms=11.370`
+     - `linear_gmac_per_s=11.995`
+     - `end_to_end_gmac_per_s=11.205`
+2. Ran:
+   - `cargo run --example transformer_linear_block -- 16 3 1 --no-attention`
+   - results:
+     - `linear_only_ms=30.757`, `total_ms=30.760`
+     - `same_stage6_ms=30.936`
+     - `linear_gmac_per_s=16.569`
+3. Ran:
+   - `cargo run --example transformer_linear_block -- 16 3 1`
+   - results:
+     - `linear_only_ms=33.195`, `attn_cpu=10.903`, `total_ms=44.099`
+     - `same_stage6_ms=32.092`
+     - `linear_gmac_per_s=15.352`
+     - `end_to_end_gmac_per_s=11.556`
