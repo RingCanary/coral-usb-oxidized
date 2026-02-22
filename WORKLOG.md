@@ -1466,3 +1466,77 @@ eval "$(./tools/bootstrap_arch_stack.sh print-env)"
 
 Without this, the process may load an older system `libedgetpu` instead of the
 repo-managed runtime in `/home/rpc/.local/lib`.
+
+### Function Gemma full decode loop + Coral tiled LM-head
+
+#### Objective
+
+Wire a full autoregressive decode loop in Rust for Function-Gemma, keeping
+linear compute on Coral and removing the CPU LM-head bottleneck via tiled Coral
+projection.
+
+#### Changes
+
+1. Added new example:
+   - `examples/function_gemma_decode_loop.rs`
+2. Added docs:
+   - `docs/function_gemma_decode_loop.md`
+3. Added model helper APIs in `src/function_gemma.rs`:
+   - `tensor_names()`
+   - `embedding_rows_f32(token_start, token_count)` for block reads used by
+     tiled LM-head without loading the full embedding matrix into heap.
+4. Updated `README.md` examples/docs list with decode-loop references.
+
+#### Decode implementation details
+
+1. Full per-token transformer path:
+   - embedding lookup
+   - per-layer RMSNorm
+   - Coral stages `q/k/v/o/gate/up/down`
+   - CPU single-token GQA attention with KV cache + RoPE
+   - SwiGLU MLP (`silu(gate) * up` then `down`)
+   - final RMSNorm
+2. LM-head backends:
+   - `cpu`: tied embedding projection on CPU
+   - `coral`: tiled Coral projection using `640x2624` template across vocab
+     tiles (`100` tiles for vocab `262146`).
+3. Per-stage affine calibration retained (CPU accumulator vs TPU output fit)
+   for dequantized f32 stage outputs.
+
+#### Artifacts and runs (Pi5)
+
+Commands were run with:
+
+```bash
+eval "$(./tools/bootstrap_arch_stack.sh print-env)"
+```
+
+LM template generated on workstation and copied to Pi:
+
+- `/tmp/functiongemma-lm-template-20260222T145912Z/dense_640x2624_quant_edgetpu.tflite`
+- `/home/rpc/functiongemma-templates-b1/dense_640x2624_quant_edgetpu.tflite`
+
+1. Baseline (CPU LM-head, 1 layer, 2 decode tokens):
+   - artifact: `~/clip-traces/functiongemma-decode-cpu-20260222T145726Z`
+   - setup: `4619.589 ms`
+   - decode: `ms_per_token=16870.889`
+2. Coral LM-head (1 layer, 2 decode tokens):
+   - artifact: `~/clip-traces/functiongemma-decode-coral-20260222T145932Z`
+   - setup: `58478.197 ms` (includes preparing 100 LM tiles)
+   - decode: `ms_per_token=633.598`
+3. Full depth (18 layers, CPU LM-head, 1 decode token):
+   - artifact: `~/clip-traces/functiongemma-decode-cpu-l18-20260222T150236Z`
+   - setup: `35367.365 ms`
+   - decode: `ms_per_token=17226.403`
+4. Full depth (18 layers, Coral LM-head, 2 decode tokens):
+   - artifact: `~/clip-traces/functiongemma-decode-coral-l18-s2-20260222T150421Z`
+   - setup: `88877.781 ms` (layer prep + 100 LM tiles)
+   - decode: `ms_per_token=978.161`
+
+#### Outcome
+
+1. Coral-tiled LM-head cuts full-depth token latency from ~`17.2s` to
+   ~`0.98s` on Pi5 (same prompt/config), removing the dominant CPU vocab
+   projection bottleneck.
+2. Startup/setup cost rises due to one-time LM tile preparation; steady-state
+   decode throughput improves by ~`17.6x`.
