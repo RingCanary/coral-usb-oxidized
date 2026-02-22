@@ -155,6 +155,24 @@ metrics.
    - `up` (`640x2048`): `avg_ms=0.821`, `corr=0.999793`
    - `down` (`2048x640`): `avg_ms=0.675`, `corr=0.999740`
 
+### Function-Gemma embedding + LM-head sanity (CPU first)
+
+1. Extended `FunctionGemmaSafeTensorFile` with embedding helpers:
+   - `embedding_dims()`
+   - `token_embedding_row_f32(token_id)`
+   - `lm_head_topk_from_hidden(hidden_state, topk)`
+2. Added example:
+   - `examples/function_gemma_lm_head_sanity.rs`
+   - docs: `docs/function_gemma_lm_head_sanity.md`
+3. Pi5 run:
+   - output: `/home/rpc/clip-traces/functiongemma-lmhead-sanity-20260222T142358Z/run.log`
+   - command:
+     - `cargo run --example function_gemma_lm_head_sanity -- /home/rpc/functiongemma-models/model.safetensors 42 10`
+   - results:
+     - `embedding_lookup_ms=2.887`
+     - `lm_head_top10_ms=14213.630`
+     - top-1 token id was self token (`42`) with score `1.062339`
+
 ## 2026-02-21
 
 ### Objective
