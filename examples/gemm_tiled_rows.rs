@@ -19,10 +19,10 @@ fn parse_mode(value: &str) -> Result<RowMode, Box<dyn Error>> {
     }
 }
 
-fn selected_col(global_row: usize, tile_dim: usize, mode: RowMode) -> usize {
+fn selected_input_row(global_output_row: usize, tile_dim: usize, mode: RowMode) -> usize {
     match mode {
-        RowMode::IdentityCycle => global_row % tile_dim,
-        RowMode::ShiftPlus1Cycle => (global_row + 1) % tile_dim,
+        RowMode::IdentityCycle => global_output_row % tile_dim,
+        RowMode::ShiftPlus1Cycle => (global_output_row + 1) % tile_dim,
     }
 }
 
@@ -61,9 +61,10 @@ fn tiled_rows_execute(
         tile.fill_matrix_qi8(0)?;
 
         for local_row in 0..row_block {
-            let global_row = row_base + local_row;
-            let col = selected_col(global_row, tile_input_dim, mode);
-            tile.set_weight_qi8(local_row, col, 127)?;
+            let global_output_row = row_base + local_row;
+            let input_row = selected_input_row(global_output_row, tile_input_dim, mode);
+            // set_weight_qi8(row, col): row=input index, col=output index.
+            tile.set_weight_qi8(input_row, local_row, 127)?;
         }
 
         let prepared = tile.prepare(delegate)?;
@@ -80,7 +81,7 @@ fn verify(rows_total: usize, mode: RowMode, input: &[i8], output: &[i8]) -> (usi
     let tile_dim = input.len();
 
     for row in 0..rows_total {
-        let expected = input[selected_col(row, tile_dim, mode)];
+        let expected = input[selected_input_row(row, tile_dim, mode)];
         let got = output[row];
         let delta = (got as i16 - expected as i16).abs();
         if delta > 1 {
