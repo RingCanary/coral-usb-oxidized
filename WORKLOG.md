@@ -59,6 +59,35 @@ metrics.
    - tuned `qmax=32`: `72` stage checks, mean corr `0.997553`, min corr
      `0.912842` (`fc2`), with unchanged pipeline latency (~`38 ms/layer`)
 
+### Full CLIP forward wiring
+
+1. Added `examples/clip_vit_full_forward.rs`:
+   - full vision path: patch embedding conv + pre/post layernorm + 12
+     transformer blocks + projection head
+   - Coral-backed linears (`q/k/v/o/fc1/fc2`) with calibrated affine
+     dequantization per stage
+   - optional embedding dump (`--out-f32le`, `--out-norm-f32le`) and optional
+     reference compare (`--reference-f32le`)
+2. Added `docs/clip_vit_full_forward.md`.
+3. Added helper script `tools/clip_hf_reference.py` (HF Transformers reference
+   embedding generator from `f32le` image tensor).
+4. Pi5 validation with real checkpoint:
+   - command used `--max-layers 12 --weight-qmax 32 --act-qmax 32`
+   - stage calibration stayed strong across all layers (`corr` mostly
+     `0.9998+`)
+   - end-to-end timing:
+     - `prepare_ms=39552.239`
+     - `forward_ms=6358.528`
+     - `total_ms=45910.767`
+   - artifacts:
+     - `/home/rpc/clip-traces/clip-full-forward-20260222T130016Z/`
+5. HF compare on same deterministic input tensor:
+   - artifact:
+     - `/home/rpc/clip-traces/clip-full-forward-hf-compare-20260222T130159Z/`
+   - raw embedding: cosine `0.73293731`, MAE `0.26041435`, RMSE `0.34962000`
+   - normalized embedding: cosine `0.73293731`, MAE `0.02508840`,
+     RMSE `0.03229882`
+
 ## 2026-02-21
 
 ### Objective
