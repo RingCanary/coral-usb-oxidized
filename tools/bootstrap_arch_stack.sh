@@ -114,6 +114,12 @@ build_libedgetpu() {
   patch makefile_build/Makefile < makefile.patch
   patch driver/usb/usb_device_interface.h < usb_device_interface.patch
 
+  # Some Debian/Raspberry Pi environments do not ship ld.gold.
+  # Fall back to bfd so the libedgetpu link step succeeds on ARM boards.
+  if ! command -v ld.gold >/dev/null 2>&1; then
+    sed -i 's/-fuse-ld=gold/-fuse-ld=bfd/g' makefile_build/Makefile
+  fi
+
   # Arch currently ships FlatBuffers 25.x while TF 2.18 generated headers assert 24.x.
   rg -l "Non-compatible flatbuffers version included" "tensorflow-${TF_VERSION}/tensorflow" -g '*_generated.h' | while read -r f; do
     perl -0777 -i -pe 's/static_assert\(FLATBUFFERS_VERSION_MAJOR.*?Non-compatible flatbuffers version included"\);/\/\/ patched out flatbuffers version assert for Arch flatbuffers compatibility\n/s' "$f"
