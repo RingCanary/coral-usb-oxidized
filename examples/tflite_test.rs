@@ -1,4 +1,4 @@
-use coral_usb_oxidized::*;
+use coral_usb_oxidized::{is_device_connected, version, CoralDevice};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing TensorFlow Lite and EdgeTPU integration");
@@ -31,25 +31,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // If we get here, a Coral USB Accelerator is connected
     println!("Coral USB Accelerator detected!");
 
-    // List all available devices
-    println!("Listing available EdgeTPU devices...");
-    let devices = list_devices()?;
-    println!("Found {} EdgeTPU device(s)", devices.len());
-    for (i, device_name) in devices.iter().enumerate() {
-        println!("Device {}: {}", i, device_name);
-    }
-
-    // Get device information
-    println!("Getting device information...");
-    let device_info = get_device_info()?;
-    for info in device_info {
-        println!("{}", info);
-    }
-
     // Create a Coral device
     println!("Creating Coral device...");
     let device = CoralDevice::new()?;
     println!("Coral device created successfully!");
+    println!("  Vendor ID: 0x{:04x}", device.vendor_id());
+    println!("  Product ID: 0x{:04x}", device.product_id());
+    if let Some(name) = device.name() {
+        println!("  Name: {}", name);
+    }
 
     // Create an EdgeTPU delegate
     println!("Creating EdgeTPU delegate...");

@@ -1,5 +1,5 @@
 use chrono;
-use coral_usb_oxidized::{list_devices, version, CoralDevice, CoralError};
+use coral_usb_oxidized::{version, CoralDevice, CoralError};
 use std::thread;
 use std::time::Duration;
 
@@ -43,14 +43,6 @@ fn verify_coral_device() -> (bool, String) {
 
             if let Some(name) = device.name() {
                 details.push_str(&format!("\n- Device Name: {}", name));
-            }
-
-            // Step 4: Get additional device information from USB descriptors
-            if let Ok(device_list) = list_devices() {
-                if !device_list.is_empty() {
-                    details.push_str("\n- USB Descriptor Info: ");
-                    details.push_str(&device_list[0]);
-                }
             }
 
             (true, details)

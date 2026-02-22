@@ -1,6 +1,20 @@
-use coral_usb_oxidized::{get_device_info, is_device_connected, version, CoralDevice};
+use coral_usb_oxidized::{is_device_connected, version, CoralDevice};
 use std::thread;
 use std::time::Duration;
+
+fn print_device_snapshot(stage: &str) {
+    println!("\nDevice information {}:", stage);
+    match CoralDevice::new() {
+        Ok(device) => {
+            println!("  Vendor ID: 0x{:04x}", device.vendor_id());
+            println!("  Product ID: 0x{:04x}", device.product_id());
+            if let Some(name) = device.name() {
+                println!("  Name: {}", name);
+            }
+        }
+        Err(e) => println!("  Unable to read device info: {}", e),
+    }
+}
 
 fn main() {
     // Print the EdgeTPU library version
@@ -10,18 +24,7 @@ fn main() {
     if is_device_connected() {
         println!("Coral USB Accelerator detected!");
 
-        // Print device information before initialization
-        println!("\nDevice information before initialization:");
-        match get_device_info() {
-            Ok(info) => {
-                for (i, device) in info.iter().enumerate() {
-                    println!("  Device {}: {}", i + 1, device);
-                }
-            }
-            Err(e) => {
-                println!("Error getting device information: {}", e);
-            }
-        }
+        print_device_snapshot("before initialization");
     } else {
         println!("No Coral USB Accelerator detected.");
         println!("Please connect a Coral USB Accelerator and try again.");
@@ -59,18 +62,7 @@ fn main() {
             println!("\nWaiting for device ID to change...");
             thread::sleep(Duration::from_secs(1));
 
-            // Print device information after initialization
-            println!("\nDevice information after initialization:");
-            match get_device_info() {
-                Ok(info) => {
-                    for (i, device) in info.iter().enumerate() {
-                        println!("  Device {}: {}", i + 1, device);
-                    }
-                }
-                Err(e) => {
-                    println!("Error getting device information: {}", e);
-                }
-            }
+            print_device_snapshot("after initialization");
 
             println!(
                 "\nNote: The Coral USB Accelerator changes its device ID after initialization."
@@ -105,18 +97,7 @@ fn main() {
                 println!("\nWaiting for device ID to change...");
                 thread::sleep(Duration::from_secs(1));
 
-                // Print device information after initialization
-                println!("\nDevice information after initialization:");
-                match get_device_info() {
-                    Ok(info) => {
-                        for (i, device) in info.iter().enumerate() {
-                            println!("  Device {}: {}", i + 1, device);
-                        }
-                    }
-                    Err(e) => {
-                        println!("Error getting device information: {}", e);
-                    }
-                }
+                print_device_snapshot("after initialization");
 
                 println!(
                     "\nNote: The Coral USB Accelerator changes its device ID after initialization."

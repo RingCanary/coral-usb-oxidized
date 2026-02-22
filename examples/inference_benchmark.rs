@@ -1,4 +1,4 @@
-use coral_usb_oxidized::{list_devices, version, CoralDevice};
+use coral_usb_oxidized::{version, CoralDevice};
 use std::env;
 use std::error::Error;
 use std::ffi::CString;
@@ -102,14 +102,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     println!("EdgeTPU version: {}", version());
-    let devices = list_devices()?;
-    println!("Detected devices: {}", devices.len());
-    for (idx, device) in devices.iter().enumerate() {
-        println!("  {}. {}", idx + 1, device);
-    }
-
     println!("STEP create_device");
     let device = CoralDevice::new()?;
+    println!(
+        "Detected device: vendor=0x{:04x} product=0x{:04x}",
+        device.vendor_id(),
+        device.product_id()
+    );
     println!("STEP create_delegate");
     let delegate = device.create_delegate()?;
     println!("STEP create_interpreter");

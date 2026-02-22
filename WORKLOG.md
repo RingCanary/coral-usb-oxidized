@@ -762,3 +762,31 @@ Executed pipeline runs (`warmup=1`, `runs=5`) for:
 4. `cargo check --example gemm_int8`
 5. `cargo check --example gemm_int8_dynamic`
 6. `cargo check --example gemm_int8_bundled`
+
+## 2026-02-22 (public API surface cleanup)
+
+### API changes
+
+1. Trimmed crate-root re-exports in `src/lib.rs` to user-facing types only.
+2. Removed crate-root exports of internal FFI/raw types:
+   - `TfLiteModel`, `TfLiteInterpreter`, `TfLiteInterpreterOptions`, `TfLiteTensor`, `TfLiteDelegate`
+   - `TfLiteModelWrapper`
+   - `EdgeTPUDelegateRaw`, `EdgeTPUDelegatePtr`, `EdgeTPUOption`, `EdgeTPUDeviceType`
+3. Removed crate-root exports for device listing helpers/constants:
+   - `list_devices`, `get_device_info`
+   - VID/PID constants
+
+### Follow-up cleanup
+
+1. Removed now-unused `list_devices` and `get_device_info` functions from `src/device.rs`.
+2. Updated examples to rely on `CoralDevice` accessors instead of removed listing helpers:
+   - `examples/basic_usage.rs`
+   - `examples/delegate_usage.rs`
+   - `examples/verify_device.rs`
+   - `examples/inference_benchmark.rs`
+   - `examples/tflite_test.rs`
+
+### Validation
+
+1. `cargo fmt`
+2. `cargo check --all-targets`

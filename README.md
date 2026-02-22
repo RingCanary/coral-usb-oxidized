@@ -246,6 +246,9 @@ Migration note:
 - The old fixed-256 wrapper types (`DenseGemm256Template`, `GemmTemplate256`, `PreparedGemm256`)
   were removed in favor of the single dimension-aware `DenseGemmTemplate` +
   `PreparedDenseGemm` path.
+- Internal/FFI-only types are no longer exported at crate root (for example
+  `TfLiteModel*` and `EdgeTPUDelegate*` raw types). Public API now focuses on
+  `CoralDevice`, `EdgeTPUDelegate`, `CoralInterpreter`, and GEMM types.
 
 ### Real inference benchmark example
 

@@ -1,4 +1,4 @@
-use coral_usb_oxidized::{list_devices, version, CoralDevice};
+use coral_usb_oxidized::{version, CoralDevice};
 
 // Simple function to verify the Coral USB Accelerator
 // This goes beyond just checking USB IDs by attempting to create a device instance
@@ -20,17 +20,6 @@ fn main() {
     println!("Coral USB Accelerator present and valid: {}", is_present);
 
     if is_present {
-        // List available devices for more details
-        match list_devices() {
-            Ok(devices) => {
-                println!("Found {} device(s):", devices.len());
-                for (i, device) in devices.iter().enumerate() {
-                    println!("  {}. {}", i + 1, device);
-                }
-            }
-            Err(e) => println!("Error listing devices: {}", e),
-        }
-
         // Create a device instance for detailed info
         match CoralDevice::new() {
             Ok(device) => {
