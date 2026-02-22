@@ -790,3 +790,51 @@ Executed pipeline runs (`warmup=1`, `runs=5`) for:
 
 1. `cargo fmt`
 2. `cargo check --all-targets`
+
+## 2026-02-22 (RE frontier platform expansion)
+
+### Dense GEMM runtime improvements
+
+1. Optimized `DenseGemmTemplate::set_weights_from_slice(...)`:
+   - replaced per-element `dense_param_offset(...)` calls with direct tile-native restride loops.
+2. Added correctness unit test:
+   - `fast_restride_matches_formula_mapping`
+   - verifies fast restride output against formula-derived offsets.
+3. Added host-loop batch helper:
+   - `PreparedDenseGemm::execute_batch_rows(&[i8]) -> Result<Vec<i8>, DenseGemmError>`
+4. Added new error variant:
+   - `DenseGemmError::BatchInputSizeMismatch`
+
+### Large matrix tiling example
+
+1. Added `examples/gemm_tiled_rows.rs`.
+2. Implements row-tiling over bundled `2688x2688` template:
+   - composes outputs for `rows_total > 2688`
+   - demonstrates matrix-vector execution beyond one on-chip parameter block.
+
+### Conv2D exploration toolchain
+
+1. Added `tools/generate_conv2d_quant_tflite.py`:
+   - deterministic single-layer Conv2D model generator
+   - full INT8 TFLite conversion + metadata output
+2. Added `tools/conv_template_pipeline.sh`:
+   - `uv` environment + model generation + `edgetpu_compiler`
+   - DWN1 extraction + executable parser + tensorizer inspect
+   - optional benchmark via `--run-benchmark`
+
+### Documentation
+
+1. Added `docs/research_frontier_platform.md` summarizing:
+   - fast restride path
+   - batch helper semantics
+   - tiled row execution
+   - Conv2D pipeline usage
+2. Updated `README.md` to include:
+   - Conv2D pipeline/tool entries
+   - `gemm_tiled_rows` example
+   - new frontier platform doc link
+3. Added initial pure-Rust USB driver milestones to frontier docs:
+   - baseline contract capture
+   - `rusb` init replay prototype
+   - command-path emulation
+   - feature-gated interpreter integration

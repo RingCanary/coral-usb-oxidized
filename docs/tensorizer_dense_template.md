@@ -176,6 +176,18 @@ Bundled-template path (no external model file required):
 cargo run --example gemm_int8_bundled -- 2688 identity 30
 ```
 
+Row-tiled large output experiment (matrix footprint larger than a single
+`2688x2688` parameter block):
+
+```bash
+cargo run --example gemm_tiled_rows -- 8192 identity_cycle 1
+```
+
+Prepared batch helper (host-loop over multiple input rows with interpreter
+reuse):
+
+- `PreparedDenseGemm::execute_batch_rows(&[i8]) -> Vec<i8>`
+
 ## 2026-02-22 update: dimension scaling sweep
 
 Observed from pipeline runs (`warmup=1`, `runs=5`) with identity kernels:

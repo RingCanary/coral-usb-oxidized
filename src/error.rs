@@ -115,6 +115,10 @@ pub enum DenseGemmError {
         expected: usize,
         actual: usize,
     },
+    BatchInputSizeMismatch {
+        input_dim: usize,
+        actual: usize,
+    },
     TfLite(TfLiteError),
     Coral(CoralError),
     Io(std::io::Error),
@@ -155,6 +159,11 @@ impl fmt::Display for DenseGemmError {
                 f,
                 "Output vector size mismatch: expected {}, got {}",
                 expected, actual
+            ),
+            DenseGemmError::BatchInputSizeMismatch { input_dim, actual } => write!(
+                f,
+                "Batch input size mismatch: expected a multiple of {}, got {}",
+                input_dim, actual
             ),
             DenseGemmError::TfLite(err) => write!(f, "TensorFlow Lite error: {}", err),
             DenseGemmError::Coral(err) => write!(f, "Coral error: {}", err),

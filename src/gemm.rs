@@ -20,6 +20,43 @@ fn invalid_template(message: impl Into<String>) -> DenseGemmError {
     DenseGemmError::InvalidTemplate(message.into())
 }
 
+fn encode_row_major_weights_into_payload(
+    input_dim: usize,
+    output_dim: usize,
+    weights_row_major_q: &[i8],
+    payload: &mut [u8],
+) {
+    let row_tile_count = input_dim / 64;
+    let col_tile_count = output_dim / 64;
+
+    // Re-stride row-major weights into recovered 64x64 tile / 4-lane payload layout.
+    for col_tile in 0..col_tile_count {
+        let col_base = col_tile * 64;
+        for row_tile in 0..row_tile_count {
+            let row_base = row_tile * 64;
+            let tile_base = (col_tile * row_tile_count + row_tile) * 4096;
+
+            for row_group in 0..16 {
+                let row_group_base = row_base + row_group * 4;
+                let group_base = tile_base + row_group * 256;
+
+                for col_local in 0..64 {
+                    let src_col = col_base + col_local;
+                    let lane_base = group_base + col_local * 4;
+
+                    for lane in 0..4 {
+                        let src_row = row_group_base + lane;
+                        let source_index = src_row * output_dim + src_col;
+                        payload[lane_base + lane] = DenseGemmTemplate::payload_byte_from_qi8(
+                            weights_row_major_q[source_index],
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub fn dense_param_offset(
     input_dim: usize,
     output_dim: usize,
@@ -195,14 +232,7 @@ impl DenseGemmTemplate {
         let input_dim = self.input_dim;
         let output_dim = self.output_dim;
         let payload = self.payload_bytes_mut()?;
-        for row in 0..input_dim {
-            for col in 0..output_dim {
-                let source_index = row * output_dim + col;
-                let target_index = dense_param_offset(input_dim, output_dim, row, col)?;
-                payload[target_index] =
-                    Self::payload_byte_from_qi8(weights_row_major_q[source_index]);
-            }
-        }
+        encode_row_major_weights_into_payload(input_dim, output_dim, weights_row_major_q, payload);
         Ok(())
     }
 
@@ -361,6 +391,23 @@ impl PreparedDenseGemm {
             .copy_from_output_tensor(0, &mut output_bytes)?;
         Ok(output_bytes.into_iter().map(|value| value as i8).collect())
     }
+
+    pub fn execute_batch_rows(&self, inputs_row_major_q: &[i8]) -> Result<Vec<i8>, DenseGemmError> {
+        if !inputs_row_major_q.len().is_multiple_of(self.input_dim) {
+            return Err(DenseGemmError::BatchInputSizeMismatch {
+                input_dim: self.input_dim,
+                actual: inputs_row_major_q.len(),
+            });
+        }
+
+        let batch = inputs_row_major_q.len() / self.input_dim;
+        let mut outputs = Vec::with_capacity(batch * self.output_dim);
+        for chunk in inputs_row_major_q.chunks_exact(self.input_dim) {
+            let out = self.execute(chunk)?;
+            outputs.extend_from_slice(&out);
+        }
+        Ok(outputs)
+    }
 }
 
 #[cfg(test)]
@@ -401,6 +448,29 @@ mod tests {
             let encoded = DenseGemmTemplate::payload_byte_from_qi8(value);
             let decoded = DenseGemmTemplate::qi8_from_payload_byte(encoded);
             assert_eq!(decoded, value);
+        }
+    }
+
+    #[test]
+    fn fast_restride_matches_formula_mapping() {
+        let input_dim = 128usize;
+        let output_dim = 128usize;
+        let count = input_dim * output_dim;
+        let mut row_major = vec![0i8; count];
+        for (idx, value) in row_major.iter_mut().enumerate() {
+            *value = ((idx % 251) as i16 - 125) as i8;
+        }
+
+        let mut payload = vec![DenseGemmTemplate::payload_byte_from_qi8(0); count];
+        encode_row_major_weights_into_payload(input_dim, output_dim, &row_major, &mut payload);
+
+        for row in 0..input_dim {
+            for col in 0..output_dim {
+                let off = dense_param_offset(input_dim, output_dim, row, col).unwrap();
+                let expected =
+                    DenseGemmTemplate::payload_byte_from_qi8(row_major[row * output_dim + col]);
+                assert_eq!(payload[off], expected);
+            }
         }
     }
 }

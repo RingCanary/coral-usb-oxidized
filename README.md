@@ -103,6 +103,7 @@ cargo run --example cpu_vs_edgetpu_mvp -- --help
 cargo run --example gemm_int8 -- <dense_template_edgetpu.tflite> shift_plus1 ramp
 cargo run --example gemm_int8_dynamic -- <dense_template_edgetpu.tflite> <input_dim> <output_dim> identity ramp
 cargo run --example gemm_int8_bundled -- 2688 identity 30
+cargo run --example gemm_tiled_rows -- 8192 identity_cycle 1
 ```
 
 ## Offline EdgeTPU package extractor
@@ -150,8 +151,10 @@ For protocol-level and syscall-level capture helpers, use:
 - `tools/parse_edgetpu_executable.py` (schema-aware parser for serialized executables)
 - `tools/tensorizer_patch_edgetpu.py` (in-place parameter patcher for compiled `*_edgetpu.tflite`)
 - `tools/generate_dense_quant_tflite.py` (single-layer Dense INT8 model generator)
+- `tools/generate_conv2d_quant_tflite.py` (single-layer Conv2D INT8 model generator)
 - `tools/bootstrap_edgetpu_compiler.sh` (local `edgetpu_compiler` bootstrap from Coral apt repo)
 - `tools/dense_template_pipeline.sh` (generate -> compile -> extract -> parse -> inspect pipeline)
+- `tools/conv_template_pipeline.sh` (Conv2D generate -> compile -> extract -> parse -> inspect pipeline)
 - `tools/dense_layout_probe.py` (single-hot parameter-layout probe and offset mapping extractor)
 - `tools/dense_template_matrix_patch.py` (structured Dense matrix patcher using recovered layout map)
 - `tools/dense_quant_value_probe.py` (single-hot float->quant->compiled byte mapping verifier)
@@ -161,6 +164,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `examples/gemm_int8.rs` (Rust-native template patch + execute + verification loop)
 - `examples/gemm_int8_dynamic.rs` (dimension-aware Rust template patch + prepared execution loop)
 - `examples/gemm_int8_bundled.rs` (runs bundled 2048/2304/2688 templates with no external model path)
+- `examples/gemm_tiled_rows.rs` (row-tiled matrix-vector execution beyond a single 2688x2688 parameter block)
 
 Detailed workflow and caveats are documented in `docs/usb_tracing.md`.
 
@@ -173,6 +177,7 @@ Current reverse-engineering notes:
 - `docs/usb_executable_transport_correlation.md`
 - `docs/tensorizer_mvp.md`
 - `docs/tensorizer_dense_template.md`
+- `docs/research_frontier_platform.md`
 - `docs/dense_layout_probe.md`
 - `docs/schema/libedgetpu_executable.fbs`
 - `docs/external_research_2026-02-21.md`
@@ -220,6 +225,16 @@ cargo run --example inference_dump -- "$latest/dense_256x256_quant_edgetpu.tflit
 cargo run --example inference_dump -- "$latest/dense_256x256_quant_edgetpu_patched_zero.tflite" ramp
 ```
 
+### Conv2D template workflow (uv-managed)
+
+Generate a single-op Conv2D template and run extraction + parser in one command:
+
+```bash
+./tools/conv_template_pipeline.sh --height 224 --width 224 --in-channels 3 --out-channels 16 --kernel-size 3 --stride 1 --padding same
+```
+
+This provides a reproducible Conv2D RE path parallel to Dense-template work, including executable extraction and schema-aware parser output for transport/parameter analysis.
+
 ### Rust-native Dense GEMM template path
 
 Use the recovered 256x256 layout and in-memory patch path directly from Rust
@@ -235,7 +250,7 @@ cargo run --example gemm_int8 -- \
 Library API entry points:
 
 - `DenseGemmTemplate` (DWN1 parameter-region discovery + dimension-aware patch/execute path)
-- `PreparedDenseGemm` (dimension-aware prepared executor)
+- `PreparedDenseGemm` (dimension-aware prepared executor; includes host-loop `execute_batch_rows`)
 - `dense_256_param_offset` (recovered restride formula)
 - `dense_param_offset` (dimension-aware restride mapping)
 - `TEMPLATE_2048`, `TEMPLATE_2304`, `TEMPLATE_2688` (bundled precompiled templates via `include_bytes!`)
