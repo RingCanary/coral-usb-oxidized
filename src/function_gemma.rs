@@ -1,6 +1,8 @@
 use half::{bf16, f16};
+use memmap2::{Mmap, MmapOptions};
 use safetensors::{Dtype, SafeTensors};
 use std::fmt;
+use std::fs::File;
 use std::path::Path;
 
 #[derive(Debug)]
@@ -179,18 +181,50 @@ pub struct FunctionGemmaLinearStageMeta {
     pub output_dim: usize,
 }
 
+enum FunctionGemmaStorage {
+    Owned(Vec<u8>),
+    Mapped(Mmap),
+}
+
 pub struct FunctionGemmaSafeTensorFile {
-    bytes: Vec<u8>,
+    storage: FunctionGemmaStorage,
 }
 
 impl FunctionGemmaSafeTensorFile {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, FunctionGemmaError> {
-        let bytes = std::fs::read(path)?;
-        Ok(Self { bytes })
+        let path = path.as_ref();
+        let file = File::open(path)?;
+        // Prefer mmap to avoid copying whole checkpoints into process heap.
+        let mapped = unsafe { MmapOptions::new().map(&file) };
+        match mapped {
+            Ok(mmap) => Ok(Self {
+                storage: FunctionGemmaStorage::Mapped(mmap),
+            }),
+            Err(_) => {
+                let bytes = std::fs::read(path)?;
+                Ok(Self {
+                    storage: FunctionGemmaStorage::Owned(bytes),
+                })
+            }
+        }
+    }
+
+    pub fn storage_kind(&self) -> &'static str {
+        match self.storage {
+            FunctionGemmaStorage::Mapped(_) => "mmap",
+            FunctionGemmaStorage::Owned(_) => "owned",
+        }
+    }
+
+    fn bytes(&self) -> &[u8] {
+        match &self.storage {
+            FunctionGemmaStorage::Owned(bytes) => bytes.as_slice(),
+            FunctionGemmaStorage::Mapped(mmap) => mmap.as_ref(),
+        }
     }
 
     fn parsed(&self) -> Result<SafeTensors<'_>, FunctionGemmaError> {
-        Ok(SafeTensors::deserialize(&self.bytes)?)
+        Ok(SafeTensors::deserialize(self.bytes())?)
     }
 
     fn tensor(
@@ -198,6 +232,13 @@ impl FunctionGemmaSafeTensorFile {
         name: &str,
     ) -> Result<safetensors::tensor::TensorView<'_>, FunctionGemmaError> {
         let parsed = self.parsed()?;
+        Self::tensor_from_parsed(&parsed, name)
+    }
+
+    fn tensor_from_parsed<'data>(
+        parsed: &SafeTensors<'data>,
+        name: &str,
+    ) -> Result<safetensors::tensor::TensorView<'data>, FunctionGemmaError> {
         parsed
             .tensor(name)
             .map_err(|_| FunctionGemmaError::MissingTensor(name.to_string()))
@@ -264,13 +305,14 @@ impl FunctionGemmaSafeTensorFile {
         layer_idx: usize,
     ) -> Result<FunctionGemmaDims, FunctionGemmaError> {
         let names = FunctionGemmaLayerLinearNames::for_layer(layer_idx);
-        let q = self.tensor(&names.q_proj)?;
-        let k = self.tensor(&names.k_proj)?;
-        let v = self.tensor(&names.v_proj)?;
-        let o = self.tensor(&names.o_proj)?;
-        let gate = self.tensor(&names.gate_proj)?;
-        let up = self.tensor(&names.up_proj)?;
-        let down = self.tensor(&names.down_proj)?;
+        let parsed = self.parsed()?;
+        let q = Self::tensor_from_parsed(&parsed, &names.q_proj)?;
+        let k = Self::tensor_from_parsed(&parsed, &names.k_proj)?;
+        let v = Self::tensor_from_parsed(&parsed, &names.v_proj)?;
+        let o = Self::tensor_from_parsed(&parsed, &names.o_proj)?;
+        let gate = Self::tensor_from_parsed(&parsed, &names.gate_proj)?;
+        let up = Self::tensor_from_parsed(&parsed, &names.up_proj)?;
+        let down = Self::tensor_from_parsed(&parsed, &names.down_proj)?;
 
         if q.shape().len() != 2 {
             return Err(FunctionGemmaError::InvalidModel(format!(

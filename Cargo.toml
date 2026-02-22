@@ -7,6 +7,7 @@ edition = "2021"
 chrono = "0.4.40"
 half = "2.7.1"
 libc = "0.2.171"
+memmap2 = "0.9.9"
 rusb = "0.9.4"
 safetensors = "0.6.2"
 # Optional TensorFlow Lite bindings for Rust
