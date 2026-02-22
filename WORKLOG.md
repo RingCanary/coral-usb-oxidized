@@ -1112,3 +1112,49 @@ flows and usbmon capture.
    - pass, capture + summary generated:
      - `traces/usbmon-20260222T095307Z-bus4/usbmon-bus4-20260222T095307Z.log`
      - `traces/usbmon-20260222T095307Z-bus4/usbmon-bus4-20260222T095307Z.summary.txt`
+
+## 2026-02-22 (CLIP ViT SafeTensors parser + mapping preflight)
+
+### Objective
+
+Start real-model ingestion for the CLIP milestone by adding SafeTensors parsing,
+layer-name mapping, and quantization preflight in Rust.
+
+### Implementation
+
+1. Added `src/clip.rs`:
+   - `ClipSafeTensorFile` loader/introspection (`tensor_count`, `tensor_info`,
+     `tensor_f32`, layer discovery).
+   - `ClipVitLayerLinearNames` and ViT-B/32 shape validation helper.
+   - `quantize_linear_out_in_to_row_major_qi8` to transpose PyTorch
+     `[out, in]` linear weights into Coral row-major `[in, out]`.
+2. Re-exported CLIP parser APIs at crate root (`src/lib.rs`).
+3. Added runnable example:
+   - `examples/clip_vit_safetensors_report.rs`
+4. Added docs:
+   - `docs/clip_vit_safetensors_report.md`
+   - updated `README.md` example/doc index entries.
+
+### Validation
+
+1. Compile checks:
+   - `cargo check --lib` (pass)
+   - `cargo check --example clip_vit_safetensors_report` (pass)
+2. Pi run against a synthetic CLIP-like SafeTensors file:
+   - generated `/tmp/clip_vit_b32_fake_layer0.safetensors` with required layer-0
+     tensors and exact ViT-B/32 shapes.
+   - command:
+     `cargo run --example clip_vit_safetensors_report -- /tmp/clip_vit_b32_fake_layer0.safetensors 0 127`
+   - result: pass (`RC=0`)
+   - highlights:
+     - `Tensor count: 6`
+     - discovered encoder layers: `count=1`, `first=0`, `last=0`
+     - all six required tensors validated (`q/k/v/o`, `mlp.fc1`, `mlp.fc2`)
+     - quantization preflight completed:
+       - `q_proj q_bytes=589824 scale=0.007874016`
+       - `mlp_fc1 q_bytes=2359296 scale=0.039370079`
+       - `mlp_fc2 q_bytes=2359296 scale=0.047244094`
+3. Negative-path check:
+   - requesting nonexistent layer index (`1`) reports
+     `MissingTensor("vision_model.encoder.layers.1.self_attn.q_proj.weight")`
+     as expected.
