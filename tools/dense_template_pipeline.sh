@@ -16,7 +16,7 @@ Options:
   --tf-package <name>    TensorFlow package for uv run (default: tensorflow-cpu
                          on x86_64, tensorflow on aarch64/arm64)
   --tf-version <v>       TensorFlow version for uv run (default: package-specific)
-  --numpy-version <v>    numpy version for uv run (default: 1.23.5)
+  --numpy-version <v>    numpy version for uv run (default: package-specific)
   --input-dim <n>        Dense input dimension (default: 256)
   --output-dim <n>       Dense output dimension (default: 256)
   --init-mode <mode>     identity|permutation|ones|random_uniform
@@ -71,6 +71,7 @@ PATCH_SEED=1337
 RUN_BENCHMARK=0
 TF_PACKAGE_SET=0
 TF_VERSION_SET=0
+NUMPY_VERSION_SET=0
 
 while (($# > 0)); do
   case "$1" in
@@ -99,6 +100,7 @@ while (($# > 0)); do
     --numpy-version)
       [[ $# -ge 2 ]] || die "missing value for --numpy-version"
       NUMPY_VERSION="$2"
+      NUMPY_VERSION_SET=1
       shift 2
       ;;
     --input-dim)
@@ -208,6 +210,21 @@ if [[ "${TF_VERSION_SET}" -eq 0 ]]; then
       ;;
     *)
       die "no default --tf-version for --tf-package ${TF_PACKAGE}; set --tf-version explicitly"
+      ;;
+  esac
+fi
+
+# Keep numpy defaults aligned with the TensorFlow package/version family.
+if [[ "${NUMPY_VERSION_SET}" -eq 0 ]]; then
+  case "${TF_PACKAGE}" in
+    tensorflow-cpu)
+      NUMPY_VERSION="1.23.5"
+      ;;
+    tensorflow)
+      NUMPY_VERSION="1.26.4"
+      ;;
+    *)
+      die "no default --numpy-version for --tf-package ${TF_PACKAGE}; set --numpy-version explicitly"
       ;;
   esac
 fi
