@@ -114,6 +114,10 @@ build_libedgetpu() {
   patch makefile_build/Makefile < makefile.patch
   patch driver/usb/usb_device_interface.h < usb_device_interface.patch
 
+  # Keep transitive shared-library deps (absl/flatbuffers) in DT_NEEDED when
+  # producing libedgetpu.so so downstream links do not see unresolved symbols.
+  perl -0pi -e 's/(-Wl,--version-script=\$\(BUILDROOT\)\/tflite\/public\/libedgetpu\.lds \\\n)/$1\t-Wl,--no-as-needed \\\n/s' makefile_build/Makefile
+
   # Some Debian/Raspberry Pi environments do not ship ld.gold.
   # Fall back to bfd so the libedgetpu link step succeeds on ARM boards.
   if ! command -v ld.gold >/dev/null 2>&1; then
