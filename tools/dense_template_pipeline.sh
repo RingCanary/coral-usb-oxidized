@@ -13,7 +13,9 @@ Options:
   --out-dir <dir>        Output directory
                          (default: traces/dense-template-<UTC timestamp>)
   --python-version <v>   uv Python version (default: 3.9)
-  --tf-version <v>       tensorflow-cpu version for uv run (default: 2.10.1)
+  --tf-package <name>    TensorFlow package for uv run (default: tensorflow-cpu
+                         on x86_64, tensorflow on aarch64/arm64)
+  --tf-version <v>       TensorFlow version for uv run (default: package-specific)
   --numpy-version <v>    numpy version for uv run (default: 1.23.5)
   --input-dim <n>        Dense input dimension (default: 256)
   --output-dim <n>       Dense output dimension (default: 256)
@@ -52,7 +54,8 @@ timestamp_utc() {
 
 OUT_DIR="traces/dense-template-$(timestamp_utc)"
 PYTHON_VERSION="3.9"
-TF_VERSION="2.10.1"
+TF_PACKAGE="tensorflow-cpu"
+TF_VERSION=""
 NUMPY_VERSION="1.23.5"
 INPUT_DIM=256
 OUTPUT_DIM=256
@@ -66,6 +69,8 @@ PATCH_MODE="none"
 PATCH_BYTE=255
 PATCH_SEED=1337
 RUN_BENCHMARK=0
+TF_PACKAGE_SET=0
+TF_VERSION_SET=0
 
 while (($# > 0)); do
   case "$1" in
@@ -79,9 +84,16 @@ while (($# > 0)); do
       PYTHON_VERSION="$2"
       shift 2
       ;;
+    --tf-package)
+      [[ $# -ge 2 ]] || die "missing value for --tf-package"
+      TF_PACKAGE="$2"
+      TF_PACKAGE_SET=1
+      shift 2
+      ;;
     --tf-version)
       [[ $# -ge 2 ]] || die "missing value for --tf-version"
       TF_VERSION="$2"
+      TF_VERSION_SET=1
       shift 2
       ;;
     --numpy-version)
@@ -171,6 +183,35 @@ esac
 need_cmd uv
 need_cmd python3
 
+# TensorFlow wheel availability differs by architecture. Fall back to the
+# monolithic tensorflow package on arm64 when package wasn't explicitly set.
+arch="$(uname -m)"
+if [[ "${TF_PACKAGE_SET}" -eq 0 ]]; then
+  case "${arch}" in
+    aarch64|arm64)
+      TF_PACKAGE="tensorflow"
+      ;;
+    *)
+      TF_PACKAGE="tensorflow-cpu"
+      ;;
+  esac
+fi
+
+# If version wasn't explicitly provided, choose a package-compatible default.
+if [[ "${TF_VERSION_SET}" -eq 0 ]]; then
+  case "${TF_PACKAGE}" in
+    tensorflow-cpu)
+      TF_VERSION="2.10.1"
+      ;;
+    tensorflow)
+      TF_VERSION="2.19.0"
+      ;;
+    *)
+      die "no default --tf-version for --tf-package ${TF_PACKAGE}; set --tf-version explicitly"
+      ;;
+  esac
+fi
+
 mkdir -p "${OUT_DIR}"
 
 MODEL_BASENAME="dense_${INPUT_DIM}x${OUTPUT_DIM}_quant"
@@ -187,7 +228,7 @@ PIPELINE_SUMMARY="${OUT_DIR}/PIPELINE_SUMMARY.txt"
 echo "[1/6] Generating dense quantized model via uv..."
 uv python install "${PYTHON_VERSION}" >/dev/null
 uv run --python "${PYTHON_VERSION}" \
-  --with "tensorflow-cpu==${TF_VERSION}" \
+  --with "${TF_PACKAGE}==${TF_VERSION}" \
   --with "numpy==${NUMPY_VERSION}" \
   tools/generate_dense_quant_tflite.py \
   --output "${QUANT_MODEL}" \
@@ -275,7 +316,8 @@ fi
   echo "compiled_model=${EDGETPU_MODEL}"
   echo "compiler=${COMPILER_PATH}"
   echo "python_version=${PYTHON_VERSION}"
-  echo "tensorflow_cpu_version=${TF_VERSION}"
+  echo "tensorflow_package=${TF_PACKAGE}"
+  echo "tensorflow_version=${TF_VERSION}"
   echo "numpy_version=${NUMPY_VERSION}"
   echo "extract_dir=${EXTRACT_DIR}"
   echo "parse_text=${PARSE_TXT}"
