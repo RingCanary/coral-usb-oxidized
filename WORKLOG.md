@@ -115,6 +115,46 @@ metrics.
    - `batch>=5` enters a quality cliff with only marginal additional speedup.
    - recommended operational point for CLIP full-forward on Pi5: `batch=4`.
 
+### Function-Gemma layer bring-up (real checkpoint on Pi5)
+
+1. Added Function-Gemma safetensors support in Rust:
+   - `src/function_gemma.rs`
+   - BF16/F16/F32 tensor decode to `f32`
+   - Gemma-style stage mapping:
+     - `q/k/v/o/gate/up/down`
+     - `model.layers.<N>.{self_attn,mlp}.*.weight`
+   - inferred dims from layer tensors (`hidden`, `q_out`, `kv_out`, `mlp_hidden`)
+2. Exported new API from crate root in `src/lib.rs`:
+   - `FunctionGemmaSafeTensorFile`
+   - `FunctionGemmaLinearStage`
+   - `FunctionGemmaLayerLinearNames`
+   - `FunctionGemmaLinearStageMeta`
+   - `FunctionGemmaDims`
+   - `FunctionGemmaError`
+3. Added new example:
+   - `examples/function_gemma_layer_tpu_probe.rs`
+   - flow: load safetensors stage -> quantize -> patch template -> execute ->
+     fit CPU accumulator affine (`alpha/beta/corr/mae/rmse`)
+4. Added docs:
+   - `docs/function_gemma_layer_tpu_probe.md`
+5. Pi5 checkpoint + stage sweep:
+   - model: `distil-labs/distil-home-assistant-functiongemma`
+   - local model path: `/home/rpc/functiongemma-models/model.safetensors`
+   - trace output: `/home/rpc/clip-traces/functiongemma-layer-probe-20260222T140422Z`
+   - inferred dims:
+     - `hidden=640`
+     - `q_out=1024`
+     - `kv_out=256`
+     - `mlp_hidden=2048`
+6. Stage results (`runs=20`, `qmax=32`, `clip_percentile=100`):
+   - `q` (`640x1024`): `avg_ms=0.459`, `corr=0.999537`
+   - `k` (`640x256`): `avg_ms=0.331`, `corr=0.994594`
+   - `v` (`640x256`): `avg_ms=0.329`, `corr=0.999965`
+   - `o` (`1024x640`): `avg_ms=0.627`, `corr=0.999872`
+   - `gate` (`640x2048`): `avg_ms=0.634`, `corr=0.999723`
+   - `up` (`640x2048`): `avg_ms=0.821`, `corr=0.999793`
+   - `down` (`2048x640`): `avg_ms=0.675`, `corr=0.999740`
+
 ## 2026-02-21
 
 ### Objective
