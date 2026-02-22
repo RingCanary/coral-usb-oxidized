@@ -60,3 +60,20 @@ uv run --with numpy --with torch --with transformers \
   /tmp/clip_input.f32le \
   /tmp/clip_ref_embed.f32le
 ```
+
+## Batched Template Guidance (Pi5)
+
+Dense templates can be compiled with fixed batch dimensions using:
+
+```bash
+./tools/dense_template_pipeline.sh --batch-size <N> ...
+```
+
+On Pi5 with Coral USB for this CLIP full-forward pipeline, measured tradeoff:
+
+- `batch=1`: `forward_ms~6486`, normalized cosine `~0.73294`
+- `batch=4`: `forward_ms~5903`, normalized cosine `~0.73294` (same fidelity)
+- `batch>=5`: small extra speed gains, but cosine collapses (`~0.34..0.44`)
+
+Recommended current operating point: `batch=4` templates for all three CLIP
+linear shapes (`768x768`, `768x3072`, `3072x768`).

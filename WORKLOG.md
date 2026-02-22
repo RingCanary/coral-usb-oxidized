@@ -88,6 +88,33 @@ metrics.
    - normalized embedding: cosine `0.73293731`, MAE `0.02508840`,
      RMSE `0.03229882`
 
+### Batched template speed/fidelity sweep (Pi5)
+
+1. Added batch-size plumbing for dense template generation/execution:
+   - `PreparedDenseGemm` now discovers and uses interpreter batch capacity.
+   - `tools/generate_dense_quant_tflite.py` supports `--batch-size`.
+   - `tools/dense_template_pipeline.sh` supports `--batch-size` end-to-end.
+2. Pi5 compiler note:
+   - local Pi compiler binary under `~/.local/bin/edgetpu_compiler` was x86-only.
+   - workaround used: compile templates on x86 workstation, copy to Pi5.
+3. Controlled CLIP full-forward sweep on Pi5 (same fixed input/reference as above):
+   - base artifacts:
+     - `/home/rpc/clip-traces/clip-batch-sweep/runs-20260222T133711Z/`
+     - summary: `/home/rpc/clip-traces/clip-batch-sweep/runs-20260222T133711Z/SUMMARY.txt`
+   - extra batch-5 confirmation:
+     - `/home/rpc/clip-traces/clip-batch-sweep/runs-extra-20260222T134351Z-b5/`
+4. Results (`forward_ms`, normalized cosine vs HF):
+   - `batch=1`: `6486.240 ms`, `cos=0.73293728`
+   - `batch=4`: `5902.632 ms`, `cos=0.73293728`
+   - `batch=5`: `5876.642 ms`, `cos=0.36591250`
+   - `batch=8`: `5872.174 ms`, `cos=0.36591250`
+   - `batch=16`: `5852.587 ms`, `cos=0.34255037`
+   - `batch=28`: `5708.579 ms`, `cos=0.43851820`
+5. Conclusion:
+   - `batch=4` is the highest tested setting that preserved fidelity on Pi5.
+   - `batch>=5` enters a quality cliff with only marginal additional speedup.
+   - recommended operational point for CLIP full-forward on Pi5: `batch=4`.
+
 ## 2026-02-21
 
 ### Objective
