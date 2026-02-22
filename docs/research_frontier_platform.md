@@ -13,6 +13,7 @@ Dense template path.
 4. New Conv2D template toolchain with `uv` + `edgetpu_compiler`.
 5. New Conv2D layout probe and mixed Conv2D->Dense multi-op pipeline.
 6. Transformer-like six-stage linear block benchmark at `d_model=2304`.
+7. f32 weight-loading verification bridge for patched `2304x2304` templates.
 
 ## 1) Fast restride path
 
@@ -135,6 +136,30 @@ Run:
 
 ```bash
 cargo run --example transformer_linear_block -- 8 5 1
+```
+
+## 6) Weight-loading verification bridge
+
+New example:
+
+- `examples/gemm_weight_load_verify.rs`
+
+Companion note:
+
+- `docs/gemm_weight_load_verify.md`
+
+Purpose:
+
+- ingest model-style `f32` weights/inputs
+- quantize to `int8`
+- patch bundled `2304x2304` template payload
+- execute on Coral
+- verify against CPU int32 accumulator reference
+
+Run:
+
+```bash
+cargo run --example gemm_weight_load_verify -- 8 3 1 2
 ```
 
 ## Immediate next experiments

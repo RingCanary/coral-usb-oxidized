@@ -964,3 +964,52 @@ on Coral integration questions:
      - `same_stage6_ms=32.092`
      - `linear_gmac_per_s=15.352`
      - `end_to_end_gmac_per_s=11.556`
+
+## 2026-02-22 (weight-loading bridge: f32 -> int8 -> patched template)
+
+### Objective
+
+Add a concrete integration bridge from model-style floating-point weights to
+patched Coral templates with CPU reference verification.
+
+### Added example + docs
+
+1. Added `examples/gemm_weight_load_verify.rs`.
+2. Added `docs/gemm_weight_load_verify.md`.
+3. Updated `README.md`:
+   - new example command in list
+   - new dedicated section for the weight-loading bridge
+   - linked new doc in RE notes.
+
+### Example capabilities
+
+1. Input:
+   - synthetic deterministic f32 weights/inputs, or
+   - raw little-endian f32 files (`--weights-f32-le`, `--inputs-f32-le`).
+2. Quantization:
+   - symmetric int8 quantization with configurable target dynamic range:
+     - `--input-qmax` (default `32`)
+     - `--weight-qmax` (default `16`)
+3. Execution:
+   - patches bundled `2304x2304` template via `set_weights_from_slice`
+   - runs batched rows through `PreparedDenseGemm::execute_batch_rows`
+4. Verification:
+   - CPU int32 accumulator reference matmul
+   - affine calibration against TPU output:
+     - global affine
+     - per-output affine
+   - reports holdout/all-point error metrics and correlation.
+
+### Hardware runs
+
+1. Ran:
+   - `cargo run --example gemm_weight_load_verify -- 8 3 1 2`
+   - results:
+     - `avg_ms=3.191`, `gmac_per_s=13.311`
+     - holdout global affine: `mae=0.0019`, `rmse=0.0434`, `max_abs_delta=1`
+2. Ran:
+   - `cargo run --example gemm_weight_load_verify -- 16 2 1 8`
+   - results:
+     - `avg_ms=5.494`, `gmac_per_s=15.458`
+     - holdout global affine: `mae=0.0002`, `rmse=0.0128`, `max_abs_delta=1`
+     - holdout per-output affine: `mae=0.1227`, `rmse=0.3502`, `max_abs_delta=1`

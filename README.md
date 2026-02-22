@@ -105,6 +105,7 @@ cargo run --example gemm_int8_dynamic -- <dense_template_edgetpu.tflite> <input_
 cargo run --example gemm_int8_bundled -- 2688 identity 30
 cargo run --example gemm_tiled_rows -- 8192 identity_cycle 1
 cargo run --example transformer_linear_block -- 8 5 1
+cargo run --example gemm_weight_load_verify -- 8 3 1 2
 ```
 
 ## Offline EdgeTPU package extractor
@@ -170,6 +171,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `examples/gemm_int8_bundled.rs` (runs bundled 2048/2304/2688 templates with no external model path)
 - `examples/gemm_tiled_rows.rs` (row-tiled matrix-vector execution beyond a single 2688x2688 parameter block)
 - `examples/transformer_linear_block.rs` (six-stage `2304x2304` transformer-like block benchmark with stage timing and model-switch baseline)
+- `examples/gemm_weight_load_verify.rs` (f32 weight/input quantize->patch->execute bridge with CPU reference verification)
 
 Detailed workflow and caveats are documented in `docs/usb_tracing.md`.
 
@@ -187,6 +189,7 @@ Current reverse-engineering notes:
 - `docs/conv_layout_probe.md`
 - `docs/dense_layout_probe.md`
 - `docs/transformer_linear_block.md`
+- `docs/gemm_weight_load_verify.md`
 - `docs/schema/libedgetpu_executable.fbs`
 - `docs/external_research_2026-02-21.md`
 - `traces/re-matrix-20260221T092342Z/USBMON_PACKET_VALIDATION_20260221T1035Z.md`
@@ -292,6 +295,19 @@ cargo run --example transformer_linear_block -- 8 5 1
 ```
 
 Use `--no-attention` to isolate linear-stage timing only.
+
+### f32 weight-loading verification bridge
+
+Run a full `f32 -> int8 -> template patch -> EdgeTPU execute` path and compare
+against a CPU quantized reference:
+
+```bash
+eval "$(./tools/bootstrap_arch_stack.sh print-env)"
+cargo run --example gemm_weight_load_verify -- 8 3 1 2
+```
+
+This is the integration bridge between synthetic matrix modes and model-style
+weight loading.
 
 Migration note:
 
