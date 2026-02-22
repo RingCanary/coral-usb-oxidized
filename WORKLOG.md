@@ -1060,3 +1060,55 @@ TPU, not only pattern matrices.
      - `same_stage6_ms=32.532`
      - `linear_gmac_per_s=15.674`
      - `end_to_end_gmac_per_s=11.847`
+
+## 2026-02-22 (Raspberry Pi 5 stack alignment + successful TPU runs)
+
+### Objective
+
+Recover stable EdgeTPU interpreter creation on Pi5 by aligning local
+`libedgetpu` + `libtensorflowlite_c` stack, then validate GEMM/transformer
+flows and usbmon capture.
+
+### Root causes found on Pi
+
+1. Local `libedgetpu` build failed with `collect2: fatal error: cannot find 'ld'`
+   because upstream Makefile forced `-fuse-ld=gold` and Pi image lacked `ld.gold`.
+2. After link-fallback fix, built `libedgetpu.so` had unresolved Abseil symbols
+   at Rust link time because transitive dependencies were dropped.
+3. Additional unresolved symbol (`absl_bad_optional_access`) required explicit
+   link inclusion in the libedgetpu Makefile link flags.
+
+### Bootstrap fixes landed
+
+1. `7dc25ad`: fallback to `-fuse-ld=bfd` when `ld.gold` is unavailable.
+2. `f062aaa`: force `-Wl,--no-as-needed` for libedgetpu so DT_NEEDED entries
+   are preserved.
+3. `af835c4`: add `-labsl_bad_optional_access` to libedgetpu link flags.
+
+### Pi package/tooling setup used
+
+1. Installed build deps used by bootstrap path:
+   - `xxd`, `libabsl-dev`, `flatbuffers-compiler`, `libflatbuffers-dev`,
+     `libusb-1.0-0-dev`, `bazelisk`
+2. Built local libs:
+   - `./tools/bootstrap_arch_stack.sh build-tflite-c --py-version 3.12`
+   - `./tools/bootstrap_arch_stack.sh build-libedgetpu`
+3. Runtime env:
+   - `eval "$(./tools/bootstrap_arch_stack.sh print-env)"`
+
+### Verified Pi outcomes (local stack, Coral attached)
+
+1. `cargo run --example simple_delegate`
+   - pass, EdgeTPU version:
+     `BuildLabel(COMPILER=14.2.0,DATE=Feb 22 2026,TIME=09:51:57), RuntimeVersion(14)`
+2. `cargo run --example gemm_int8_bundled -- 2304 identity 2`
+   - pass, `avg_ms=7.968`, identity output preserved.
+3. `cargo run --example transformer_linear_block -- 16 2 1 --no-attention --weight-source f32 --seed 123`
+   - pass, `linear_only_ms=48.737`, `linear_gmac_per_s=10.456`.
+4. `cargo run --example gemm_weight_load_verify -- 8 3 1 2`
+   - pass, `avg_ms=4.104`, `gmac_per_s=10.347`,
+     global-affine holdout `max_abs_delta=1`.
+5. `sudo ./tools/usbmon_capture.sh -b 4 -- ... gemm_int8_bundled -- 2304 identity 5`
+   - pass, capture + summary generated:
+     - `traces/usbmon-20260222T095307Z-bus4/usbmon-bus4-20260222T095307Z.log`
+     - `traces/usbmon-20260222T095307Z-bus4/usbmon-bus4-20260222T095307Z.summary.txt`
