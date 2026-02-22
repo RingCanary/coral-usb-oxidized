@@ -1,4 +1,4 @@
-use coral_usb_oxidized::{CoralDevice, list_devices, version};
+use coral_usb_oxidized::{list_devices, version, CoralDevice};
 
 // Simple function to verify the Coral USB Accelerator
 // This goes beyond just checking USB IDs by attempting to create a device instance
@@ -6,19 +6,19 @@ use coral_usb_oxidized::{CoralDevice, list_devices, version};
 fn is_coral_device_present() -> bool {
     match CoralDevice::new() {
         Ok(device) => device.is_valid(), // Returns true if the delegate was created and is valid
-        Err(_) => false,                 // Returns false if creation failed (e.g., no real Edge TPU)
+        Err(_) => false, // Returns false if creation failed (e.g., no real Edge TPU)
     }
 }
 
 fn main() {
     // Print the EdgeTPU library version
     println!("EdgeTPU Library Version: {}", version());
-    
+
     // Check if a Coral USB Accelerator is present and valid
     // This is the key verification step that confirms we have a real device
     let is_present = is_coral_device_present();
     println!("Coral USB Accelerator present and valid: {}", is_present);
-    
+
     if is_present {
         // List available devices for more details
         match list_devices() {
@@ -27,10 +27,10 @@ fn main() {
                 for (i, device) in devices.iter().enumerate() {
                     println!("  {}. {}", i + 1, device);
                 }
-            },
+            }
             Err(e) => println!("Error listing devices: {}", e),
         }
-        
+
         // Create a device instance for detailed info
         match CoralDevice::new() {
             Ok(device) => {
@@ -39,10 +39,10 @@ fn main() {
                 println!("  Vendor ID: 0x{:04x}", device.vendor_id());
                 println!("  Product ID: 0x{:04x}", device.product_id());
                 println!("  Name: {:?}", device.name());
-                
+
                 // The device will be automatically freed when it goes out of scope
                 println!("\nDevice will be freed when it goes out of scope");
-            },
+            }
             Err(e) => println!("Error creating device: {}", e),
         }
     } else {

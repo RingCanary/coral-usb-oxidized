@@ -149,9 +149,10 @@ Next step for GEMM path:
 
 The template patch + execute loop is now available directly in crate code:
 
-- `DenseGemm256Template` for DWN1 parameter-region discovery and matrix patching
-- `GemmTemplate256` for delegate-backed execution from in-memory patched model bytes
+- `DenseGemmTemplate` for DWN1 parameter-region discovery and matrix patching
+- `PreparedDenseGemm` for delegate-backed reuse from in-memory patched model bytes
 - `dense_256_param_offset(row, col)` for the recovered 256x256 restride mapping
+- `dense_param_offset(input_dim, output_dim, row, col)` for generalized dimensions
 
 Reference example:
 
@@ -167,6 +168,12 @@ Dimension-aware Rust execution example:
 cargo run --example gemm_int8_dynamic -- \
   traces/dense-template-1024x1024-20260222T062017Z/dense_1024x1024_quant_edgetpu.tflite \
   1024 1024 identity ramp 30
+```
+
+Bundled-template path (no external model file required):
+
+```bash
+cargo run --example gemm_int8_bundled -- 2688 identity 30
 ```
 
 ## 2026-02-22 update: dimension scaling sweep

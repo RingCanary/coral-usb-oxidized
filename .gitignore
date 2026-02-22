@@ -5,6 +5,8 @@ edgetpu_runtime/
 # models
 models/
 *.tflite
+!templates/
+!templates/*.tflite
 
 # libraries
 *.so

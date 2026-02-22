@@ -1,6 +1,4 @@
-use coral_usb_oxidized::{
-    version, CoralDevice, DenseGemm256Template, GemmTemplate256, DENSE_GEMM256_DIM,
-};
+use coral_usb_oxidized::{version, CoralDevice, DenseGemmTemplate, DENSE_GEMM256_DIM};
 use std::env;
 use std::error::Error;
 use std::path::Path;
@@ -50,8 +48,8 @@ fn parse_input_mode(value: &str) -> Result<InputMode, Box<dyn Error>> {
     }
 }
 
-fn build_input(mode: InputMode) -> [i8; DENSE_GEMM256_DIM] {
-    let mut out = [0i8; DENSE_GEMM256_DIM];
+fn build_input(mode: InputMode) -> Vec<i8> {
+    let mut out = vec![0i8; DENSE_GEMM256_DIM];
     match mode {
         InputMode::Ramp => {
             for (idx, value) in out.iter_mut().enumerate() {
@@ -74,7 +72,7 @@ fn build_input(mode: InputMode) -> [i8; DENSE_GEMM256_DIM] {
 }
 
 fn apply_matrix_mode(
-    template: &mut DenseGemm256Template,
+    template: &mut DenseGemmTemplate,
     mode: MatrixMode,
 ) -> Result<(), Box<dyn Error>> {
     match mode {
@@ -82,7 +80,7 @@ fn apply_matrix_mode(
         MatrixMode::ShiftPlus1 => template.set_shift_plus1(127)?,
         MatrixMode::ShiftMinus1 => template.set_shift_minus1(127)?,
         MatrixMode::DiagonalRamp => {
-            let mut diagonal = [0i8; DENSE_GEMM256_DIM];
+            let mut diagonal = vec![0i8; DENSE_GEMM256_DIM];
             for (idx, value) in diagonal.iter_mut().enumerate() {
                 *value = (idx as i16 - 128) as i8;
             }
@@ -92,11 +90,8 @@ fn apply_matrix_mode(
     Ok(())
 }
 
-fn expected_output(
-    mode: MatrixMode,
-    input: &[i8; DENSE_GEMM256_DIM],
-) -> Option<[i8; DENSE_GEMM256_DIM]> {
-    let mut expected = [0i8; DENSE_GEMM256_DIM];
+fn expected_output(mode: MatrixMode, input: &[i8]) -> Option<Vec<i8>> {
+    let mut expected = vec![0i8; DENSE_GEMM256_DIM];
     match mode {
         MatrixMode::Identity => {
             expected.copy_from_slice(input);
@@ -118,10 +113,7 @@ fn expected_output(
     }
 }
 
-fn summarize_delta(
-    output: &[i8; DENSE_GEMM256_DIM],
-    expected: &[i8; DENSE_GEMM256_DIM],
-) -> (usize, i16) {
+fn summarize_delta(output: &[i8], expected: &[i8]) -> (usize, i16) {
     let mut mismatches = 0usize;
     let mut max_abs_delta = 0i16;
     for (got, want) in output.iter().zip(expected.iter()) {
@@ -136,7 +128,7 @@ fn summarize_delta(
     (mismatches, max_abs_delta)
 }
 
-fn preview(label: &str, data: &[i8; DENSE_GEMM256_DIM], count: usize) {
+fn preview(label: &str, data: &[i8], count: usize) {
     let shown = count.min(DENSE_GEMM256_DIM);
     let joined = data
         .iter()
@@ -163,6 +155,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .get(4)
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(1);
+    if runs == 0 {
+        return Err("runs must be >= 1".into());
+    }
 
     if !Path::new(model_path).exists() {
         return Err(format!("model not found: {}", model_path).into());
@@ -176,12 +171,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let device = CoralDevice::new()?;
     let delegate = device.create_delegate()?;
-    let mut gemm = GemmTemplate256::from_compiled_template_file(model_path)?;
-    apply_matrix_mode(gemm.template_mut(), matrix_mode)?;
+    let mut template =
+        DenseGemmTemplate::from_file_with_dims(model_path, DENSE_GEMM256_DIM, DENSE_GEMM256_DIM)?;
+    apply_matrix_mode(&mut template, matrix_mode)?;
 
     let input = build_input(input_mode);
-    let prepared = gemm.prepare(&delegate)?;
-    let mut output = [0i8; DENSE_GEMM256_DIM];
+    let prepared = template.prepare(&delegate)?;
+    let mut output = vec![0i8; DENSE_GEMM256_DIM];
     let mut total_ms = 0.0f64;
     for run_idx in 0..runs {
         let started = Instant::now();

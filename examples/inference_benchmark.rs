@@ -141,7 +141,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         if alloc_status != 0 {
             TfLiteInterpreterDelete(interpreter);
             TfLiteModelDelete(model);
-            return Err(format!("TfLiteInterpreterAllocateTensors failed: {}", alloc_status).into());
+            return Err(
+                format!("TfLiteInterpreterAllocateTensors failed: {}", alloc_status).into(),
+            );
         }
 
         (interpreter, model)
@@ -180,7 +182,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     for _ in 0..warmup {
         let copy_status = unsafe {
-            TfLiteTensorCopyFromBuffer(input_tensor, input_data.as_ptr().cast::<c_void>(), input_data.len())
+            TfLiteTensorCopyFromBuffer(
+                input_tensor,
+                input_data.as_ptr().cast::<c_void>(),
+                input_data.len(),
+            )
         };
         if copy_status != 0 {
             unsafe {
@@ -202,7 +208,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut latencies_ms = Vec::with_capacity(runs);
     for _ in 0..runs {
         let copy_status = unsafe {
-            TfLiteTensorCopyFromBuffer(input_tensor, input_data.as_ptr().cast::<c_void>(), input_data.len())
+            TfLiteTensorCopyFromBuffer(
+                input_tensor,
+                input_data.as_ptr().cast::<c_void>(),
+                input_data.len(),
+            )
         };
         if copy_status != 0 {
             unsafe {

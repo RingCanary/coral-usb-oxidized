@@ -91,6 +91,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .get(6)
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or(10);
+    if runs == 0 {
+        return Err("runs must be >= 1".into());
+    }
 
     if !Path::new(model_path).exists() {
         return Err(format!("model not found: {model_path}").into());

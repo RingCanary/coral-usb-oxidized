@@ -89,7 +89,9 @@ fn fill_input(mode: &str, input: &mut [u8]) -> Result<(), Box<dyn Error>> {
             }
         }
         _ => {
-            return Err(format!("unknown input mode: {mode} (expected: zeros|ones|ramp|alt)").into());
+            return Err(
+                format!("unknown input mode: {mode} (expected: zeros|ones|ramp|alt)").into(),
+            );
         }
     }
     Ok(())

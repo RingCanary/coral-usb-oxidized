@@ -701,3 +701,64 @@ Executed pipeline runs (`warmup=1`, `runs=5`) for:
 2. `cargo run --example gemm_int8_dynamic -- traces/dense-template-1024x1024-20260222T062017Z/dense_1024x1024_quant_edgetpu.tflite 1024 1024 identity ramp 30`
    - validated dimension-aware Rust path on hardware
    - output preview matched expected identity behavior
+
+## 2026-02-22 (MVP consolidation: module split + API simplification + bundled templates)
+
+### Codebase structure changes
+
+1. Split previous monolithic `src/lib.rs` into focused modules:
+   - `src/error.rs`
+   - `src/device.rs`
+   - `src/delegate.rs`
+   - `src/interpreter.rs`
+   - `src/flatbuffer.rs`
+   - `src/gemm.rs`
+2. Reduced `src/lib.rs` to module declarations + re-exports.
+
+### GEMM API consolidation
+
+1. Removed duplicate fixed-256 wrapper types:
+   - `DenseGemm256Template`
+   - `GemmTemplate256`
+   - `PreparedGemm256`
+2. Kept one canonical path:
+   - `DenseGemmTemplate`
+   - `PreparedDenseGemm`
+3. Kept compatibility constants/helpers for 256 workflows:
+   - `DENSE_GEMM256_DIM`
+   - `DENSE_GEMM256_WEIGHT_COUNT`
+   - `DENSE_GEMM256_WEIGHT_BYTES`
+   - `DENSE_GEMM256_ZERO_POINT`
+   - `dense_256_param_offset(...)`
+4. Added `DenseGemmTemplate::set_diagonal(...)` so structured 256 examples stay supported via generic API.
+
+### Bundled template support
+
+1. Added precompiled templates under `templates/`:
+   - `dense_2048x2048_quant_edgetpu.tflite`
+   - `dense_2304x2304_quant_edgetpu.tflite`
+   - `dense_2688x2688_quant_edgetpu.tflite`
+2. Exposed constants:
+   - `TEMPLATE_2048`
+   - `TEMPLATE_2304`
+   - `TEMPLATE_2688`
+3. Added constructors:
+   - `DenseGemmTemplate::from_bundled_2048()`
+   - `DenseGemmTemplate::from_bundled_2304()`
+   - `DenseGemmTemplate::from_bundled_2688()`
+4. Updated `.gitignore` to track bundled template binaries while keeping other `*.tflite` files ignored.
+
+### Example updates
+
+1. Updated `examples/gemm_int8.rs` to use `DenseGemmTemplate` directly.
+2. Kept `examples/gemm_int8_dynamic.rs` on generic path.
+3. Added `examples/gemm_int8_bundled.rs` to run bundled templates without external model paths.
+
+### Validation
+
+1. `cargo fmt`
+2. `cargo check --lib`
+3. `cargo check --tests`
+4. `cargo check --example gemm_int8`
+5. `cargo check --example gemm_int8_dynamic`
+6. `cargo check --example gemm_int8_bundled`
