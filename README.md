@@ -105,6 +105,7 @@ cargo run --example gemm_int8_dynamic -- <dense_template_edgetpu.tflite> <input_
 cargo run --example gemm_int8_bundled -- 2688 identity 30
 cargo run --example gemm_tiled_rows -- 8192 identity_cycle 1
 cargo run --example transformer_linear_block -- 8 5 1
+cargo run --example transformer_linear_block -- 16 3 1 --no-attention --weight-source f32
 cargo run --example gemm_weight_load_verify -- 8 3 1 2
 ```
 
@@ -295,6 +296,20 @@ cargo run --example transformer_linear_block -- 8 5 1
 ```
 
 Use `--no-attention` to isolate linear-stage timing only.
+
+Wire f32 weight loading for all six stages (generated or file-backed):
+
+```bash
+eval "$(./tools/bootstrap_arch_stack.sh print-env)"
+cargo run --example transformer_linear_block -- 16 3 1 --no-attention --weight-source f32
+```
+
+Optional file-backed stage weights:
+
+- `--weights-dir <dir>` expects:
+  - `q_proj.f32le`, `k_proj.f32le`, `v_proj.f32le`,
+  - `o_proj.f32le`, `mlp_up.f32le`, `mlp_down.f32le`
+  each containing `2304*2304` little-endian `f32` row-major values.
 
 ### f32 weight-loading verification bridge
 

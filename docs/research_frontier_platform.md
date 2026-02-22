@@ -14,6 +14,7 @@ Dense template path.
 5. New Conv2D layout probe and mixed Conv2D->Dense multi-op pipeline.
 6. Transformer-like six-stage linear block benchmark at `d_model=2304`.
 7. f32 weight-loading verification bridge for patched `2304x2304` templates.
+8. Wired f32 stage loading into full six-stage transformer-block TPU runs.
 
 ## 1) Fast restride path
 
@@ -161,6 +162,21 @@ Run:
 ```bash
 cargo run --example gemm_weight_load_verify -- 8 3 1 2
 ```
+
+## 7) Wired f32 stage loading in transformer block
+
+`examples/transformer_linear_block.rs` now supports f32 stage-weight loading
+for all six projections:
+
+```bash
+cargo run --example transformer_linear_block -- 16 3 1 --no-attention --weight-source f32
+```
+
+Optional file-backed stage weights:
+
+- `--weights-dir <dir>` with:
+  - `q_proj.f32le`, `k_proj.f32le`, `v_proj.f32le`
+  - `o_proj.f32le`, `mlp_up.f32le`, `mlp_down.f32le`
 
 ## Immediate next experiments
 

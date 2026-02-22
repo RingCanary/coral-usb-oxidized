@@ -33,6 +33,12 @@ Arguments:
 - `runs` (default `5`)
 - `warmup` (default `1`)
 - `--no-attention` to disable CPU single-head attention and focus on linear path
+- `--weight-source pattern|f32` (default `pattern`)
+- `--weights-dir <dir>` (with `--weight-source f32`): stage files
+  `q_proj.f32le`, `k_proj.f32le`, `v_proj.f32le`,
+  `o_proj.f32le`, `mlp_up.f32le`, `mlp_down.f32le`
+- `--input-f32-le <path>` optional `seq_len*2304` little-endian `f32` input rows
+- `--input-qmax` and `--weight-qmax` control symmetric int8 quantization ranges
 
 ## Reported metrics
 
@@ -49,6 +55,16 @@ The example prints:
 
 This is intended as the milestone harness before moving to expanded MLP ratios,
 multi-head splitting, and larger prefill sequence benchmarking.
+
+## f32 Weight Wiring
+
+The example now supports full `f32 -> int8 -> template patch` stage loading for
+all six projections. With `--weight-source f32`, each stage either:
+
+- loads row-major weights from `--weights-dir`, or
+- generates deterministic synthetic `f32` weights from `--seed`.
+
+This allows TPU-side transformer-block runs with non-synthetic template modes.
 
 ## Initial measurements (2026-02-22)
 
@@ -67,3 +83,16 @@ Hardware run snapshots from this repo:
   - `attn_cpu=10.903`
   - `total_ms=44.099`
   - `end_to_end_gmac_per_s=11.556`
+
+## f32-weight TPU runs (2026-02-22)
+
+- `seq_len=16`, `runs=3`, `--no-attention --weight-source f32`:
+  - `linear_only_ms=31.926`
+  - `same_stage6_ms=31.821`
+  - `linear_gmac_per_s=15.962`
+  - `switch_penalty_ms=0.104`
+- `seq_len=16`, `runs=2`, `--weight-source f32`:
+  - `linear_only_ms=32.514`
+  - `attn_cpu=10.501`
+  - `total_ms=43.016`
+  - `end_to_end_gmac_per_s=11.847`

@@ -1013,3 +1013,50 @@ patched Coral templates with CPU reference verification.
      - `avg_ms=5.494`, `gmac_per_s=15.458`
      - holdout global affine: `mae=0.0002`, `rmse=0.0128`, `max_abs_delta=1`
      - holdout per-output affine: `mae=0.1227`, `rmse=0.3502`, `max_abs_delta=1`
+
+## 2026-02-22 (wired f32 stage loading into transformer block + TPU validation)
+
+### Objective
+
+Wire the f32 weight-loading bridge into the six-stage transformer-linear block
+benchmark so the block can run with quantized patched weights end-to-end on
+TPU, not only pattern matrices.
+
+### Implementation
+
+1. Updated `examples/transformer_linear_block.rs` to support:
+   - `--weight-source pattern|f32` (default `pattern`)
+   - `--weights-dir <dir>` (`q_proj.f32le`, `k_proj.f32le`, `v_proj.f32le`,
+     `o_proj.f32le`, `mlp_up.f32le`, `mlp_down.f32le`)
+   - `--input-f32-le <path>`
+   - `--input-qmax`, `--weight-qmax`, `--verify-calibration-rows`, `--seed`
+2. Added full in-example path:
+   - load/generate f32 stage weights
+   - symmetric int8 quantization
+   - per-stage `set_weights_from_slice` patch
+   - stage prepare + execute on Coral
+3. Added optional `q_proj` CPU-vs-TPU affine verification printout for the
+   wired mode.
+
+### Docs updates
+
+1. Updated `README.md` with f32 wired transformer-block command and weight-file
+   naming conventions.
+2. Updated `docs/transformer_linear_block.md` with new CLI flags and run
+   results for f32-weight mode.
+
+### Hardware runs
+
+1. Ran:
+   - `cargo run --example transformer_linear_block -- 16 3 1 --no-attention --weight-source f32 --verify-calibration-rows 8`
+   - results:
+     - `linear_only_ms=31.926`, `total_ms=31.930`
+     - `same_stage6_ms=31.821`
+     - `linear_gmac_per_s=15.962`
+2. Ran:
+   - `cargo run --example transformer_linear_block -- 16 2 1 --weight-source f32 --verify-calibration-rows 8`
+   - results:
+     - `linear_only_ms=32.514`, `attn_cpu=10.501`, `total_ms=43.016`
+     - `same_stage6_ms=32.532`
+     - `linear_gmac_per_s=15.674`
+     - `end_to_end_gmac_per_s=11.847`
