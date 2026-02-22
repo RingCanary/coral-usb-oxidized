@@ -58,6 +58,7 @@ def _make_kernel(
 
 
 def _representative_dataset(
+    batch_size: int,
     input_dim: int,
     samples: int,
     value_range: float,
@@ -68,7 +69,7 @@ def _representative_dataset(
         batch = rng.uniform(
             -value_range,
             value_range,
-            size=(1, input_dim),
+            size=(batch_size, input_dim),
         ).astype(np.float32)
         yield [batch]
 
@@ -79,6 +80,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--output", required=True, help="Output .tflite path.")
     p.add_argument("--metadata-out", help="Optional JSON metadata output path.")
+    p.add_argument("--batch-size", type=int, default=1, help="Input batch size.")
     p.add_argument("--input-dim", type=int, default=256)
     p.add_argument("--output-dim", type=int, default=256)
     p.add_argument(
@@ -108,6 +110,9 @@ def main() -> int:
 
     tf.keras.utils.set_random_seed(args.seed)
 
+    if args.batch_size <= 0:
+        raise ValueError(f"--batch-size must be >= 1, got {args.batch_size}")
+
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -115,7 +120,7 @@ def main() -> int:
         [
             tf.keras.layers.InputLayer(
                 input_shape=(args.input_dim,),
-                batch_size=1,
+                batch_size=args.batch_size,
                 dtype=tf.float32,
                 name="input",
             ),
@@ -130,7 +135,7 @@ def main() -> int:
     )
 
     # Materialize variables before setting deterministic weights.
-    _ = model(np.zeros((1, args.input_dim), dtype=np.float32))
+    _ = model(np.zeros((args.batch_size, args.input_dim), dtype=np.float32))
 
     kernel = _make_kernel(
         init_mode=args.init_mode,
@@ -153,6 +158,7 @@ def main() -> int:
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
     converter.representative_dataset = lambda: _representative_dataset(
         input_dim=args.input_dim,
+        batch_size=args.batch_size,
         samples=args.rep_samples,
         value_range=args.rep_range,
         seed=args.seed + 1,
@@ -176,6 +182,7 @@ def main() -> int:
         "output_sha256": _sha256_bytes(tflite_model),
         "input_dim": args.input_dim,
         "output_dim": args.output_dim,
+        "batch_size": args.batch_size,
         "init_mode": args.init_mode,
         "diag_scale": args.diag_scale,
         "hot_row": args.hot_row,

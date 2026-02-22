@@ -17,6 +17,7 @@ Options:
                          on x86_64, tensorflow on aarch64/arm64)
   --tf-version <v>       TensorFlow version for uv run (default: package-specific)
   --numpy-version <v>    numpy version for uv run (default: package-specific)
+  --batch-size <n>       Dense input batch size (default: 1)
   --input-dim <n>        Dense input dimension (default: 256)
   --output-dim <n>       Dense output dimension (default: 256)
   --init-mode <mode>     identity|permutation|ones|random_uniform
@@ -57,6 +58,7 @@ PYTHON_VERSION="3.9"
 TF_PACKAGE="tensorflow-cpu"
 TF_VERSION=""
 NUMPY_VERSION="1.23.5"
+BATCH_SIZE=1
 INPUT_DIM=256
 OUTPUT_DIM=256
 INIT_MODE="identity"
@@ -101,6 +103,11 @@ while (($# > 0)); do
       [[ $# -ge 2 ]] || die "missing value for --numpy-version"
       NUMPY_VERSION="$2"
       NUMPY_VERSION_SET=1
+      shift 2
+      ;;
+    --batch-size)
+      [[ $# -ge 2 ]] || die "missing value for --batch-size"
+      BATCH_SIZE="$2"
       shift 2
       ;;
     --input-dim)
@@ -182,6 +189,8 @@ case "${PATCH_MODE}" in
   *) die "invalid --patch-mode '${PATCH_MODE}'" ;;
 esac
 
+[[ "${BATCH_SIZE}" =~ ^[1-9][0-9]*$ ]] || die "invalid --batch-size '${BATCH_SIZE}' (expected positive integer)"
+
 need_cmd uv
 need_cmd python3
 
@@ -232,6 +241,9 @@ fi
 mkdir -p "${OUT_DIR}"
 
 MODEL_BASENAME="dense_${INPUT_DIM}x${OUTPUT_DIM}_quant"
+if [[ "${BATCH_SIZE}" -ne 1 ]]; then
+  MODEL_BASENAME="${MODEL_BASENAME}_b${BATCH_SIZE}"
+fi
 QUANT_MODEL="${OUT_DIR}/${MODEL_BASENAME}.tflite"
 DENSE_META="${OUT_DIR}/${MODEL_BASENAME}.metadata.json"
 COMPILE_LOG="${OUT_DIR}/edgetpu_compile.log"
@@ -250,6 +262,7 @@ uv run --python "${PYTHON_VERSION}" \
   tools/generate_dense_quant_tflite.py \
   --output "${QUANT_MODEL}" \
   --metadata-out "${DENSE_META}" \
+  --batch-size "${BATCH_SIZE}" \
   --input-dim "${INPUT_DIM}" \
   --output-dim "${OUTPUT_DIM}" \
   --init-mode "${INIT_MODE}" \
@@ -336,6 +349,7 @@ fi
   echo "tensorflow_package=${TF_PACKAGE}"
   echo "tensorflow_version=${TF_VERSION}"
   echo "numpy_version=${NUMPY_VERSION}"
+  echo "batch_size=${BATCH_SIZE}"
   echo "extract_dir=${EXTRACT_DIR}"
   echo "parse_text=${PARSE_TXT}"
   echo "parse_json=${PARSE_JSON}"

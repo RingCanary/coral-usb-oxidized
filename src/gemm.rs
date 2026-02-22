@@ -339,6 +339,7 @@ pub struct PreparedDenseGemm {
     interpreter: CoralInterpreter,
     input_dim: usize,
     output_dim: usize,
+    max_batch_rows: usize,
 }
 
 impl PreparedDenseGemm {
@@ -350,16 +351,21 @@ impl PreparedDenseGemm {
     ) -> Result<Self, DenseGemmError> {
         let interpreter = CoralInterpreter::new_from_memory(model_bytes, delegate)?;
         let input_size = interpreter.input_tensor_byte_size(0)?;
-        if input_size != input_dim {
+        if input_size < input_dim || input_size % input_dim != 0 {
             return Err(DenseGemmError::InputSizeMismatch {
                 expected: input_dim,
                 actual: input_size,
             });
         }
+        let max_batch_rows = input_size / input_dim;
+
         let output_size = interpreter.output_tensor_byte_size(0)?;
-        if output_size != output_dim {
+        let expected_output_size = output_dim
+            .checked_mul(max_batch_rows)
+            .ok_or_else(|| invalid_template("output byte size overflow"))?;
+        if output_size != expected_output_size {
             return Err(DenseGemmError::OutputSizeMismatch {
-                expected: output_dim,
+                expected: expected_output_size,
                 actual: output_size,
             });
         }
@@ -367,6 +373,7 @@ impl PreparedDenseGemm {
             interpreter,
             input_dim,
             output_dim,
+            max_batch_rows,
         })
     }
 
@@ -374,22 +381,19 @@ impl PreparedDenseGemm {
         (self.input_dim, self.output_dim)
     }
 
+    pub fn max_batch_rows(&self) -> usize {
+        self.max_batch_rows
+    }
+
     pub fn execute(&self, input: &[i8]) -> Result<Vec<i8>, DenseGemmError> {
-        if input.len() != self.input_dim {
-            return Err(DenseGemmError::InputSizeMismatch {
-                expected: self.input_dim,
-                actual: input.len(),
+        let outputs = self.execute_batch_rows(input)?;
+        if outputs.len() != self.output_dim {
+            return Err(DenseGemmError::OutputSizeMismatch {
+                expected: self.output_dim,
+                actual: outputs.len(),
             });
         }
-
-        let input_bytes: Vec<u8> = input.iter().map(|value| *value as u8).collect();
-        self.interpreter.copy_to_input_tensor(0, &input_bytes)?;
-        self.interpreter.run()?;
-
-        let mut output_bytes = vec![0u8; self.output_dim];
-        self.interpreter
-            .copy_from_output_tensor(0, &mut output_bytes)?;
-        Ok(output_bytes.into_iter().map(|value| value as i8).collect())
+        Ok(outputs)
     }
 
     pub fn execute_batch_rows(&self, inputs_row_major_q: &[i8]) -> Result<Vec<i8>, DenseGemmError> {
@@ -402,9 +406,37 @@ impl PreparedDenseGemm {
 
         let batch = inputs_row_major_q.len() / self.input_dim;
         let mut outputs = Vec::with_capacity(batch * self.output_dim);
-        for chunk in inputs_row_major_q.chunks_exact(self.input_dim) {
-            let out = self.execute(chunk)?;
-            outputs.extend_from_slice(&out);
+        if batch == 0 {
+            return Ok(outputs);
+        }
+
+        let rows_per_invoke = self.max_batch_rows.max(1);
+        let input_bytes_per_invoke = rows_per_invoke
+            .checked_mul(self.input_dim)
+            .ok_or_else(|| invalid_template("input invoke byte size overflow"))?;
+        let output_bytes_per_invoke = rows_per_invoke
+            .checked_mul(self.output_dim)
+            .ok_or_else(|| invalid_template("output invoke byte size overflow"))?;
+        let mut input_bytes = vec![0u8; input_bytes_per_invoke];
+        let mut output_bytes = vec![0u8; output_bytes_per_invoke];
+
+        for chunk in inputs_row_major_q.chunks(rows_per_invoke * self.input_dim) {
+            let rows_in_chunk = chunk.len() / self.input_dim;
+            input_bytes.fill(0);
+            for (idx, value) in chunk.iter().enumerate() {
+                input_bytes[idx] = *value as u8;
+            }
+
+            self.interpreter.copy_to_input_tensor(0, &input_bytes)?;
+            self.interpreter.run()?;
+
+            self.interpreter
+                .copy_from_output_tensor(0, &mut output_bytes)?;
+
+            let used = rows_in_chunk
+                .checked_mul(self.output_dim)
+                .ok_or_else(|| invalid_template("output slice size overflow"))?;
+            outputs.extend(output_bytes.iter().take(used).map(|value| *value as i8));
         }
         Ok(outputs)
     }
