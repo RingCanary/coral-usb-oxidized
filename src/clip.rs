@@ -1,4 +1,5 @@
 use safetensors::{Dtype, SafeTensors};
+use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::path::Path;
@@ -208,8 +209,26 @@ impl Default for ClipVitB32Dims {
 #[derive(Debug, Clone, Copy)]
 pub struct QuantizationInfo {
     pub max_abs: f32,
+    pub clipped_max_abs: f32,
     pub scale: f32,
     pub qmax: i32,
+    pub clip_percentile: f32,
+    pub clipped_values: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct LinearQuantConfig {
+    pub qmax: i32,
+    pub clip_percentile: f32,
+}
+
+impl Default for LinearQuantConfig {
+    fn default() -> Self {
+        Self {
+            qmax: 127,
+            clip_percentile: 100.0,
+        }
+    }
 }
 
 pub struct ClipSafeTensorFile {
@@ -371,15 +390,51 @@ pub fn quantize_linear_out_in_to_row_major_qi8(
     output_dim: usize,
     qmax: i32,
 ) -> Result<(Vec<i8>, QuantizationInfo), ClipError> {
+    quantize_linear_out_in_to_row_major_qi8_with_config(
+        weights_out_by_in_f32,
+        input_dim,
+        output_dim,
+        LinearQuantConfig {
+            qmax,
+            clip_percentile: 100.0,
+        },
+    )
+}
+
+fn absolute_percentile(values: &[f32], percentile: f32) -> f32 {
+    if values.is_empty() {
+        return 0.0;
+    }
+
+    let mut abs_values: Vec<f32> = values.iter().map(|value| value.abs()).collect();
+    let max_index = abs_values.len() - 1;
+    let rank = (((percentile / 100.0) * max_index as f32).round() as usize).min(max_index);
+    let (_, nth, _) =
+        abs_values.select_nth_unstable_by(rank, |a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+    *nth
+}
+
+pub fn quantize_linear_out_in_to_row_major_qi8_with_config(
+    weights_out_by_in_f32: &[f32],
+    input_dim: usize,
+    output_dim: usize,
+    config: LinearQuantConfig,
+) -> Result<(Vec<i8>, QuantizationInfo), ClipError> {
     if input_dim == 0 || output_dim == 0 {
         return Err(ClipError::InvalidArgument(
             "input_dim and output_dim must be non-zero".to_string(),
         ));
     }
-    if !(1..=127).contains(&qmax) {
+    if !(1..=127).contains(&config.qmax) {
         return Err(ClipError::InvalidArgument(format!(
             "qmax must be in [1, 127], got {}",
-            qmax
+            config.qmax
+        )));
+    }
+    if !(0.0..=100.0).contains(&config.clip_percentile) || config.clip_percentile == 0.0 {
+        return Err(ClipError::InvalidArgument(format!(
+            "clip_percentile must be in (0, 100], got {}",
+            config.clip_percentile
         )));
     }
 
@@ -396,24 +451,39 @@ pub fn quantize_linear_out_in_to_row_major_qi8(
 
     let mut max_abs = 0.0f32;
     for &value in weights_out_by_in_f32 {
+        if !value.is_finite() {
+            return Err(ClipError::InvalidModel(
+                "weight tensor contains non-finite values".to_string(),
+            ));
+        }
         let abs = value.abs();
         if abs > max_abs {
             max_abs = abs;
         }
     }
 
-    let scale = if max_abs > 0.0 {
-        max_abs / qmax as f32
+    let clipped_max_abs = if config.clip_percentile >= 100.0 {
+        max_abs
+    } else {
+        absolute_percentile(weights_out_by_in_f32, config.clip_percentile)
+    };
+
+    let scale = if clipped_max_abs > 0.0 {
+        clipped_max_abs / config.qmax as f32
     } else {
         1.0
     };
 
     let mut out_row_major = vec![0i8; expected];
+    let mut clipped_values = 0usize;
     for out_idx in 0..output_dim {
         for in_idx in 0..input_dim {
             let source = weights_out_by_in_f32[out_idx * input_dim + in_idx];
             let q = (source / scale).round() as i32;
-            let clamped = q.clamp(-qmax, qmax) as i8;
+            if q < -config.qmax || q > config.qmax {
+                clipped_values += 1;
+            }
+            let clamped = q.clamp(-config.qmax, config.qmax) as i8;
             out_row_major[in_idx * output_dim + out_idx] = clamped;
         }
     }
@@ -422,8 +492,11 @@ pub fn quantize_linear_out_in_to_row_major_qi8(
         out_row_major,
         QuantizationInfo {
             max_abs,
+            clipped_max_abs,
             scale,
-            qmax,
+            qmax: config.qmax,
+            clip_percentile: config.clip_percentile,
+            clipped_values,
         },
     ))
 }
@@ -491,5 +564,22 @@ mod tests {
         assert!(row_major[0] <= row_major[1]);
         assert!(row_major[2] <= row_major[3]);
         assert!(row_major[4] <= row_major[5]);
+    }
+
+    #[test]
+    fn quantizer_respects_percentile_clipping() {
+        let source = vec![0.0f32, 1.0, 2.0, 100.0];
+        let (_row_major, info) = quantize_linear_out_in_to_row_major_qi8_with_config(
+            &source,
+            2,
+            2,
+            LinearQuantConfig {
+                qmax: 127,
+                clip_percentile: 75.0,
+            },
+        )
+        .unwrap();
+        assert!(info.clipped_max_abs < info.max_abs);
+        assert!(info.clipped_values > 0);
     }
 }

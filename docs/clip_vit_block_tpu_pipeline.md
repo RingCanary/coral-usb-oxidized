@@ -28,6 +28,7 @@ cargo run --example clip_vit_block_tpu_pipeline -- \
   <template_768x3072.tflite> \
   <template_3072x768.tflite> \
   [layer_idx] [rows] [runs] [warmup] [qmax] \
+  [--clip-percentile P] [--auto-qmax A,B,C] \
   [--input-q PATH] [--seed N]
 ```
 
@@ -37,8 +38,16 @@ Defaults:
 - `rows=8`
 - `runs=3`
 - `warmup=1`
-- `qmax=127`
+- `qmax=24`
+- `clip_percentile=100`
 - synthetic input rows when `--input-q` is omitted
+
+Recommended for CLIP checkpoints:
+
+- use `qmax` in the `20..32` range (defaults to `24`) to reduce accumulator
+  saturation
+- use `--auto-qmax 16,20,24,32,48,64` to pick per-stage `qmax` based on
+  calibration correlation/RMSE on the current stage input
 
 ## Template mapping
 

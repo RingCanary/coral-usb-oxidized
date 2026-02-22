@@ -7,9 +7,9 @@ mod gemm;
 mod interpreter;
 
 pub use crate::clip::{
-    quantize_linear_out_in_to_row_major_qi8, ClipError, ClipSafeTensorFile, ClipTensorInfo,
-    ClipVitB32Dims, ClipVitLayerLinearNames, ClipVitLinearStage, ClipVitLinearStageMeta,
-    QuantizationInfo,
+    quantize_linear_out_in_to_row_major_qi8, quantize_linear_out_in_to_row_major_qi8_with_config,
+    ClipError, ClipSafeTensorFile, ClipTensorInfo, ClipVitB32Dims, ClipVitLayerLinearNames,
+    ClipVitLinearStage, ClipVitLinearStageMeta, LinearQuantConfig, QuantizationInfo,
 };
 pub use crate::delegate::{version, EdgeTPUDelegate};
 pub use crate::device::{is_device_connected, CoralDevice};

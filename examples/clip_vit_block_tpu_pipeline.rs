@@ -1,6 +1,7 @@
 use coral_usb_oxidized::{
-    quantize_linear_out_in_to_row_major_qi8, version, ClipSafeTensorFile, ClipVitB32Dims,
-    ClipVitLinearStageMeta, CoralDevice, DenseGemmTemplate, PreparedDenseGemm, QuantizationInfo,
+    quantize_linear_out_in_to_row_major_qi8_with_config, version, ClipSafeTensorFile,
+    ClipVitB32Dims, ClipVitLinearStageMeta, CoralDevice, DenseGemmTemplate, LinearQuantConfig,
+    PreparedDenseGemm, QuantizationInfo,
 };
 use std::env;
 use std::error::Error;
@@ -19,6 +20,8 @@ struct Config {
     runs: usize,
     warmup: usize,
     qmax: i32,
+    clip_percentile: f32,
+    auto_qmax_candidates: Vec<i32>,
     seed: u64,
     input_q_path: Option<String>,
 }
@@ -30,6 +33,18 @@ struct PreparedStage {
     quant: QuantizationInfo,
     prepared: PreparedDenseGemm,
     prepare_ms: f64,
+    calibration_fit: Option<AffineFit>,
+    calibration_stage_ms: Option<f64>,
+}
+
+struct StageCandidate {
+    weights_q: Vec<i8>,
+    quant: QuantizationInfo,
+    prepared: PreparedDenseGemm,
+    prepare_ms: f64,
+    output_q: Vec<i8>,
+    stage_ms: f64,
+    fit: AffineFit,
 }
 
 struct PipelineRun {
@@ -75,14 +90,33 @@ impl XorShift64 {
 
 fn usage(program: &str) {
     println!(
-        "Usage: {program} <model.safetensors> <template_768x768.tflite> <template_768x3072.tflite> <template_3072x768.tflite> [layer_idx] [rows] [runs] [warmup] [qmax] [--input-q PATH] [--seed N]"
+        "Usage: {program} <model.safetensors> <template_768x768.tflite> <template_768x3072.tflite> <template_3072x768.tflite> [layer_idx] [rows] [runs] [warmup] [qmax] [--clip-percentile P] [--auto-qmax A,B,C] [--input-q PATH] [--seed N]"
     );
+    println!("Defaults: layer_idx=0 rows=8 runs=3 warmup=1 qmax=24 clip_percentile=100 seed=1");
     println!(
-        "Defaults: layer_idx=0 rows=8 runs=3 warmup=1 qmax=127 seed=1 (input defaults to synthetic int8 rows)"
+        "Example: cargo run --example clip_vit_block_tpu_pipeline -- model.safetensors t768x768_edgetpu.tflite t768x3072_edgetpu.tflite t3072x768_edgetpu.tflite 0 8 3 1 24 --auto-qmax 16,20,24,32,48,64"
     );
-    println!(
-        "Example: cargo run --example clip_vit_block_tpu_pipeline -- model.safetensors t768x768_edgetpu.tflite t768x3072_edgetpu.tflite t3072x768_edgetpu.tflite 0 8 3 1 127"
-    );
+}
+
+fn parse_qmax_candidates(value: &str) -> Result<Vec<i32>, Box<dyn Error>> {
+    let mut out = Vec::new();
+    for raw in value.split(',') {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let q = trimmed.parse::<i32>()?;
+        if !(1..=127).contains(&q) {
+            return Err(format!("auto-qmax entry must be in [1, 127], got {}", q).into());
+        }
+        if !out.contains(&q) {
+            out.push(q);
+        }
+    }
+    if out.is_empty() {
+        return Err("--auto-qmax requires at least one numeric candidate".into());
+    }
+    Ok(out)
 }
 
 fn parse_args() -> Result<Config, Box<dyn Error>> {
@@ -103,6 +137,8 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
     let mut positional = Vec::new();
     let mut input_q_path: Option<String> = None;
     let mut seed: u64 = 1;
+    let mut clip_percentile: f32 = 100.0;
+    let mut auto_qmax_candidates = Vec::new();
 
     let mut idx = 1usize;
     while idx < args.len() {
@@ -120,6 +156,20 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                     return Err("--seed requires a value".into());
                 }
                 seed = args[idx].parse::<u64>()?;
+            }
+            "--clip-percentile" => {
+                idx += 1;
+                if idx >= args.len() {
+                    return Err("--clip-percentile requires a value".into());
+                }
+                clip_percentile = args[idx].parse::<f32>()?;
+            }
+            "--auto-qmax" => {
+                idx += 1;
+                if idx >= args.len() {
+                    return Err("--auto-qmax requires a comma-separated list".into());
+                }
+                auto_qmax_candidates = parse_qmax_candidates(&args[idx])?;
             }
             value if value.starts_with('-') => {
                 return Err(format!("unknown option: {}", value).into());
@@ -153,7 +203,7 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
     let qmax = positional
         .get(8)
         .and_then(|value| value.parse::<i32>().ok())
-        .unwrap_or(127);
+        .unwrap_or(24);
 
     if rows == 0 {
         return Err("rows must be >= 1".into());
@@ -163,6 +213,9 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
     }
     if !(1..=127).contains(&qmax) {
         return Err("qmax must be in [1, 127]".into());
+    }
+    if !(0.0..=100.0).contains(&clip_percentile) || clip_percentile == 0.0 {
+        return Err("clip_percentile must be in (0, 100]".into());
     }
 
     Ok(Config {
@@ -175,6 +228,8 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         runs,
         warmup,
         qmax,
+        clip_percentile,
+        auto_qmax_candidates,
         seed,
         input_q_path,
     })
@@ -331,6 +386,55 @@ fn fit_affine(cpu_acc: &[i32], tpu_output_q: &[i8]) -> Result<AffineFit, Box<dyn
     })
 }
 
+fn quantize_weights(
+    weights_f32: &[f32],
+    input_dim: usize,
+    output_dim: usize,
+    qmax: i32,
+    clip_percentile: f32,
+) -> Result<(Vec<i8>, QuantizationInfo), Box<dyn Error>> {
+    Ok(quantize_linear_out_in_to_row_major_qi8_with_config(
+        weights_f32,
+        input_dim,
+        output_dim,
+        LinearQuantConfig {
+            qmax,
+            clip_percentile,
+        },
+    )?)
+}
+
+fn prepare_stage_from_weights(
+    template_path: &str,
+    meta: &ClipVitLinearStageMeta,
+    weights_q: &[i8],
+    delegate: &coral_usb_oxidized::EdgeTPUDelegate,
+) -> Result<(PreparedDenseGemm, f64), Box<dyn Error>> {
+    let mut template =
+        DenseGemmTemplate::from_file_with_dims(template_path, meta.input_dim, meta.output_dim)?;
+    template.set_weights_from_slice(weights_q)?;
+
+    let started_prepare = Instant::now();
+    let prepared = template.prepare(delegate)?;
+    let prepare_ms = started_prepare.elapsed().as_secs_f64() * 1000.0;
+    Ok((prepared, prepare_ms))
+}
+
+fn choose_better_candidate(candidate: &StageCandidate, best: Option<&StageCandidate>) -> bool {
+    match best {
+        None => true,
+        Some(current) => {
+            if candidate.fit.corr > current.fit.corr + 1e-9 {
+                true
+            } else if (candidate.fit.corr - current.fit.corr).abs() <= 1e-9 {
+                candidate.fit.rmse < current.fit.rmse
+            } else {
+                false
+            }
+        }
+    }
+}
+
 fn execute_pipeline_once(
     stages: &[PreparedStage],
     input_rows_q: &[i8],
@@ -388,12 +492,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("EdgeTPU version: {}", version());
     println!("CLIP ViT-B/32 linear block TPU pipeline");
     println!(
-        "Config: layer={} rows={} runs={} warmup={} qmax={} input_source={}",
+        "Config: layer={} rows={} runs={} warmup={} qmax={} clip_percentile={} auto_qmax={:?} input_source={}",
         config.layer_idx,
         config.rows,
         config.runs,
         config.warmup,
         config.qmax,
+        config.clip_percentile,
+        config.auto_qmax_candidates,
         config.input_q_path.as_deref().unwrap_or("synthetic(seed)")
     );
     println!(
@@ -405,48 +511,115 @@ fn main() -> Result<(), Box<dyn Error>> {
     let delegate = device.create_delegate()?;
 
     let mut prepared_stages: Vec<PreparedStage> = Vec::with_capacity(STAGE_COUNT);
+    let mut calibration_input = input_rows_q.clone();
+
     for meta in stage_metas {
-        let weights_f32 = model.tensor_f32(&meta.tensor_name)?;
-        let (weights_q, quant) = quantize_linear_out_in_to_row_major_qi8(
-            &weights_f32,
-            meta.input_dim,
-            meta.output_dim,
-            config.qmax,
-        )?;
-
         let template_path = template_path_for_dims(&config, meta.input_dim, meta.output_dim)?;
-        let mut template =
-            DenseGemmTemplate::from_file_with_dims(template_path, meta.input_dim, meta.output_dim)?;
-        template.set_weights_from_slice(&weights_q)?;
+        let weights_f32 = model.tensor_f32(&meta.tensor_name)?;
 
-        let started_prepare = Instant::now();
-        let prepared = template.prepare(&delegate)?;
-        let prepare_ms = started_prepare.elapsed().as_secs_f64() * 1000.0;
+        if config.auto_qmax_candidates.is_empty() {
+            let (weights_q, quant) = quantize_weights(
+                &weights_f32,
+                meta.input_dim,
+                meta.output_dim,
+                config.qmax,
+                config.clip_percentile,
+            )?;
+            let (prepared, prepare_ms) =
+                prepare_stage_from_weights(template_path, &meta, &weights_q, &delegate)?;
+            prepared_stages.push(PreparedStage {
+                meta,
+                template_path: template_path.to_string(),
+                weights_q,
+                quant,
+                prepared,
+                prepare_ms,
+                calibration_fit: None,
+                calibration_stage_ms: None,
+            });
+            continue;
+        }
 
+        let mut best: Option<StageCandidate> = None;
+        for &candidate_qmax in &config.auto_qmax_candidates {
+            let (weights_q, quant) = quantize_weights(
+                &weights_f32,
+                meta.input_dim,
+                meta.output_dim,
+                candidate_qmax,
+                config.clip_percentile,
+            )?;
+            let (prepared, prepare_ms) =
+                prepare_stage_from_weights(template_path, &meta, &weights_q, &delegate)?;
+
+            let started_stage = Instant::now();
+            let output_q = prepared.execute_batch_rows(&calibration_input)?;
+            let stage_ms = started_stage.elapsed().as_secs_f64() * 1000.0;
+
+            let cpu_acc = cpu_accumulator_reference_batch(
+                &calibration_input,
+                &weights_q,
+                meta.input_dim,
+                meta.output_dim,
+            )?;
+            let fit = fit_affine(&cpu_acc, &output_q)?;
+
+            let candidate = StageCandidate {
+                weights_q,
+                quant,
+                prepared,
+                prepare_ms,
+                output_q,
+                stage_ms,
+                fit,
+            };
+            if choose_better_candidate(&candidate, best.as_ref()) {
+                best = Some(candidate);
+            }
+        }
+
+        let selected = best.ok_or("internal error: no quantization candidate selected")?;
+        calibration_input = selected.output_q.clone();
         prepared_stages.push(PreparedStage {
             meta,
             template_path: template_path.to_string(),
-            weights_q,
-            quant,
-            prepared,
-            prepare_ms,
+            weights_q: selected.weights_q,
+            quant: selected.quant,
+            prepared: selected.prepared,
+            prepare_ms: selected.prepare_ms,
+            calibration_fit: Some(selected.fit),
+            calibration_stage_ms: Some(selected.stage_ms),
         });
     }
 
     println!("Stage setup:");
     for stage in &prepared_stages {
+        let clipped_pct = if stage.weights_q.is_empty() {
+            0.0
+        } else {
+            100.0 * stage.quant.clipped_values as f64 / stage.weights_q.len() as f64
+        };
         println!(
-            "  {:>4} dims={:>4}x{:<4} q_bytes={} scale={:.9} max_abs={:.9} prepare_ms={:.3} tensor={} template={}",
+            "  {:>4} dims={:>4}x{:<4} q_bytes={} qmax={} scale={:.9} max_abs={:.9} clipped_max_abs={:.9} clip_pct={:.2}% prepare_ms={:.3} tensor={} template={}",
             stage.meta.stage,
             stage.meta.input_dim,
             stage.meta.output_dim,
             stage.weights_q.len(),
+            stage.quant.qmax,
             stage.quant.scale,
             stage.quant.max_abs,
+            stage.quant.clipped_max_abs,
+            clipped_pct,
             stage.prepare_ms,
             stage.meta.tensor_name,
             stage.template_path
         );
+        if let (Some(fit), Some(ms)) = (stage.calibration_fit, stage.calibration_stage_ms) {
+            println!(
+                "       autotune_fit: corr={:.6} mae={:.4} rmse={:.4} calibration_stage_ms={:.3}",
+                fit.corr, fit.mae, fit.rmse, ms
+            );
+        }
     }
 
     for _ in 0..config.warmup {

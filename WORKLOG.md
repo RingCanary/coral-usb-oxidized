@@ -35,6 +35,26 @@ metrics.
    - compile phase reached linking and failed in this environment due to
      missing `libedgetpu`/`libtensorflowlite_c` shared libs.
 
+### Quantization improvements
+
+1. Added configurable CLIP quantization API in `src/clip.rs`:
+   - `LinearQuantConfig { qmax, clip_percentile }`
+   - `quantize_linear_out_in_to_row_major_qi8_with_config(...)`
+2. Extended `QuantizationInfo` with:
+   - `clipped_max_abs`
+   - `clip_percentile`
+   - `clipped_values`
+3. Kept compatibility wrapper:
+   - `quantize_linear_out_in_to_row_major_qi8(...)` now forwards to the
+     configurable API with `clip_percentile=100`.
+4. Upgraded `examples/clip_vit_block_tpu_pipeline.rs`:
+   - default `qmax` changed from `127` to `24`
+   - added `--clip-percentile`
+   - added `--auto-qmax A,B,C` per-stage auto-tune based on calibration
+     correlation/RMSE
+   - stage setup now prints clipping stats and selected `qmax` values.
+5. Updated docs and README command examples to show recommended CLIP settings.
+
 ## 2026-02-21
 
 ### Objective
