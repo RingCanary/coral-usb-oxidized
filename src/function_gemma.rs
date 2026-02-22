@@ -227,6 +227,11 @@ impl FunctionGemmaSafeTensorFile {
         Ok(SafeTensors::deserialize(self.bytes())?)
     }
 
+    pub fn tensor_names(&self) -> Result<Vec<String>, FunctionGemmaError> {
+        let parsed = self.parsed()?;
+        Ok(parsed.names().into_iter().map(str::to_string).collect())
+    }
+
     fn tensor_from_parsed<'data>(
         parsed: &SafeTensors<'data>,
         name: &str,
@@ -441,6 +446,64 @@ impl FunctionGemmaSafeTensorFile {
         decode_row_to_f32(&data[start..end], tensor.dtype(), hidden)
     }
 
+    pub fn embedding_rows_f32(
+        &self,
+        token_start: usize,
+        token_count: usize,
+    ) -> Result<Vec<f32>, FunctionGemmaError> {
+        if token_count == 0 {
+            return Ok(Vec::new());
+        }
+
+        let parsed = self.parsed()?;
+        let tensor = Self::tensor_from_parsed(&parsed, "model.embed_tokens.weight")?;
+        if tensor.shape().len() != 2 {
+            return Err(FunctionGemmaError::InvalidModel(format!(
+                "expected model.embed_tokens.weight to be rank-2, got {:?}",
+                tensor.shape()
+            )));
+        }
+        let vocab = tensor.shape()[0];
+        let hidden = tensor.shape()[1];
+        if token_start >= vocab {
+            return Err(FunctionGemmaError::InvalidArgument(format!(
+                "token_start {} out of range [0, {})",
+                token_start, vocab
+            )));
+        }
+        let token_end = token_start
+            .checked_add(token_count)
+            .ok_or_else(|| FunctionGemmaError::InvalidModel("token range overflow".to_string()))?;
+        if token_end > vocab {
+            return Err(FunctionGemmaError::InvalidArgument(format!(
+                "token range {}..{} out of bounds for vocab {}",
+                token_start, token_end, vocab
+            )));
+        }
+
+        let stride = hidden
+            .checked_mul(dtype_elem_size(tensor.dtype())?)
+            .ok_or_else(|| {
+                FunctionGemmaError::InvalidModel("embedding stride overflow".to_string())
+            })?;
+        let start = token_start.checked_mul(stride).ok_or_else(|| {
+            FunctionGemmaError::InvalidModel("embedding start overflow".to_string())
+        })?;
+        let end = token_end.checked_mul(stride).ok_or_else(|| {
+            FunctionGemmaError::InvalidModel("embedding end overflow".to_string())
+        })?;
+        let data = tensor.data();
+        if end > data.len() || start > end {
+            return Err(FunctionGemmaError::InvalidModel(format!(
+                "embedding block slice out of bounds: {}..{} > {}",
+                start,
+                end,
+                data.len()
+            )));
+        }
+        decode_slice_to_f32(&data[start..end], tensor.dtype(), token_count * hidden)
+    }
+
     pub fn lm_head_topk_from_hidden(
         &self,
         hidden_state: &[f32],
@@ -550,13 +613,21 @@ fn decode_row_to_f32(
     dtype: Dtype,
     hidden: usize,
 ) -> Result<Vec<f32>, FunctionGemmaError> {
-    let mut out = Vec::with_capacity(hidden);
+    decode_slice_to_f32(data, dtype, hidden)
+}
+
+fn decode_slice_to_f32(
+    data: &[u8],
+    dtype: Dtype,
+    expected_values: usize,
+) -> Result<Vec<f32>, FunctionGemmaError> {
+    let mut out = Vec::with_capacity(expected_values);
     match dtype {
         Dtype::F32 => {
-            if data.len() != hidden * 4 {
+            if data.len() != expected_values * 4 {
                 return Err(FunctionGemmaError::InvalidModel(format!(
                     "f32 row byte length mismatch: expected {}, got {}",
-                    hidden * 4,
+                    expected_values * 4,
                     data.len()
                 )));
             }
@@ -565,10 +636,10 @@ fn decode_row_to_f32(
             }
         }
         Dtype::F16 => {
-            if data.len() != hidden * 2 {
+            if data.len() != expected_values * 2 {
                 return Err(FunctionGemmaError::InvalidModel(format!(
                     "f16 row byte length mismatch: expected {}, got {}",
-                    hidden * 2,
+                    expected_values * 2,
                     data.len()
                 )));
             }
@@ -578,10 +649,10 @@ fn decode_row_to_f32(
             }
         }
         Dtype::BF16 => {
-            if data.len() != hidden * 2 {
+            if data.len() != expected_values * 2 {
                 return Err(FunctionGemmaError::InvalidModel(format!(
                     "bf16 row byte length mismatch: expected {}, got {}",
-                    hidden * 2,
+                    expected_values * 2,
                     data.len()
                 )));
             }
