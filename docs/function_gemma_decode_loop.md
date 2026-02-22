@@ -45,3 +45,28 @@ size is `2624`, so an `input=640, output=2624` template is expected).
 ```bash
 eval "$(./tools/bootstrap_arch_stack.sh print-env)"
 ```
+
+## Pi5 benchmark snapshot
+
+Using the same prompt/config on Pi5, switching LM-head from CPU to Coral-tiled
+changes decode latency substantially:
+
+1. `--max-layers 18 --lm-head cpu --steps 1`:
+   - `ms_per_token ~= 17226`
+2. `--max-layers 18 --lm-head coral --steps 2`:
+   - `ms_per_token ~= 978`
+
+Observed improvement:
+
+- ~`17.6x` faster token decode with Coral-tiled LM-head for the same model and
+  decode path.
+
+## Practical guidance
+
+1. Use `--lm-head cpu` only for bring-up/debug (simpler, lower setup).
+2. Use `--lm-head coral` for real decode throughput.
+3. Expect higher one-time setup time with Coral LM-head:
+   - per-layer stage preparation
+   - LM vocab tile preparation (`640x2624`, `100` tiles for vocab `262146`).
+4. For long decode runs, setup amortizes quickly and Coral LM-head gives the
+   better steady-state path.

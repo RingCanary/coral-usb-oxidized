@@ -15,6 +15,7 @@ Dense template path.
 6. Transformer-like six-stage linear block benchmark at `d_model=2304`.
 7. f32 weight-loading verification bridge for patched `2304x2304` templates.
 8. Wired f32 stage loading into full six-stage transformer-block TPU runs.
+9. Function-Gemma autoregressive decode loop with Coral-tiled LM-head path.
 
 ## 1) Fast restride path
 
@@ -177,6 +178,39 @@ Optional file-backed stage weights:
 - `--weights-dir <dir>` with:
   - `q_proj.f32le`, `k_proj.f32le`, `v_proj.f32le`
   - `o_proj.f32le`, `mlp_up.f32le`, `mlp_down.f32le`
+
+## 8) Function-Gemma decode loop + Coral LM-head tiling
+
+New example:
+
+- `examples/function_gemma_decode_loop.rs`
+
+Companion note:
+
+- `docs/function_gemma_decode_loop.md`
+
+What it adds:
+
+1. Full per-token autoregressive decoder path:
+   - embedding lookup
+   - RMSNorm
+   - Coral `q/k/v/o/gate/up/down`
+   - CPU GQA + KV cache + RoPE
+   - SwiGLU
+   - final RMSNorm + top-k
+2. LM-head backend selection:
+   - CPU tied embedding projection
+   - Coral-tiled projection (`640x2624` tiles over vocab)
+
+Pi5 validation snapshot:
+
+1. Full depth (`18` layers), CPU LM-head:
+   - ~`17226 ms/token`
+2. Full depth (`18` layers), Coral LM-head tiled:
+   - ~`978 ms/token`
+
+This shifts decode from CPU vocab-projection bound to a Coral-backed steady
+state suitable for ongoing Function-Gemma integration work.
 
 ## Immediate next experiments
 
