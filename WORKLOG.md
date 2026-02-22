@@ -1,5 +1,40 @@
 # WORKLOG
 
+## 2026-02-22
+
+### Objective
+
+Wire a CLIP ViT-B/32 per-layer linear-stage pipeline (`q/k/v/o/fc1/fc2`) onto
+existing Dense EdgeTPU templates with explicit stage metadata and validation
+metrics.
+
+### Changes
+
+1. Added CLIP stage metadata helpers in `src/clip.rs`:
+   - `ClipVitLinearStage`
+   - `ClipVitLinearStageMeta`
+   - `ClipVitLayerLinearNames::tensor_name_for_stage`
+   - `ClipVitLayerLinearNames::stage_metas`
+   - `ClipSafeTensorFile::clip_vit_layer_stage_metas`
+2. Exported new clip helpers from `src/lib.rs` for example use.
+3. Added `examples/clip_vit_block_tpu_pipeline.rs`:
+   - loads layer tensors from SafeTensors
+   - quantizes all six stages
+   - patches three template classes (`768x768`, `768x3072`, `3072x768`)
+   - prepares six TPU stages and executes a full linear chain over row batches
+   - reports stage timing and CPU-accumulator vs TPU affine fit metrics.
+4. Added docs entry:
+   - `docs/clip_vit_block_tpu_pipeline.md`
+5. Updated `README.md` example lists with the new pipeline command.
+
+### Validation
+
+1. `cargo check --example clip_vit_block_tpu_pipeline`
+   - passed
+2. `cargo test -q clip::tests::`
+   - compile phase reached linking and failed in this environment due to
+     missing `libedgetpu`/`libtensorflowlite_c` shared libs.
+
 ## 2026-02-21
 
 ### Objective

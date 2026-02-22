@@ -84,6 +84,65 @@ pub struct ClipVitLayerLinearNames {
     pub mlp_fc2: String,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ClipVitLinearStage {
+    Q,
+    K,
+    V,
+    O,
+    Fc1,
+    Fc2,
+}
+
+impl ClipVitLinearStage {
+    pub const ALL: [Self; 6] = [Self::Q, Self::K, Self::V, Self::O, Self::Fc1, Self::Fc2];
+
+    pub fn short_name(self) -> &'static str {
+        match self {
+            Self::Q => "q",
+            Self::K => "k",
+            Self::V => "v",
+            Self::O => "o",
+            Self::Fc1 => "fc1",
+            Self::Fc2 => "fc2",
+        }
+    }
+
+    pub fn io_dims(self, dims: ClipVitB32Dims) -> (usize, usize) {
+        match self {
+            Self::Q | Self::K | Self::V | Self::O => (dims.d_model, dims.d_model),
+            Self::Fc1 => (dims.d_model, dims.mlp_hidden),
+            Self::Fc2 => (dims.mlp_hidden, dims.d_model),
+        }
+    }
+}
+
+impl fmt::Display for ClipVitLinearStage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.short_name())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ClipVitLinearStageMeta {
+    pub stage: ClipVitLinearStage,
+    pub tensor_name: String,
+    pub input_dim: usize,
+    pub output_dim: usize,
+}
+
+impl ClipVitLinearStageMeta {
+    fn new(stage: ClipVitLinearStage, tensor_name: String, dims: ClipVitB32Dims) -> Self {
+        let (input_dim, output_dim) = stage.io_dims(dims);
+        Self {
+            stage,
+            tensor_name,
+            input_dim,
+            output_dim,
+        }
+    }
+}
+
 impl ClipVitLayerLinearNames {
     pub fn for_layer(layer_idx: usize) -> Self {
         let base = format!("vision_model.encoder.layers.{}", layer_idx);
@@ -105,6 +164,28 @@ impl ClipVitLayerLinearNames {
             &self.o_proj,
             &self.mlp_fc1,
             &self.mlp_fc2,
+        ]
+    }
+
+    pub fn tensor_name_for_stage(&self, stage: ClipVitLinearStage) -> &str {
+        match stage {
+            ClipVitLinearStage::Q => &self.q_proj,
+            ClipVitLinearStage::K => &self.k_proj,
+            ClipVitLinearStage::V => &self.v_proj,
+            ClipVitLinearStage::O => &self.o_proj,
+            ClipVitLinearStage::Fc1 => &self.mlp_fc1,
+            ClipVitLinearStage::Fc2 => &self.mlp_fc2,
+        }
+    }
+
+    pub fn stage_metas(&self, dims: ClipVitB32Dims) -> [ClipVitLinearStageMeta; 6] {
+        [
+            ClipVitLinearStageMeta::new(ClipVitLinearStage::Q, self.q_proj.clone(), dims),
+            ClipVitLinearStageMeta::new(ClipVitLinearStage::K, self.k_proj.clone(), dims),
+            ClipVitLinearStageMeta::new(ClipVitLinearStage::V, self.v_proj.clone(), dims),
+            ClipVitLinearStageMeta::new(ClipVitLinearStage::O, self.o_proj.clone(), dims),
+            ClipVitLinearStageMeta::new(ClipVitLinearStage::Fc1, self.mlp_fc1.clone(), dims),
+            ClipVitLinearStageMeta::new(ClipVitLinearStage::Fc2, self.mlp_fc2.clone(), dims),
         ]
     }
 }
@@ -273,6 +354,15 @@ impl ClipSafeTensorFile {
 
         Ok(names)
     }
+
+    pub fn clip_vit_layer_stage_metas(
+        &self,
+        layer_idx: usize,
+        dims: ClipVitB32Dims,
+    ) -> Result<[ClipVitLinearStageMeta; 6], ClipError> {
+        let names = self.validate_clip_vit_layer_linears(layer_idx, dims)?;
+        Ok(names.stage_metas(dims))
+    }
 }
 
 pub fn quantize_linear_out_in_to_row_major_qi8(
@@ -353,6 +443,34 @@ mod tests {
             names.mlp_fc2,
             "vision_model.encoder.layers.3.mlp.fc2.weight"
         );
+    }
+
+    #[test]
+    fn stage_enum_order_and_labels_are_stable() {
+        let labels = ClipVitLinearStage::ALL
+            .iter()
+            .map(|stage| stage.short_name())
+            .collect::<Vec<_>>();
+        assert_eq!(labels, vec!["q", "k", "v", "o", "fc1", "fc2"]);
+    }
+
+    #[test]
+    fn layer_stage_metas_match_expected_dims() {
+        let dims = ClipVitB32Dims::default();
+        let names = ClipVitLayerLinearNames::for_layer(2);
+        let metas = names.stage_metas(dims);
+
+        assert_eq!(metas[0].stage, ClipVitLinearStage::Q);
+        assert_eq!(metas[0].tensor_name, names.q_proj.as_str());
+        assert_eq!((metas[0].input_dim, metas[0].output_dim), (768, 768));
+
+        assert_eq!(metas[4].stage, ClipVitLinearStage::Fc1);
+        assert_eq!(metas[4].tensor_name, names.mlp_fc1.as_str());
+        assert_eq!((metas[4].input_dim, metas[4].output_dim), (768, 3072));
+
+        assert_eq!(metas[5].stage, ClipVitLinearStage::Fc2);
+        assert_eq!(metas[5].tensor_name, names.mlp_fc2.as_str());
+        assert_eq!((metas[5].input_dim, metas[5].output_dim), (3072, 768));
     }
 
     #[test]

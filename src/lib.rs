@@ -8,7 +8,8 @@ mod interpreter;
 
 pub use crate::clip::{
     quantize_linear_out_in_to_row_major_qi8, ClipError, ClipSafeTensorFile, ClipTensorInfo,
-    ClipVitB32Dims, ClipVitLayerLinearNames, QuantizationInfo,
+    ClipVitB32Dims, ClipVitLayerLinearNames, ClipVitLinearStage, ClipVitLinearStageMeta,
+    QuantizationInfo,
 };
 pub use crate::delegate::{version, EdgeTPUDelegate};
 pub use crate::device::{is_device_connected, CoralDevice};
