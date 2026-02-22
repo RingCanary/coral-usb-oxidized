@@ -46,7 +46,7 @@ Recommended for CLIP checkpoints:
 
 - use `qmax` in the `24..48` range (defaults to `32`) to reduce accumulator
   saturation
-- use `--auto-qmax 16,20,24,32,48,64` to pick per-stage `qmax` based on
+- use `--auto-qmax 24,32,48,64` to pick per-stage `qmax` based on
   calibration correlation/RMSE on the current stage input
 
 ## Template mapping

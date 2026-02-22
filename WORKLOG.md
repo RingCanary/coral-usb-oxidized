@@ -54,6 +54,10 @@ metrics.
      correlation/RMSE
    - stage setup now prints clipping stats and selected `qmax` values.
 5. Updated docs and README command examples to show recommended CLIP settings.
+6. Pi5 checkpoint sweeps for CLIP ViT-B/32 (`12` layers, `8` rows, `3` runs):
+   - legacy `qmax=127`: stage-mean correlation around `0.88` (from prior run)
+   - tuned `qmax=32`: `72` stage checks, mean corr `0.997553`, min corr
+     `0.912842` (`fc2`), with unchanged pipeline latency (~`38 ms/layer`)
 
 ## 2026-02-21
 
