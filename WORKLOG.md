@@ -1420,3 +1420,49 @@ Added and used `examples/clip_vit_layer_tpu_probe.rs`:
 2. Pi cannot run the current `edgetpu_compiler` bootstrap binary (x86_64
    artifact), so rectangular template compilation currently happens on
    workstation and templates are copied to Pi for execution.
+
+### Function Gemma Pi5 process-use reduction
+
+#### Objective
+
+Reduce Pi5 process RAM and host overhead when loading large Function-Gemma
+SafeTensors checkpoints while keeping TPU stage output unchanged.
+
+#### Changes
+
+1. Added mmap-backed checkpoint loading in `src/function_gemma.rs`:
+   - `FunctionGemmaStorage::{Mapped, Owned}`
+   - `FunctionGemmaSafeTensorFile::load` now prefers `memmap2::Mmap` and
+     falls back to owned bytes on mmap failure.
+2. Added `storage_kind()` and shared `bytes()` view helpers.
+3. Reduced repeated parsing overhead for dim inference by parsing once and
+   resolving all stage tensors from one `SafeTensors` handle.
+4. Fixed tensor-view lifetime handling after mmap introduction by ensuring each
+   tensor view is used while its parsed metadata handle is still alive.
+
+#### Validation (Pi5)
+
+Using `/usr/bin/time -v` on the same commands and same model/template:
+
+1. `function_gemma_layer_tpu_probe` (`layer=0 stage=q runs=20`):
+   - baseline: `elapsed=5.67s`, `cpu=10%`, `max_rss=539808 KB`
+   - mmap: `elapsed=2.92s`, `cpu=9%`, `max_rss=18192 KB`
+2. `function_gemma_lm_head_sanity` (`token=42 topk=10`):
+   - baseline: `elapsed=18.46s`, `cpu=80%`, `max_rss=531584 KB`
+   - mmap: `elapsed=18.11s`, `cpu=92%`, `max_rss=336032 KB`
+
+Observed effect:
+
+1. TPU stage path keeps low host CPU and drops process RSS by ~`30x`.
+2. CPU-only LM-head path drops RSS by ~`195 MB` with similar wall time.
+
+#### Runtime note
+
+On Pi5, commands must evaluate the repo env exports before execution:
+
+```bash
+eval "$(./tools/bootstrap_arch_stack.sh print-env)"
+```
+
+Without this, the process may load an older system `libedgetpu` instead of the
+repo-managed runtime in `/home/rpc/.local/lib`.
