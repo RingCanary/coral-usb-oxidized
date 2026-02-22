@@ -405,20 +405,17 @@ pub struct CoralInterpreter {
 }
 
 impl CoralInterpreter {
-    /// Create a new TensorFlow Lite interpreter with an EdgeTPU delegate
-    pub fn new(model_path: &str, delegate: &EdgeTPUDelegate) -> Result<Self, TfLiteError> {
-        let model = TfLiteModelWrapper::new_from_file(model_path)?;
-
+    fn from_model(
+        model: TfLiteModelWrapper,
+        delegate: &EdgeTPUDelegate,
+    ) -> Result<Self, TfLiteError> {
         let interpreter = unsafe {
             let options = TfLiteInterpreterOptionsCreate();
             if options.is_null() {
                 return Err(TfLiteError::InterpreterCreationFailed);
             }
 
-            TfLiteInterpreterOptionsAddDelegate(
-                options,
-                delegate.as_ptr() as *mut TfLiteDelegate,
-            );
+            TfLiteInterpreterOptionsAddDelegate(options, delegate.as_ptr() as *mut TfLiteDelegate);
 
             let interpreter_ptr = TfLiteInterpreterCreate(model.as_ptr(), options);
             TfLiteInterpreterOptionsDelete(options);
@@ -444,6 +441,21 @@ impl CoralInterpreter {
             _model: model,
             _delegate: delegate_clone,
         })
+    }
+
+    /// Create a new TensorFlow Lite interpreter with an EdgeTPU delegate
+    pub fn new(model_path: &str, delegate: &EdgeTPUDelegate) -> Result<Self, TfLiteError> {
+        let model = TfLiteModelWrapper::new_from_file(model_path)?;
+        Self::from_model(model, delegate)
+    }
+
+    /// Create a new TensorFlow Lite interpreter from in-memory model bytes.
+    pub fn new_from_memory(
+        model_data: &[u8],
+        delegate: &EdgeTPUDelegate,
+    ) -> Result<Self, TfLiteError> {
+        let model = TfLiteModelWrapper::new_from_memory(model_data)?;
+        Self::from_model(model, delegate)
     }
 
     /// Set the number of threads to use for inference
@@ -659,6 +671,693 @@ impl Drop for CoralInterpreter {
                 TfLiteInterpreterDelete(self.interpreter);
             }
         }
+    }
+}
+
+const DWN1_IDENTIFIER: &[u8; 4] = b"DWN1";
+const EXECUTABLE_TYPE_PARAMETER_CACHING: i16 = 1;
+
+pub const DENSE_GEMM256_DIM: usize = 256;
+pub const DENSE_GEMM256_WEIGHT_COUNT: usize = DENSE_GEMM256_DIM * DENSE_GEMM256_DIM;
+pub const DENSE_GEMM256_WEIGHT_BYTES: usize = DENSE_GEMM256_WEIGHT_COUNT;
+pub const DENSE_GEMM256_ZERO_POINT: i16 = 128;
+
+#[derive(Debug)]
+pub enum DenseGemmError {
+    InvalidTemplate(String),
+    ParameterRegionNotFound,
+    InvalidParameterRegionSize { expected: usize, actual: usize },
+    WeightSizeMismatch { expected: usize, actual: usize },
+    InputSizeMismatch { expected: usize, actual: usize },
+    OutputSizeMismatch { expected: usize, actual: usize },
+    TfLite(TfLiteError),
+    Coral(CoralError),
+    Io(std::io::Error),
+}
+
+impl fmt::Display for DenseGemmError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DenseGemmError::InvalidTemplate(msg) => write!(f, "Invalid GEMM template: {}", msg),
+            DenseGemmError::ParameterRegionNotFound => {
+                write!(f, "No executable parameter region found in template")
+            }
+            DenseGemmError::InvalidParameterRegionSize { expected, actual } => write!(
+                f,
+                "Unexpected parameter payload size: expected {}, got {}",
+                expected, actual
+            ),
+            DenseGemmError::WeightSizeMismatch { expected, actual } => write!(
+                f,
+                "Weight matrix size mismatch: expected {}, got {}",
+                expected, actual
+            ),
+            DenseGemmError::InputSizeMismatch { expected, actual } => write!(
+                f,
+                "Input vector size mismatch: expected {}, got {}",
+                expected, actual
+            ),
+            DenseGemmError::OutputSizeMismatch { expected, actual } => write!(
+                f,
+                "Output vector size mismatch: expected {}, got {}",
+                expected, actual
+            ),
+            DenseGemmError::TfLite(err) => write!(f, "TensorFlow Lite error: {}", err),
+            DenseGemmError::Coral(err) => write!(f, "Coral error: {}", err),
+            DenseGemmError::Io(err) => write!(f, "I/O error: {}", err),
+        }
+    }
+}
+
+impl std::error::Error for DenseGemmError {}
+
+impl From<TfLiteError> for DenseGemmError {
+    fn from(value: TfLiteError) -> Self {
+        DenseGemmError::TfLite(value)
+    }
+}
+
+impl From<CoralError> for DenseGemmError {
+    fn from(value: CoralError) -> Self {
+        DenseGemmError::Coral(value)
+    }
+}
+
+impl From<std::io::Error> for DenseGemmError {
+    fn from(value: std::io::Error) -> Self {
+        DenseGemmError::Io(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Region {
+    start: usize,
+    end: usize,
+}
+
+impl Region {
+    fn size(&self) -> usize {
+        self.end.saturating_sub(self.start)
+    }
+}
+
+struct FlatTable<'a> {
+    data: &'a [u8],
+    table_offset: usize,
+    vtable_offset: usize,
+    vtable_len: usize,
+}
+
+impl FlatTable<'_> {
+    fn field_offset(&self, field_id: usize) -> Result<Option<usize>, DenseGemmError> {
+        let entry = self
+            .vtable_offset
+            .checked_add(4)
+            .and_then(|v| v.checked_add(field_id.saturating_mul(2)))
+            .ok_or_else(|| DenseGemmError::InvalidTemplate("vtable entry overflow".to_string()))?;
+        if entry + 2 > self.vtable_offset + self.vtable_len {
+            return Ok(None);
+        }
+
+        let rel = read_u16(self.data, entry)? as usize;
+        if rel == 0 {
+            return Ok(None);
+        }
+
+        let abs = self
+            .table_offset
+            .checked_add(rel)
+            .ok_or_else(|| DenseGemmError::InvalidTemplate("field offset overflow".to_string()))?;
+        if abs > self.data.len() {
+            return Err(DenseGemmError::InvalidTemplate(format!(
+                "field {} offset {} out of range",
+                field_id, abs
+            )));
+        }
+        Ok(Some(abs))
+    }
+}
+
+#[derive(Debug)]
+struct ExecutableView {
+    type_value: i16,
+    parameter_region: Option<Region>,
+}
+
+#[derive(Debug)]
+struct PackageView {
+    executables: Vec<ExecutableView>,
+}
+
+fn invalid_template(message: impl Into<String>) -> DenseGemmError {
+    DenseGemmError::InvalidTemplate(message.into())
+}
+
+fn checked_slice<'a>(
+    data: &'a [u8],
+    start: usize,
+    len: usize,
+    what: &str,
+) -> Result<&'a [u8], DenseGemmError> {
+    let end = start
+        .checked_add(len)
+        .ok_or_else(|| invalid_template(format!("{} range overflow", what)))?;
+    if end > data.len() {
+        return Err(invalid_template(format!(
+            "{} out of bounds: start={} len={} data_len={}",
+            what,
+            start,
+            len,
+            data.len()
+        )));
+    }
+    Ok(&data[start..end])
+}
+
+fn read_u16(data: &[u8], offset: usize) -> Result<u16, DenseGemmError> {
+    let bytes = checked_slice(data, offset, 2, "u16 read")?;
+    Ok(u16::from_le_bytes([bytes[0], bytes[1]]))
+}
+
+fn read_i16(data: &[u8], offset: usize) -> Result<i16, DenseGemmError> {
+    let bytes = checked_slice(data, offset, 2, "i16 read")?;
+    Ok(i16::from_le_bytes([bytes[0], bytes[1]]))
+}
+
+fn read_u32(data: &[u8], offset: usize) -> Result<u32, DenseGemmError> {
+    let bytes = checked_slice(data, offset, 4, "u32 read")?;
+    Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+fn read_i32(data: &[u8], offset: usize) -> Result<i32, DenseGemmError> {
+    let bytes = checked_slice(data, offset, 4, "i32 read")?;
+    Ok(i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+fn parse_root_table<'a>(
+    data: &'a [u8],
+    root_offset: usize,
+    file_identifier: Option<&[u8; 4]>,
+) -> Result<FlatTable<'a>, DenseGemmError> {
+    checked_slice(data, root_offset, 4, "root table")?;
+
+    if let Some(id) = file_identifier {
+        let got = checked_slice(data, root_offset + 4, 4, "file identifier")?;
+        if got != id {
+            return Err(invalid_template(format!(
+                "identifier mismatch: expected {:?}, got {:?}",
+                id, got
+            )));
+        }
+    }
+
+    let table_rel = read_u32(data, root_offset)? as usize;
+    let table_offset = root_offset
+        .checked_add(table_rel)
+        .ok_or_else(|| invalid_template("table pointer overflow"))?;
+    checked_slice(data, table_offset, 4, "table pointer")?;
+
+    let vtable_rel = read_i32(data, table_offset)?;
+    if vtable_rel == 0 {
+        return Err(invalid_template("invalid vtable relative offset 0"));
+    }
+
+    let vtable_offset = if vtable_rel > 0 {
+        table_offset
+            .checked_sub(vtable_rel as usize)
+            .ok_or_else(|| invalid_template("vtable underflow"))?
+    } else {
+        table_offset
+            .checked_add((-vtable_rel) as usize)
+            .ok_or_else(|| invalid_template("vtable overflow"))?
+    };
+
+    let vtable_len = read_u16(data, vtable_offset)? as usize;
+    let object_len = read_u16(data, vtable_offset + 2)? as usize;
+    if vtable_len < 4 || vtable_len % 2 != 0 {
+        return Err(invalid_template(format!(
+            "invalid vtable length {}",
+            vtable_len
+        )));
+    }
+    if object_len < 4 {
+        return Err(invalid_template(format!(
+            "invalid object length {}",
+            object_len
+        )));
+    }
+    checked_slice(data, vtable_offset, vtable_len, "vtable bounds")?;
+    checked_slice(data, table_offset, object_len, "table bounds")?;
+
+    Ok(FlatTable {
+        data,
+        table_offset,
+        vtable_offset,
+        vtable_len,
+    })
+}
+
+fn read_offset_object(
+    table: &FlatTable<'_>,
+    field_id: usize,
+) -> Result<Option<usize>, DenseGemmError> {
+    let Some(off) = table.field_offset(field_id)? else {
+        return Ok(None);
+    };
+
+    let rel = read_u32(table.data, off)? as usize;
+    if rel == 0 {
+        return Ok(None);
+    }
+
+    let target = off
+        .checked_add(rel)
+        .ok_or_else(|| invalid_template("offset-object overflow"))?;
+    checked_slice(table.data, target, 4, "offset-object target")?;
+    Ok(Some(target))
+}
+
+fn read_vector_region(
+    table: &FlatTable<'_>,
+    field_id: usize,
+) -> Result<Option<Region>, DenseGemmError> {
+    let Some(target) = read_offset_object(table, field_id)? else {
+        return Ok(None);
+    };
+
+    let vlen = read_u32(table.data, target)? as usize;
+    let start = target
+        .checked_add(4)
+        .ok_or_else(|| invalid_template("vector start overflow"))?;
+    let end = start
+        .checked_add(vlen)
+        .ok_or_else(|| invalid_template("vector end overflow"))?;
+    checked_slice(table.data, start, vlen, "vector data")?;
+    Ok(Some(Region { start, end }))
+}
+
+fn read_i16_field(
+    table: &FlatTable<'_>,
+    field_id: usize,
+    default: i16,
+) -> Result<i16, DenseGemmError> {
+    let Some(off) = table.field_offset(field_id)? else {
+        return Ok(default);
+    };
+    read_i16(table.data, off)
+}
+
+fn scan_dwn1_candidates(data: &[u8]) -> Vec<usize> {
+    let mut out = Vec::new();
+    if data.len() < 8 {
+        return out;
+    }
+
+    for idx in 0..=(data.len() - 4) {
+        if &data[idx..idx + 4] == DWN1_IDENTIFIER && idx >= 4 {
+            let root = idx - 4;
+            if !out.contains(&root) {
+                out.push(root);
+            }
+        }
+    }
+    out
+}
+
+fn parse_multi_executable_layout(multi_bytes: &[u8]) -> Result<Vec<Region>, DenseGemmError> {
+    let table = parse_root_table(multi_bytes, 0, None)?;
+    let Some(vec_target) = read_offset_object(&table, 0)? else {
+        return Err(invalid_template(
+            "MultiExecutable.serialized_executables missing",
+        ));
+    };
+
+    let length = read_u32(multi_bytes, vec_target)? as usize;
+    let vec_start = vec_target
+        .checked_add(4)
+        .ok_or_else(|| invalid_template("serialized_executables vector start overflow"))?;
+    let vec_bytes = length
+        .checked_mul(4)
+        .ok_or_else(|| invalid_template("serialized_executables vector length overflow"))?;
+    checked_slice(
+        multi_bytes,
+        vec_start,
+        vec_bytes,
+        "serialized_executables vector",
+    )?;
+
+    let mut regions = Vec::with_capacity(length);
+    for i in 0..length {
+        let slot = vec_start + i * 4;
+        let rel = read_u32(multi_bytes, slot)? as usize;
+        let str_off = slot
+            .checked_add(rel)
+            .ok_or_else(|| invalid_template("serialized executable string offset overflow"))?;
+        let str_len = read_u32(multi_bytes, str_off)? as usize;
+        let str_start = str_off
+            .checked_add(4)
+            .ok_or_else(|| invalid_template("serialized executable string start overflow"))?;
+        checked_slice(
+            multi_bytes,
+            str_start,
+            str_len,
+            "serialized executable string data",
+        )?;
+        regions.push(Region {
+            start: str_start,
+            end: str_start + str_len,
+        });
+    }
+
+    Ok(regions)
+}
+
+fn inspect_packages(blob: &[u8]) -> Vec<PackageView> {
+    let mut packages = Vec::new();
+
+    for root_offset in scan_dwn1_candidates(blob) {
+        let pkg = (|| -> Result<PackageView, DenseGemmError> {
+            let package_table = parse_root_table(blob, root_offset, Some(DWN1_IDENTIFIER))?;
+            let Some(multi_region) = read_vector_region(&package_table, 1)? else {
+                return Err(invalid_template("package missing multi_executable"));
+            };
+            let multi_bytes = &blob[multi_region.start..multi_region.end];
+            let executable_regions = parse_multi_executable_layout(multi_bytes)?;
+
+            let mut executables = Vec::with_capacity(executable_regions.len());
+            for executable_region in executable_regions {
+                let abs_start = multi_region
+                    .start
+                    .checked_add(executable_region.start)
+                    .ok_or_else(|| invalid_template("executable region start overflow"))?;
+                let abs_end = multi_region
+                    .start
+                    .checked_add(executable_region.end)
+                    .ok_or_else(|| invalid_template("executable region end overflow"))?;
+                if abs_end > blob.len() || abs_start >= abs_end {
+                    return Err(invalid_template("executable region out of bounds"));
+                }
+
+                let executable_blob = &blob[abs_start..abs_end];
+                let executable_table = parse_root_table(executable_blob, 0, None)?;
+                let type_value = read_i16_field(&executable_table, 13, 0)?;
+                let parameter_region = read_vector_region(&executable_table, 6)?;
+                let parameter_region = parameter_region.map(|region| Region {
+                    start: abs_start + region.start,
+                    end: abs_start + region.end,
+                });
+
+                executables.push(ExecutableView {
+                    type_value,
+                    parameter_region,
+                });
+            }
+
+            Ok(PackageView { executables })
+        })();
+
+        if let Ok(parsed) = pkg {
+            packages.push(parsed);
+        }
+    }
+
+    packages
+}
+
+fn select_dense_parameter_region(packages: &[PackageView]) -> Result<Region, DenseGemmError> {
+    let mut first_nonempty = None;
+    for package in packages {
+        for executable in &package.executables {
+            let Some(region) = executable.parameter_region else {
+                continue;
+            };
+            if region.size() == 0 {
+                continue;
+            }
+            if first_nonempty.is_none() {
+                first_nonempty = Some(region);
+            }
+            if executable.type_value == EXECUTABLE_TYPE_PARAMETER_CACHING {
+                return Ok(region);
+            }
+        }
+    }
+    first_nonempty.ok_or(DenseGemmError::ParameterRegionNotFound)
+}
+
+pub fn dense_256_param_offset(row: usize, col: usize) -> Result<usize, DenseGemmError> {
+    if row >= DENSE_GEMM256_DIM || col >= DENSE_GEMM256_DIM {
+        return Err(invalid_template(format!(
+            "row/col out of range: row={} col={} (expected < {})",
+            row, col, DENSE_GEMM256_DIM
+        )));
+    }
+
+    Ok(
+        (col / 64) * 16384
+            + (row / 64) * 4096
+            + ((row % 64) / 4) * 256
+            + (col % 64) * 4
+            + (row % 4),
+    )
+}
+
+#[derive(Clone)]
+pub struct DenseGemm256Template {
+    model_bytes: Vec<u8>,
+    parameter_region: Region,
+}
+
+impl DenseGemm256Template {
+    pub fn from_file(model_path: &str) -> Result<Self, DenseGemmError> {
+        let model_bytes = std::fs::read(model_path)?;
+        Self::from_bytes(&model_bytes)
+    }
+
+    pub fn from_bytes(model_bytes: &[u8]) -> Result<Self, DenseGemmError> {
+        let packages = inspect_packages(model_bytes);
+        if packages.is_empty() {
+            return Err(invalid_template("no valid DWN1 package found"));
+        }
+
+        let parameter_region = select_dense_parameter_region(&packages)?;
+        let actual_size = parameter_region.size();
+        if actual_size != DENSE_GEMM256_WEIGHT_BYTES {
+            return Err(DenseGemmError::InvalidParameterRegionSize {
+                expected: DENSE_GEMM256_WEIGHT_BYTES,
+                actual: actual_size,
+            });
+        }
+
+        Ok(Self {
+            model_bytes: model_bytes.to_vec(),
+            parameter_region,
+        })
+    }
+
+    pub fn model_bytes(&self) -> &[u8] {
+        &self.model_bytes
+    }
+
+    pub fn parameter_region(&self) -> (usize, usize) {
+        (self.parameter_region.start, self.parameter_region.end)
+    }
+
+    pub fn payload_bytes(&self) -> &[u8] {
+        &self.model_bytes[self.parameter_region.start..self.parameter_region.end]
+    }
+
+    pub fn payload_byte_from_qi8(weight_q: i8) -> u8 {
+        ((weight_q as i16) + DENSE_GEMM256_ZERO_POINT) as u8
+    }
+
+    pub fn qi8_from_payload_byte(payload: u8) -> i8 {
+        (payload as i16 - DENSE_GEMM256_ZERO_POINT) as i8
+    }
+
+    fn payload_bytes_mut(&mut self) -> Result<&mut [u8], DenseGemmError> {
+        let end = self.parameter_region.end;
+        if end > self.model_bytes.len() || self.parameter_region.start >= end {
+            return Err(invalid_template("parameter payload region out of bounds"));
+        }
+        Ok(&mut self.model_bytes[self.parameter_region.start..end])
+    }
+
+    pub fn fill_matrix_qi8(&mut self, value_q: i8) -> Result<(), DenseGemmError> {
+        let encoded = Self::payload_byte_from_qi8(value_q);
+        self.payload_bytes_mut()?.fill(encoded);
+        Ok(())
+    }
+
+    pub fn set_weight_qi8(
+        &mut self,
+        row: usize,
+        col: usize,
+        weight_q: i8,
+    ) -> Result<(), DenseGemmError> {
+        let offset = dense_256_param_offset(row, col)?;
+        let payload = self.payload_bytes_mut()?;
+        payload[offset] = Self::payload_byte_from_qi8(weight_q);
+        Ok(())
+    }
+
+    pub fn set_weights_from_slice(
+        &mut self,
+        weights_row_major_q: &[i8],
+    ) -> Result<(), DenseGemmError> {
+        if weights_row_major_q.len() != DENSE_GEMM256_WEIGHT_COUNT {
+            return Err(DenseGemmError::WeightSizeMismatch {
+                expected: DENSE_GEMM256_WEIGHT_COUNT,
+                actual: weights_row_major_q.len(),
+            });
+        }
+
+        self.fill_matrix_qi8(0)?;
+        let payload = self.payload_bytes_mut()?;
+        for row in 0..DENSE_GEMM256_DIM {
+            for col in 0..DENSE_GEMM256_DIM {
+                let source_index = row * DENSE_GEMM256_DIM + col;
+                let target_index = dense_256_param_offset(row, col)?;
+                payload[target_index] =
+                    Self::payload_byte_from_qi8(weights_row_major_q[source_index]);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn set_weights(
+        &mut self,
+        weights_row_major_q: &[i8; DENSE_GEMM256_WEIGHT_COUNT],
+    ) -> Result<(), DenseGemmError> {
+        self.set_weights_from_slice(weights_row_major_q)
+    }
+
+    pub fn set_identity(&mut self, active_q: i8) -> Result<(), DenseGemmError> {
+        self.fill_matrix_qi8(0)?;
+        for i in 0..DENSE_GEMM256_DIM {
+            self.set_weight_qi8(i, i, active_q)?;
+        }
+        Ok(())
+    }
+
+    pub fn set_shift_plus1(&mut self, active_q: i8) -> Result<(), DenseGemmError> {
+        self.fill_matrix_qi8(0)?;
+        for col in 0..DENSE_GEMM256_DIM {
+            let row = (col + 1) % DENSE_GEMM256_DIM;
+            self.set_weight_qi8(row, col, active_q)?;
+        }
+        Ok(())
+    }
+
+    pub fn set_shift_minus1(&mut self, active_q: i8) -> Result<(), DenseGemmError> {
+        self.fill_matrix_qi8(0)?;
+        for col in 0..DENSE_GEMM256_DIM {
+            let row = (col + DENSE_GEMM256_DIM - 1) % DENSE_GEMM256_DIM;
+            self.set_weight_qi8(row, col, active_q)?;
+        }
+        Ok(())
+    }
+
+    pub fn set_diagonal(&mut self, diagonal_q: &[i8]) -> Result<(), DenseGemmError> {
+        if diagonal_q.len() != DENSE_GEMM256_DIM {
+            return Err(DenseGemmError::WeightSizeMismatch {
+                expected: DENSE_GEMM256_DIM,
+                actual: diagonal_q.len(),
+            });
+        }
+
+        self.fill_matrix_qi8(0)?;
+        for (idx, value_q) in diagonal_q.iter().enumerate() {
+            self.set_weight_qi8(idx, idx, *value_q)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct GemmTemplate256 {
+    template: DenseGemm256Template,
+}
+
+impl GemmTemplate256 {
+    pub fn from_compiled_template_file(model_path: &str) -> Result<Self, DenseGemmError> {
+        Ok(Self {
+            template: DenseGemm256Template::from_file(model_path)?,
+        })
+    }
+
+    pub fn from_compiled_template_bytes(model_bytes: &[u8]) -> Result<Self, DenseGemmError> {
+        Ok(Self {
+            template: DenseGemm256Template::from_bytes(model_bytes)?,
+        })
+    }
+
+    pub fn template(&self) -> &DenseGemm256Template {
+        &self.template
+    }
+
+    pub fn template_mut(&mut self) -> &mut DenseGemm256Template {
+        &mut self.template
+    }
+
+    pub fn set_weights(
+        &mut self,
+        weights_row_major_q: &[i8; DENSE_GEMM256_WEIGHT_COUNT],
+    ) -> Result<(), DenseGemmError> {
+        self.template.set_weights(weights_row_major_q)
+    }
+
+    pub fn set_weights_from_slice(
+        &mut self,
+        weights_row_major_q: &[i8],
+    ) -> Result<(), DenseGemmError> {
+        self.template.set_weights_from_slice(weights_row_major_q)
+    }
+
+    pub fn execute(
+        &self,
+        delegate: &EdgeTPUDelegate,
+        input: &[i8; DENSE_GEMM256_DIM],
+    ) -> Result<[i8; DENSE_GEMM256_DIM], DenseGemmError> {
+        let interpreter = CoralInterpreter::new_from_memory(self.template.model_bytes(), delegate)?;
+        let input_size = interpreter.input_tensor_byte_size(0)?;
+        if input_size != DENSE_GEMM256_DIM {
+            return Err(DenseGemmError::InputSizeMismatch {
+                expected: DENSE_GEMM256_DIM,
+                actual: input_size,
+            });
+        }
+        let output_size = interpreter.output_tensor_byte_size(0)?;
+        if output_size != DENSE_GEMM256_DIM {
+            return Err(DenseGemmError::OutputSizeMismatch {
+                expected: DENSE_GEMM256_DIM,
+                actual: output_size,
+            });
+        }
+
+        let mut input_bytes = [0u8; DENSE_GEMM256_DIM];
+        for (dst, src) in input_bytes.iter_mut().zip(input.iter()) {
+            *dst = *src as u8;
+        }
+        interpreter.copy_to_input_tensor(0, &input_bytes)?;
+        interpreter.run()?;
+
+        let mut output_bytes = [0u8; DENSE_GEMM256_DIM];
+        interpreter.copy_from_output_tensor(0, &mut output_bytes)?;
+        let mut output = [0i8; DENSE_GEMM256_DIM];
+        for (dst, src) in output.iter_mut().zip(output_bytes.iter()) {
+            *dst = *src as i8;
+        }
+
+        Ok(output)
+    }
+
+    pub fn execute_with_new_delegate(
+        &self,
+        input: &[i8; DENSE_GEMM256_DIM],
+    ) -> Result<[i8; DENSE_GEMM256_DIM], DenseGemmError> {
+        let device = CoralDevice::new()?;
+        let delegate = device.create_delegate()?;
+        self.execute(&delegate, input)
     }
 }
 
@@ -1053,6 +1752,32 @@ pub fn version() -> String {
                 Err(_) => "Unknown".to_string(),
             },
             Err(_) => "Unknown".to_string(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dense_offset_formula_matches_known_points() {
+        assert_eq!(dense_256_param_offset(0, 0).unwrap(), 0);
+        assert_eq!(dense_256_param_offset(1, 0).unwrap(), 1);
+        assert_eq!(dense_256_param_offset(0, 1).unwrap(), 4);
+        assert_eq!(dense_256_param_offset(4, 0).unwrap(), 256);
+        assert_eq!(dense_256_param_offset(64, 0).unwrap(), 4096);
+        assert_eq!(dense_256_param_offset(0, 64).unwrap(), 16384);
+        assert_eq!(dense_256_param_offset(255, 255).unwrap(), 65535);
+    }
+
+    #[test]
+    fn dense_payload_encoding_round_trips() {
+        let values = [-128i8, -127, -1, 0, 1, 63, 127];
+        for value in values {
+            let encoded = DenseGemm256Template::payload_byte_from_qi8(value);
+            let decoded = DenseGemm256Template::qi8_from_payload_byte(encoded);
+            assert_eq!(decoded, value);
         }
     }
 }

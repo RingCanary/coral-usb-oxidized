@@ -100,6 +100,7 @@ cargo run --example simple_delegate
 cargo run --example tflite_test
 cargo run --example tflite_standard_example
 cargo run --example cpu_vs_edgetpu_mvp -- --help
+cargo run --example gemm_int8 -- <dense_template_edgetpu.tflite> shift_plus1 ramp
 ```
 
 ## Offline EdgeTPU package extractor
@@ -155,6 +156,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `tools/strace_usb_scaling.py` (USBDEVFS submit/reap scaling fit from strace summaries)
 - `tools/edgetpu_delegate_smoke.sh` (minimal delegate exercise without TensorFlow Lite C libs)
 - `examples/inference_dump.rs` (single-invoke deterministic output dump for tensorizer validation)
+- `examples/gemm_int8.rs` (Rust-native template patch + execute + verification loop)
 
 Detailed workflow and caveats are documented in `docs/usb_tracing.md`.
 
@@ -213,6 +215,24 @@ eval "$(./tools/bootstrap_arch_stack.sh print-env)"
 cargo run --example inference_dump -- "$latest/dense_256x256_quant_edgetpu.tflite" ramp
 cargo run --example inference_dump -- "$latest/dense_256x256_quant_edgetpu_patched_zero.tflite" ramp
 ```
+
+### Rust-native Dense GEMM template path
+
+Use the recovered 256x256 layout and in-memory patch path directly from Rust
+(no Python patcher required for weight replacement):
+
+```bash
+eval "$(./tools/bootstrap_arch_stack.sh print-env)"
+latest="$(ls -1dt traces/dense-template-* | head -n1)"
+cargo run --example gemm_int8 -- \
+  "$latest/dense_256x256_quant_edgetpu.tflite" shift_plus1 ramp
+```
+
+Library API entry points:
+
+- `DenseGemm256Template` (DWN1 parameter-region discovery + matrix patching)
+- `GemmTemplate256` (template ownership + delegate-backed execution)
+- `dense_256_param_offset` (recovered restride formula)
 
 ### Real inference benchmark example
 

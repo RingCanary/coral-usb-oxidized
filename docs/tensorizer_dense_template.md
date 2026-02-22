@@ -144,3 +144,19 @@ Next step for GEMM path:
 2. Add host-side dequantized expected-value checks for representative matrix
    blocks.
 3. Wrap into a stable tensorizer API around template reuse.
+
+## 2026-02-22 update: Rust-native tensorizer path
+
+The template patch + execute loop is now available directly in crate code:
+
+- `DenseGemm256Template` for DWN1 parameter-region discovery and matrix patching
+- `GemmTemplate256` for delegate-backed execution from in-memory patched model bytes
+- `dense_256_param_offset(row, col)` for the recovered 256x256 restride mapping
+
+Reference example:
+
+```bash
+cargo run --example gemm_int8 -- \
+  traces/dense-template-20260221T120206Z/dense_256x256_quant_edgetpu.tflite \
+  shift_plus1 ramp
+```

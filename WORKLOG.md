@@ -562,3 +562,77 @@ All runs exited with `command_exit=0`.
 4. Fixed-template byte sweeps (same compiled template, varying patched bytes)
    showed linear lane-0 output progression around center `128`, validating
    direct byte-level control for tensorizer weight encoding.
+
+## 2026-02-22 (Rust-native GEMM template API)
+
+### New library capabilities
+
+1. Added in-memory interpreter constructor:
+   - `CoralInterpreter::new_from_memory(&[u8], &EdgeTPUDelegate)`
+2. Added Rust-native DWN1/FlatBuffer inspection for compiled templates:
+   - package scan by `DWN1` marker
+   - executable parsing and `parameters` vector region discovery
+   - automatic preference for `PARAMETER_CACHING` executable payload
+3. Added Dense tensorizer types:
+   - `DenseGemm256Template`
+   - `GemmTemplate256`
+4. Added public constants and mapping helpers:
+   - `DENSE_GEMM256_DIM`
+   - `DENSE_GEMM256_WEIGHT_COUNT`
+   - `DENSE_GEMM256_WEIGHT_BYTES`
+   - `DENSE_GEMM256_ZERO_POINT`
+   - `dense_256_param_offset(row, col)`
+
+### New API behavior
+
+1. `DenseGemm256Template` can now:
+   - locate and validate the `65536`-byte Dense parameter payload
+   - encode/decode quantized weights (`q_i8 <-> payload_u8`)
+   - patch weights by full matrix or structured modes:
+     - identity
+     - shift plus/minus one
+     - diagonal vector
+2. `GemmTemplate256` can execute patched templates directly on EdgeTPU:
+   - creates interpreter from patched bytes in memory
+   - copies int8 input vector (`256`)
+   - invokes delegate path and returns int8 output vector (`256`)
+
+### New Rust example
+
+1. Added `examples/gemm_int8.rs`:
+   - loads compiled Dense template
+   - patches matrix entirely in Rust
+   - runs inference via `GemmTemplate256::execute`
+   - compares observed output against expected output for:
+     - identity
+     - shift plus one
+     - shift minus one
+
+### Validation
+
+1. `cargo fmt`
+2. `cargo check --lib`
+3. `cargo check --tests`
+4. `cargo check --example gemm_int8`
+
+### Hardware verification (Rust-only path)
+
+Environment:
+
+```bash
+eval "$(./tools/bootstrap_arch_stack.sh print-env)"
+```
+
+Commands and outcomes:
+
+1. `cargo run --example gemm_int8 -- traces/dense-template-20260221T120206Z/dense_256x256_quant_edgetpu.tflite shift_plus1 ramp`
+   - output matched expected shift-by-1 exactly
+   - `mismatches(|delta|>1)=0`, `max_abs_delta=0`
+2. `cargo run --example gemm_int8 -- traces/dense-template-20260221T120206Z/dense_256x256_quant_edgetpu.tflite identity ramp`
+   - output matched expected identity exactly
+   - `mismatches(|delta|>1)=0`, `max_abs_delta=0`
+3. `cargo run --example gemm_int8 -- traces/dense-template-20260221T120206Z/dense_256x256_quant_edgetpu.tflite shift_minus1 ramp`
+   - output matched expected shift-by-minus-1 exactly
+   - `mismatches(|delta|>1)=0`, `max_abs_delta=0`
+4. `cargo run --example gemm_int8 -- traces/dense-template-20260221T120206Z/dense_256x256_quant_edgetpu.tflite diag_ramp ramp`
+   - completed successfully with nontrivial transformed output profile
