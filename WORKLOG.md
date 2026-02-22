@@ -636,3 +636,68 @@ Commands and outcomes:
    - `mismatches(|delta|>1)=0`, `max_abs_delta=0`
 4. `cargo run --example gemm_int8 -- traces/dense-template-20260221T120206Z/dense_256x256_quant_edgetpu.tflite diag_ramp ramp`
    - completed successfully with nontrivial transformed output profile
+
+## 2026-02-22 (dimension scaling + prepared execution path)
+
+### New API additions
+
+1. Added dimension-aware mapping helper:
+   - `dense_param_offset(input_dim, output_dim, row, col)`
+2. Added dimension-aware template/executor types:
+   - `DenseGemmTemplate`
+   - `PreparedDenseGemm`
+3. Added interpreter-reuse path for fixed 256 templates:
+   - `PreparedGemm256`
+   - `GemmTemplate256::prepare(...)`
+4. Added dynamic Rust example:
+   - `examples/gemm_int8_dynamic.rs`
+5. Updated `examples/gemm_int8.rs`:
+   - optional `runs` arg
+   - executes via prepared interpreter (reuse path)
+
+### Dimension scaling sweep runs
+
+Executed pipeline runs (`warmup=1`, `runs=5`) for:
+
+1. `256x256` -> `traces/dense-template-256x256-20260222T062154Z`
+2. `512x512` -> `traces/dense-template-512x512-20260222T062006Z`
+3. `1024x1024` -> `traces/dense-template-1024x1024-20260222T062017Z`
+4. `2048x2048` -> `traces/dense-template-2048x2048-20260222T062027Z`
+5. `2304x2304` -> `traces/dense-template-2304x2304-20260222T062229Z`
+6. `2688x2688` -> `traces/dense-template-2688x2688-20260222T062240Z`
+7. `2752x2752` -> `traces/dense-template-2752x2752-20260222T062306Z`
+8. `2816x2816` -> `traces/dense-template-2816x2816-20260222T062218Z`
+9. `3072x3072` -> `traces/dense-template-3072x3072-20260222T062252Z`
+10. `4096x4096` -> `traces/dense-template-4096x4096-20260222T062039Z`
+
+### Scaling findings
+
+1. Compiler acceptance is solid through `4096x4096` for single-op Dense.
+2. Two distinct runtime regimes were observed:
+   - Cached regime (`256`..`2688`):
+     - compiler emits `2` executables
+     - parameter bytes kept on-chip
+     - throughput climbs up to about `16 GMAC/s`
+   - Streaming regime (`2752` and above):
+     - compiler emits `1` executable
+     - on-chip parameter caching drops to `0`
+     - off-chip parameter streaming dominates
+     - throughput collapses to about `0.44 GMAC/s`
+3. Crossover is narrow between `2688` and `2752` in this environment.
+
+### Layout mapping generalization
+
+1. Ran single-hot probe suites:
+   - `traces/dense-layout-probe-512x512-20260222T062104Z`
+   - `traces/dense-layout-probe-1024x1024-20260222T062119Z`
+2. All sampled offsets matched the generalized formula implemented in
+   `dense_param_offset(...)`.
+
+### Prepared execution validation
+
+1. `cargo run --example gemm_int8 -- traces/dense-template-256x256-20260222T062154Z/dense_256x256_quant_edgetpu.tflite shift_plus1 ramp 30`
+   - verified exact shift behavior with interpreter reuse
+   - measured `avg_ms=0.216` over 30 runs
+2. `cargo run --example gemm_int8_dynamic -- traces/dense-template-1024x1024-20260222T062017Z/dense_1024x1024_quant_edgetpu.tflite 1024 1024 identity ramp 30`
+   - validated dimension-aware Rust path on hardware
+   - output preview matched expected identity behavior

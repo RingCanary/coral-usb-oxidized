@@ -259,10 +259,10 @@ fi
 
 if ((RUN_BENCHMARK == 1)); then
   BENCH_COMPILED_LOG="${OUT_DIR}/bench_compiled.log"
-  BENCH_PATCHED_LOG="${OUT_DIR}/bench_patched.log"
   echo "[bench] Running inference_benchmark on compiled model..."
   cargo run --example inference_benchmark -- "${EDGETPU_MODEL}" 5 1 | tee "${BENCH_COMPILED_LOG}"
   if [[ -n "${PATCHED_MODEL}" ]]; then
+    BENCH_PATCHED_LOG="${OUT_DIR}/bench_patched.log"
     echo "[bench] Running inference_benchmark on patched model..."
     cargo run --example inference_benchmark -- "${PATCHED_MODEL}" 5 1 | tee "${BENCH_PATCHED_LOG}"
   fi

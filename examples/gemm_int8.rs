@@ -4,6 +4,7 @@ use coral_usb_oxidized::{
 use std::env;
 use std::error::Error;
 use std::path::Path;
+use std::time::Instant;
 
 #[derive(Clone, Copy, Debug)]
 enum MatrixMode {
@@ -150,7 +151,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         eprintln!(
-            "Usage: cargo run --example gemm_int8 -- <dense_template_edgetpu.tflite> [matrix_mode] [input_mode]"
+            "Usage: cargo run --example gemm_int8 -- <dense_template_edgetpu.tflite> [matrix_mode] [input_mode] [runs]"
         );
         std::process::exit(2);
     }
@@ -158,6 +159,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let model_path = &args[1];
     let matrix_mode = parse_matrix_mode(args.get(2).map(String::as_str).unwrap_or("shift_plus1"))?;
     let input_mode = parse_input_mode(args.get(3).map(String::as_str).unwrap_or("ramp"))?;
+    let runs = args
+        .get(4)
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(1);
 
     if !Path::new(model_path).exists() {
         return Err(format!("model not found: {}", model_path).into());
@@ -167,6 +172,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Model template: {}", model_path);
     println!("Matrix mode: {:?}", matrix_mode);
     println!("Input mode: {:?}", input_mode);
+    println!("Runs: {}", runs);
 
     let device = CoralDevice::new()?;
     let delegate = device.create_delegate()?;
@@ -174,7 +180,26 @@ fn main() -> Result<(), Box<dyn Error>> {
     apply_matrix_mode(gemm.template_mut(), matrix_mode)?;
 
     let input = build_input(input_mode);
-    let output = gemm.execute(&delegate, &input)?;
+    let prepared = gemm.prepare(&delegate)?;
+    let mut output = [0i8; DENSE_GEMM256_DIM];
+    let mut total_ms = 0.0f64;
+    for run_idx in 0..runs {
+        let started = Instant::now();
+        let current = prepared.execute(&input)?;
+        total_ms += started.elapsed().as_secs_f64() * 1000.0;
+        if run_idx + 1 == runs {
+            output = current;
+        }
+    }
+
+    if runs > 1 {
+        println!(
+            "Latency: avg_ms={:.3} total_ms={:.3}",
+            total_ms / runs as f64,
+            total_ms
+        );
+    }
+
     preview("Input", &input, 32);
     preview("Output", &output, 32);
 

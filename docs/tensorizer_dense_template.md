@@ -160,3 +160,39 @@ cargo run --example gemm_int8 -- \
   traces/dense-template-20260221T120206Z/dense_256x256_quant_edgetpu.tflite \
   shift_plus1 ramp
 ```
+
+Dimension-aware Rust execution example:
+
+```bash
+cargo run --example gemm_int8_dynamic -- \
+  traces/dense-template-1024x1024-20260222T062017Z/dense_1024x1024_quant_edgetpu.tflite \
+  1024 1024 identity ramp 30
+```
+
+## 2026-02-22 update: dimension scaling sweep
+
+Observed from pipeline runs (`warmup=1`, `runs=5`) with identity kernels:
+
+| dim | avg ms | effective GMAC/s | on-chip params | off-chip params | executables |
+|---:|---:|---:|---|---|---:|
+| 256 | 0.225 | 0.291 | 64.00KiB | 0.00B | 2 |
+| 512 | 0.264 | 0.993 | 256.00KiB | 0.00B | 2 |
+| 1024 | 0.277 | 3.785 | 1.00MiB | 0.00B | 2 |
+| 2048 | 0.474 | 8.849 | 4.00MiB | 0.00B | 2 |
+| 2304 | 0.339 | 15.659 | 5.06MiB | 0.00B | 2 |
+| 2688 | 0.449 | 16.092 | 6.89MiB | 0.00B | 2 |
+| 2752 | 17.303 | 0.438 | 0.00B | 7.22MiB | 1 |
+| 3072 | 21.442 | 0.440 | 0.00B | 9.00MiB | 1 |
+| 4096 | 37.554 | 0.447 | 0.00B | 16.00MiB | 1 |
+
+Key result:
+
+- There is a sharp regime change between `2688` and `2752` where compiler output
+  flips from two-executable (parameter-caching) to one-executable streaming.
+- Past this point, throughput collapses from ~`16 GMAC/s` to ~`0.44 GMAC/s`,
+  indicating parameter streaming dominates runtime.
+
+Layout-map generalization checks:
+
+- Single-hot probes for `512x512` and `1024x1024` exactly match
+  `dense_param_offset(...)` (same 64x64 tile and 4-lane inner ordering).

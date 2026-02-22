@@ -101,6 +101,7 @@ cargo run --example tflite_test
 cargo run --example tflite_standard_example
 cargo run --example cpu_vs_edgetpu_mvp -- --help
 cargo run --example gemm_int8 -- <dense_template_edgetpu.tflite> shift_plus1 ramp
+cargo run --example gemm_int8_dynamic -- <dense_template_edgetpu.tflite> <input_dim> <output_dim> identity ramp
 ```
 
 ## Offline EdgeTPU package extractor
@@ -157,6 +158,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `tools/edgetpu_delegate_smoke.sh` (minimal delegate exercise without TensorFlow Lite C libs)
 - `examples/inference_dump.rs` (single-invoke deterministic output dump for tensorizer validation)
 - `examples/gemm_int8.rs` (Rust-native template patch + execute + verification loop)
+- `examples/gemm_int8_dynamic.rs` (dimension-aware Rust template patch + prepared execution loop)
 
 Detailed workflow and caveats are documented in `docs/usb_tracing.md`.
 
@@ -232,7 +234,11 @@ Library API entry points:
 
 - `DenseGemm256Template` (DWN1 parameter-region discovery + matrix patching)
 - `GemmTemplate256` (template ownership + delegate-backed execution)
+- `PreparedGemm256` (interpreter reuse for repeated execution with fixed weights)
+- `DenseGemmTemplate` (dimension-aware matrix patch/execute path for sizes beyond 256)
+- `PreparedDenseGemm` (dimension-aware prepared executor)
 - `dense_256_param_offset` (recovered restride formula)
+- `dense_param_offset` (dimension-aware restride mapping)
 
 ### Real inference benchmark example
 
