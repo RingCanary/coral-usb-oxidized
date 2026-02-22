@@ -38,13 +38,13 @@ Defaults:
 - `rows=8`
 - `runs=3`
 - `warmup=1`
-- `qmax=24`
+- `qmax=32`
 - `clip_percentile=100`
 - synthetic input rows when `--input-q` is omitted
 
 Recommended for CLIP checkpoints:
 
-- use `qmax` in the `20..32` range (defaults to `24`) to reduce accumulator
+- use `qmax` in the `24..48` range (defaults to `32`) to reduce accumulator
   saturation
 - use `--auto-qmax 16,20,24,32,48,64` to pick per-stage `qmax` based on
   calibration correlation/RMSE on the current stage input

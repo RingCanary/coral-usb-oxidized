@@ -92,9 +92,9 @@ fn usage(program: &str) {
     println!(
         "Usage: {program} <model.safetensors> <template_768x768.tflite> <template_768x3072.tflite> <template_3072x768.tflite> [layer_idx] [rows] [runs] [warmup] [qmax] [--clip-percentile P] [--auto-qmax A,B,C] [--input-q PATH] [--seed N]"
     );
-    println!("Defaults: layer_idx=0 rows=8 runs=3 warmup=1 qmax=24 clip_percentile=100 seed=1");
+    println!("Defaults: layer_idx=0 rows=8 runs=3 warmup=1 qmax=32 clip_percentile=100 seed=1");
     println!(
-        "Example: cargo run --example clip_vit_block_tpu_pipeline -- model.safetensors t768x768_edgetpu.tflite t768x3072_edgetpu.tflite t3072x768_edgetpu.tflite 0 8 3 1 24 --auto-qmax 16,20,24,32,48,64"
+        "Example: cargo run --example clip_vit_block_tpu_pipeline -- model.safetensors t768x768_edgetpu.tflite t768x3072_edgetpu.tflite t3072x768_edgetpu.tflite 0 8 3 1 32"
     );
 }
 
@@ -203,7 +203,7 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
     let qmax = positional
         .get(8)
         .and_then(|value| value.parse::<i32>().ok())
-        .unwrap_or(24);
+        .unwrap_or(32);
 
     if rows == 0 {
         return Err("rows must be >= 1".into());

@@ -109,7 +109,7 @@ cargo run --example transformer_linear_block -- 16 3 1 --no-attention --weight-s
 cargo run --example gemm_weight_load_verify -- 8 3 1 2
 cargo run --example clip_vit_safetensors_report -- /path/to/model.safetensors 0 127
 cargo run --example clip_vit_layer_tpu_probe -- /path/to/model.safetensors /path/to/template_edgetpu.tflite 0 q 20 127
-cargo run --example clip_vit_block_tpu_pipeline -- /path/to/model.safetensors /path/to/template_768x768_edgetpu.tflite /path/to/template_768x3072_edgetpu.tflite /path/to/template_3072x768_edgetpu.tflite 0 8 3 1 24 --auto-qmax 16,20,24,32,48,64
+cargo run --example clip_vit_block_tpu_pipeline -- /path/to/model.safetensors /path/to/template_768x768_edgetpu.tflite /path/to/template_768x3072_edgetpu.tflite /path/to/template_3072x768_edgetpu.tflite 0 8 3 1 32
 ```
 
 ## Offline EdgeTPU package extractor

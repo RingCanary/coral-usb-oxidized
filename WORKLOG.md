@@ -48,7 +48,7 @@ metrics.
    - `quantize_linear_out_in_to_row_major_qi8(...)` now forwards to the
      configurable API with `clip_percentile=100`.
 4. Upgraded `examples/clip_vit_block_tpu_pipeline.rs`:
-   - default `qmax` changed from `127` to `24`
+   - default `qmax` changed from `127` to `32`
    - added `--clip-percentile`
    - added `--auto-qmax A,B,C` per-stage auto-tune based on calibration
      correlation/RMSE
