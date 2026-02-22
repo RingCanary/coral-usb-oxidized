@@ -11,6 +11,7 @@ Dense template path.
 2. Host-side batched execution helper (`PreparedDenseGemm::execute_batch_rows`).
 3. Row-tiled large matrix-vector example using bundled `2688x2688` template.
 4. New Conv2D template toolchain with `uv` + `edgetpu_compiler`.
+5. New Conv2D layout probe and mixed Conv2D->Dense multi-op pipeline.
 
 ## 1) Fast restride path
 
@@ -95,6 +96,20 @@ Pipeline output mirrors Dense flow:
 - executable parser text/json
 - tensorizer inspect text/json
 - optional benchmark log (`--run-benchmark`)
+
+Conv payload-layout probing:
+
+- `tools/conv_layout_probe.py`
+- initial recovered 1x1 channel-mixer mapping candidate:
+  - `offset = 512 + ((ic // 4) * 256) + (oc * 4) + (ic % 4)`
+
+Mixed-op graph path:
+
+- `tools/generate_dense_conv_quant_tflite.py`
+- `tools/multiop_template_pipeline.sh`
+
+This adds a combined Conv2D + Dense graph workflow for chaining operator classes
+in one compiled model, closer to practical lightweight network blocks.
 
 ## Immediate next experiments
 

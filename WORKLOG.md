@@ -838,3 +838,60 @@ Executed pipeline runs (`warmup=1`, `runs=5`) for:
    - `rusb` init replay prototype
    - command-path emulation
    - feature-gated interpreter integration
+
+## 2026-02-22 (frontier runs: Conv2D probe + multi-op chain + tiled throughput)
+
+### Tiled GEMM validation and bug fix
+
+1. Ran `examples/gemm_tiled_rows` on hardware at `rows_total=8192`.
+2. Detected orientation bug in shift mode:
+   - fixed per-tile mapping from `set_weight_qi8(local_row, col, ...)` to
+     `set_weight_qi8(input_row, local_row, ...)`
+   - root cause: row/col orientation at write site (`row=input`, `col=output`).
+3. Post-fix validation:
+   - `identity_cycle`: `mismatches=0`, `max_abs_delta=0`
+   - `shift_plus1_cycle`: `mismatches=0`, `max_abs_delta=0`
+4. Added throughput print to example:
+   - `effective_gmac_per_s` based on `rows_total * tile_dim` MACs per run
+5. Measured throughput at `8192` rows (`runs=5`):
+   - `identity_cycle`: `avg_ms=119.554`, `effective_gmac_per_s=0.184`
+   - `shift_plus1_cycle`: `avg_ms=117.630`, `effective_gmac_per_s=0.187`
+
+### Conv2D pipeline runs
+
+1. Ran:
+   - `./tools/conv_template_pipeline.sh --height 224 --width 224 --in-channels 3 --out-channels 16 --kernel-size 3 --stride 1 --padding same --run-benchmark`
+   - compile mapped `CONV_2D=1`, `executables=2`, on-chip params `2.75KiB`
+   - benchmark avg `31.054 ms` (`1x224x224x3 -> 1x224x224x16`)
+2. Ran:
+   - `./tools/conv_template_pipeline.sh --height 224 --width 224 --in-channels 16 --out-channels 32 --kernel-size 1 --stride 1 --padding same --init-mode ones --run-benchmark`
+   - compile mapped `CONV_2D=1`, `executables=2`, on-chip params `1.25KiB`
+   - benchmark avg `69.552 ms` (`1x224x224x16 -> 1x224x224x32`)
+
+### Conv2D tensorizer probing additions
+
+1. Extended `tools/generate_conv2d_quant_tflite.py` with `single_hot` kernel mode.
+2. Added `tools/conv_layout_probe.py`:
+   - compiles single-hot Conv probes
+   - extracts parameter region payloads
+   - reports `mapping_candidate_offset` candidates per coordinate
+3. Hardware-backed run:
+   - `./tools/conv_layout_probe.py --height 32 --width 32 --in-channels 64 --out-channels 64 --kernel-size 1 --rep-samples 32`
+   - output: `traces/conv-layout-probe-20260222T071933Z/layout_probe.{json,txt}`
+4. Recovered 1x1 Conv2D channel-layout candidate (64x64 channels):
+   - `offset = 512 + ((ic // 4) * 256) + (oc * 4) + (ic % 4)`
+   - indicates a fixed `512`-byte prefix followed by Dense-like 4-lane packing.
+
+### Multi-op Conv2D->Dense chain
+
+1. Added `tools/generate_dense_conv_quant_tflite.py` (Conv2D -> GAP -> Dense).
+2. Added `tools/multiop_template_pipeline.sh` for one-command generation+compile+parse+inspect+benchmark.
+3. Ran:
+   - `./tools/multiop_template_pipeline.sh --run-benchmark`
+   - compiled model: `denseconv_16x16x16_conv64_k1_dense256_quant_edgetpu.tflite`
+   - mapped ops:
+     - `CONV_2D=1`
+     - `MEAN=1`
+     - `FULLY_CONNECTED=1`
+   - benchmark avg `0.286 ms` (`1x16x16x16 -> 1x256`)
+   - artifacts: `traces/multiop-template-20260222T071951Z/*`

@@ -152,10 +152,13 @@ For protocol-level and syscall-level capture helpers, use:
 - `tools/tensorizer_patch_edgetpu.py` (in-place parameter patcher for compiled `*_edgetpu.tflite`)
 - `tools/generate_dense_quant_tflite.py` (single-layer Dense INT8 model generator)
 - `tools/generate_conv2d_quant_tflite.py` (single-layer Conv2D INT8 model generator)
+- `tools/generate_dense_conv_quant_tflite.py` (Conv2D->Dense INT8 multi-op model generator)
 - `tools/bootstrap_edgetpu_compiler.sh` (local `edgetpu_compiler` bootstrap from Coral apt repo)
 - `tools/dense_template_pipeline.sh` (generate -> compile -> extract -> parse -> inspect pipeline)
 - `tools/conv_template_pipeline.sh` (Conv2D generate -> compile -> extract -> parse -> inspect pipeline)
+- `tools/multiop_template_pipeline.sh` (Conv2D->Dense generate -> compile -> extract -> parse -> inspect pipeline)
 - `tools/dense_layout_probe.py` (single-hot parameter-layout probe and offset mapping extractor)
+- `tools/conv_layout_probe.py` (single-hot Conv2D parameter-layout probe and offset candidate extraction)
 - `tools/dense_template_matrix_patch.py` (structured Dense matrix patcher using recovered layout map)
 - `tools/dense_quant_value_probe.py` (single-hot float->quant->compiled byte mapping verifier)
 - `tools/strace_usb_scaling.py` (USBDEVFS submit/reap scaling fit from strace summaries)
@@ -178,6 +181,8 @@ Current reverse-engineering notes:
 - `docs/tensorizer_mvp.md`
 - `docs/tensorizer_dense_template.md`
 - `docs/research_frontier_platform.md`
+- `docs/multiop_conv_dense.md`
+- `docs/conv_layout_probe.md`
 - `docs/dense_layout_probe.md`
 - `docs/schema/libedgetpu_executable.fbs`
 - `docs/external_research_2026-02-21.md`
@@ -234,6 +239,23 @@ Generate a single-op Conv2D template and run extraction + parser in one command:
 ```
 
 This provides a reproducible Conv2D RE path parallel to Dense-template work, including executable extraction and schema-aware parser output for transport/parameter analysis.
+
+### Conv2D layout probe workflow
+
+Recover candidate payload offsets for Conv2D single-hot kernel coordinates:
+
+```bash
+./tools/conv_layout_probe.py --height 32 --width 32 --in-channels 64 --out-channels 64 --kernel-size 1
+```
+
+### Multi-op Conv2D + Dense workflow
+
+Generate and compile a chained Conv2D->Dense model (useful stepping stone toward
+microgpt-adjacent mixed-layer acceleration experiments):
+
+```bash
+./tools/multiop_template_pipeline.sh --run-benchmark
+```
 
 ### Rust-native Dense GEMM template path
 

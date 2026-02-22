@@ -21,6 +21,11 @@ def _make_kernel(
     out_channels: int,
     seed: int,
     diag_scale: float,
+    hot_y: int,
+    hot_x: int,
+    hot_in_channel: int,
+    hot_out_channel: int,
+    hot_value: float,
 ) -> np.ndarray:
     rng = np.random.default_rng(seed)
     kernel = np.zeros(
@@ -38,6 +43,21 @@ def _make_kernel(
         center = kernel_size // 2
         for channel in range(min(in_channels, out_channels)):
             kernel[center, center, channel, channel] = diag_scale
+        return kernel
+    if init_mode == "single_hot":
+        if not (0 <= hot_y < kernel_size):
+            raise ValueError(f"--hot-y out of range: {hot_y} (kernel_size={kernel_size})")
+        if not (0 <= hot_x < kernel_size):
+            raise ValueError(f"--hot-x out of range: {hot_x} (kernel_size={kernel_size})")
+        if not (0 <= hot_in_channel < in_channels):
+            raise ValueError(
+                f"--hot-in-channel out of range: {hot_in_channel} (in_channels={in_channels})"
+            )
+        if not (0 <= hot_out_channel < out_channels):
+            raise ValueError(
+                f"--hot-out-channel out of range: {hot_out_channel} (out_channels={out_channels})"
+            )
+        kernel[hot_y, hot_x, hot_in_channel, hot_out_channel] = hot_value
         return kernel
 
     raise ValueError(f"unsupported init_mode: {init_mode}")
@@ -78,7 +98,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--padding", choices=["same", "valid"], default="same")
     p.add_argument(
         "--init-mode",
-        choices=["delta", "ones", "zero", "random_uniform"],
+        choices=["delta", "ones", "zero", "random_uniform", "single_hot"],
         default="delta",
         help="Kernel initialization mode.",
     )
@@ -87,6 +107,23 @@ def _build_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.0,
         help="Scale for delta/ones init modes.",
+    )
+    p.add_argument("--hot-y", type=int, default=0, help="Y index for --init-mode single_hot.")
+    p.add_argument("--hot-x", type=int, default=0, help="X index for --init-mode single_hot.")
+    p.add_argument(
+        "--hot-in-channel",
+        type=int,
+        default=0,
+        help="Input channel index for --init-mode single_hot.",
+    )
+    p.add_argument(
+        "--hot-out-channel",
+        type=int,
+        default=0,
+        help="Output channel index for --init-mode single_hot.",
+    )
+    p.add_argument(
+        "--hot-value", type=float, default=1.0, help="Value for --init-mode single_hot."
     )
     p.add_argument("--use-bias", action="store_true", help="Enable Conv2D bias.")
     p.add_argument("--seed", type=int, default=1337, help="RNG seed.")
@@ -149,6 +186,11 @@ def main() -> int:
         out_channels=args.out_channels,
         seed=args.seed,
         diag_scale=args.diag_scale,
+        hot_y=args.hot_y,
+        hot_x=args.hot_x,
+        hot_in_channel=args.hot_in_channel,
+        hot_out_channel=args.hot_out_channel,
+        hot_value=args.hot_value,
     )
     conv_layer = model.layers[-1]
     if args.use_bias:
@@ -193,6 +235,11 @@ def main() -> int:
         "padding": args.padding,
         "init_mode": args.init_mode,
         "diag_scale": args.diag_scale,
+        "hot_y": args.hot_y,
+        "hot_x": args.hot_x,
+        "hot_in_channel": args.hot_in_channel,
+        "hot_out_channel": args.hot_out_channel,
+        "hot_value": args.hot_value,
         "use_bias": args.use_bias,
         "seed": args.seed,
         "rep_samples": args.rep_samples,

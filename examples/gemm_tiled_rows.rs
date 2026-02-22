@@ -149,13 +149,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    if runs > 1 {
-        println!(
-            "Latency: avg_ms={:.3} total_ms={:.3}",
-            total_ms / runs as f64,
-            total_ms
-        );
-    }
+    let avg_ms = total_ms / runs as f64;
+    let macs_per_run = (rows_total as f64) * (tile_dim as f64);
+    let effective_gmac_per_s = macs_per_run / (avg_ms * 1_000_000.0);
+    println!(
+        "Latency: avg_ms={:.3} total_ms={:.3} effective_gmac_per_s={:.3}",
+        avg_ms, total_ms, effective_gmac_per_s
+    );
 
     preview("Input", &input, 32);
     preview("Output", &output, 32);
