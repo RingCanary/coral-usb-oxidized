@@ -227,14 +227,6 @@ impl FunctionGemmaSafeTensorFile {
         Ok(SafeTensors::deserialize(self.bytes())?)
     }
 
-    fn tensor(
-        &self,
-        name: &str,
-    ) -> Result<safetensors::tensor::TensorView<'_>, FunctionGemmaError> {
-        let parsed = self.parsed()?;
-        Self::tensor_from_parsed(&parsed, name)
-    }
-
     fn tensor_from_parsed<'data>(
         parsed: &SafeTensors<'data>,
         name: &str,
@@ -245,7 +237,8 @@ impl FunctionGemmaSafeTensorFile {
     }
 
     pub fn tensor_f32(&self, name: &str) -> Result<Vec<f32>, FunctionGemmaError> {
-        let tensor = self.tensor(name)?;
+        let parsed = self.parsed()?;
+        let tensor = Self::tensor_from_parsed(&parsed, name)?;
         let data = tensor.data();
         match tensor.dtype() {
             Dtype::F32 => {
@@ -399,7 +392,8 @@ impl FunctionGemmaSafeTensorFile {
     }
 
     pub fn embedding_dims(&self) -> Result<(usize, usize), FunctionGemmaError> {
-        let tensor = self.tensor("model.embed_tokens.weight")?;
+        let parsed = self.parsed()?;
+        let tensor = Self::tensor_from_parsed(&parsed, "model.embed_tokens.weight")?;
         if tensor.shape().len() != 2 {
             return Err(FunctionGemmaError::InvalidModel(format!(
                 "expected model.embed_tokens.weight to be rank-2, got {:?}",
@@ -410,7 +404,8 @@ impl FunctionGemmaSafeTensorFile {
     }
 
     pub fn token_embedding_row_f32(&self, token_id: usize) -> Result<Vec<f32>, FunctionGemmaError> {
-        let tensor = self.tensor("model.embed_tokens.weight")?;
+        let parsed = self.parsed()?;
+        let tensor = Self::tensor_from_parsed(&parsed, "model.embed_tokens.weight")?;
         if tensor.shape().len() != 2 {
             return Err(FunctionGemmaError::InvalidModel(format!(
                 "expected model.embed_tokens.weight to be rank-2, got {:?}",
@@ -457,7 +452,8 @@ impl FunctionGemmaSafeTensorFile {
             ));
         }
 
-        let tensor = self.tensor("model.embed_tokens.weight")?;
+        let parsed = self.parsed()?;
+        let tensor = Self::tensor_from_parsed(&parsed, "model.embed_tokens.weight")?;
         if tensor.shape().len() != 2 {
             return Err(FunctionGemmaError::InvalidModel(format!(
                 "expected model.embed_tokens.weight to be rank-2, got {:?}",
