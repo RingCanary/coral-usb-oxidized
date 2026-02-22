@@ -1158,3 +1158,92 @@ layer-name mapping, and quantization preflight in Rust.
    - requesting nonexistent layer index (`1`) reports
      `MissingTensor("vision_model.encoder.layers.1.self_attn.q_proj.weight")`
      as expected.
+
+## 2026-02-22 (CLIP rectangular templates + real checkpoint TPU probe)
+
+### Objective
+
+Validate CLIP-relevant rectangular Dense templates (`768x768`, `768x3072`,
+`3072x768`) and run real CLIP ViT layer weights on Coral TPU.
+
+### Template compilation results
+
+1. Compiled on workstation (x86_64) with `tools/dense_template_pipeline.sh`:
+   - `/tmp/clip-rect-templates/dense-768x768-20260222T105439Z`
+   - `/tmp/clip-rect-templates/dense-768x3072-20260222T105442Z`
+   - `/tmp/clip-rect-templates/dense-3072x768-20260222T105445Z`
+2. All three models compiled successfully with:
+   - `min_runtime_version=14`
+   - `executables=2` (`PARAMETER_CACHING`)
+   - `FULLY_CONNECTED` mapped to Edge TPU
+3. On-chip parameter cache usage from compiler logs:
+   - `768x768`: `576 KiB`
+   - `768x3072`: `2.25 MiB`
+   - `3072x768`: `2.25 MiB`
+   (all well below the observed ~7 MiB cliff).
+
+### Pi execution sanity (templates copied to Pi)
+
+Template files on Pi:
+
+- `/home/rpc/clip-traces/clip-rect-templates/dense_768x768_quant_edgetpu.tflite`
+- `/home/rpc/clip-traces/clip-rect-templates/dense_768x3072_quant_edgetpu.tflite`
+- `/home/rpc/clip-traces/clip-rect-templates/dense_3072x768_quant_edgetpu.tflite`
+
+Using `examples/gemm_int8_dynamic.rs`:
+
+1. `768x768` (`identity`, `runs=100`):
+   - `avg_ms=0.403` (identity output preserved)
+2. `768x3072` (`zero`, `runs=100`):
+   - `avg_ms=0.544` (zero output as expected)
+3. `3072x768` (`zero`, `runs=100`):
+   - `avg_ms=0.519` (zero output as expected)
+
+Approximate throughput (single-vector matvec):
+
+- `768x768`: ~`1.46 GMAC/s`
+- `768x3072`: ~`4.34 GMAC/s`
+- `3072x768`: ~`4.55 GMAC/s`
+
+### Real CLIP checkpoint ingestion and validation
+
+1. Downloaded real checkpoint on Pi:
+   - `https://huggingface.co/Bingsu/clip-vit-base-patch32-ko/resolve/main/model.safetensors`
+   - local path:
+     `/home/rpc/clip-models/clip-vit-base-patch32-ko-model.safetensors`
+   - size: `~578 MiB`
+2. SafeTensors parser preflight:
+   - `Tensor count: 400`
+   - discovered vision encoder layers: `0..11` (`12` layers)
+   - layer `0` and `11` linear tensor shapes validated (`q/k/v/o/fc1/fc2`).
+
+### Real-weight TPU probe (single stage)
+
+Added and used `examples/clip_vit_layer_tpu_probe.rs`:
+
+1. Layer `0`, stage `q` (`768x768`, `runs=20`):
+   - latency `avg_ms=0.540`
+   - CPU-accumulator vs TPU affine fit:
+     - `corr=0.936058`, `mae=18.94`, `rmse=27.22`
+2. Layer `0`, stage `fc1` (`768x3072`, `runs=20`):
+   - latency `avg_ms=0.824`
+   - fit:
+     - `corr=0.996099`, `mae=1.29`, `rmse=3.97`
+3. Layer `0`, stage `fc2` (`3072x768`, `runs=20`):
+   - latency `avg_ms=0.794`
+   - fit:
+     - `corr=0.986527`, `mae=6.08`, `rmse=10.53`
+4. Layer `11`, stage `fc1` (`768x3072`, `runs=20`):
+   - latency `avg_ms=0.832`
+   - fit:
+     - `corr=0.946272`, `mae=21.68`, `rmse=28.38`
+
+### Notes
+
+1. `tools/dense_template_pipeline.sh` was updated to be architecture-aware for
+   TensorFlow package/version and NumPy defaults:
+   - x86 defaults remain `tensorflow-cpu==2.10.1`, `numpy==1.23.5`
+   - ARM defaults use `tensorflow==2.19.0`, `numpy==1.26.4`
+2. Pi cannot run the current `edgetpu_compiler` bootstrap binary (x86_64
+   artifact), so rectangular template compilation currently happens on
+   workstation and templates are copied to Pi for execution.
