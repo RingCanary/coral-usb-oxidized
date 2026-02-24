@@ -269,8 +269,25 @@ Key outcomes:
        - `tileconfig0 <= 0x7f`
        - `scalarCoreRunControl <= 0x1`
        - `tileconfig0 <= 0x7f`
-       - `scalarCoreRunControl <= 0x2`
-       - `tileconfig0 <= 0x7f`
+     - `scalarCoreRunControl <= 0x2`
+     - `tileconfig0 <= 0x7f`
+
+### Phase-A replay smoke (known-write subset)
+
+1. Applied known-write subset from fresh capture directly via
+   `examples/rusb_control_plane_probe.rs` on Pi5 runtime state (`18d1:9302`):
+   - `scu_ctrl_0 <= 0x000f0059`
+   - `tileconfig0 <= 0x7f`
+   - `scalarCoreRunControl <= 0x1`
+   - `tileconfig0 <= 0x7f`
+   - `scalarCoreRunControl <= 0x2`
+   - `tileconfig0 <= 0x7f`
+2. Result:
+   - all writes returned success (no timeout)
+   - device remained enumerated as `18d1:9302` after replay
+3. Post-replay health check:
+   - `cargo run --example delegate_usage` succeeded with delegate creation and
+     expected initialized-state behavior.
 
 ## 2026-02-22
 
