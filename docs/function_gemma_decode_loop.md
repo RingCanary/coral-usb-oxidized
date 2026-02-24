@@ -81,14 +81,19 @@ size `2624`):
    - `decode_ms_per_token ~= 51883`
    - cache stats showed strong churn (`misses >> hits`, high evictions)
 4. `--max-layers 1 --lm-head coral-lazy --lm-cache-capacity 32 --lm-shortlist-tiles 16 --steps 1`
-   - expected behavior: sharply reduced tile evaluations per step and much
-     lower decode latency than exact lazy mode (approximate logits)
+   - `setup_ms ~= 4399`
+   - `decode_ms_per_token ~= 7973`
+   - cache stats: `misses=16`, `evictions=0`, `avg_eval_tiles=16`
 
 Observations:
 
 - `coral-preload` gives the best steady-state decode throughput.
 - `coral-lazy` can reduce setup cost but is only practical for exact full-vocab
   decoding when cache capacity is close to tile count.
+- `coral-lazy` + shortlist (`--lm-shortlist-tiles 16`) reduced this probe from
+  `~48.0 s/token` to `~8.0 s/token` (~`6x` faster) versus exact lazy mode.
+- shortlist is approximate: next-token predictions can differ from exact
+  full-vocab top-k.
 - `--prefill-logits` is expensive and should stay disabled unless explicitly
   needed:
   - prefill off: `~47.6 ms`

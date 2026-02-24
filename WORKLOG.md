@@ -33,6 +33,15 @@ pure-`rusb` control-plane baseline.
 5. Updated docs/README:
    - `docs/function_gemma_decode_loop.md`
    - `README.md`
+6. Added approximate lazy shortlist mode in
+   `examples/function_gemma_decode_loop.rs`:
+   - new flag: `--lm-shortlist-tiles N` (`0` keeps exact full-vocab lazy mode)
+   - lazy tile candidate policy per decode step:
+     - current token tile
+     - previous-step winning tiles
+     - recent LRU tiles
+     - round-robin fill
+   - added eval counters in lazy cache stats (`eval_calls`, `avg_eval_tiles`).
 
 ### Pi5 validation
 
@@ -60,6 +69,16 @@ Selected results:
 5. Quant mode comparison (`--max-layers 18`, lazy cache32 constrained run):
    - `per-tensor`: broader stage correlation spread (~0.92-0.99)
    - `per-channel`: mostly `~0.998-0.999+` stage correlation
+6. New shortlist sweep (`--max-layers 1 --steps 1`, `coral-lazy`, cache `32`):
+   - `shortlist=8`: `~4015 ms/token`
+   - `shortlist=16`: `~7954 ms/token`
+   - `shortlist=24`: `~11871 ms/token`
+   - `shortlist=32`: `~15844 ms/token`
+   - exact lazy (`shortlist=0`): `~48047 ms/token`
+7. Two-step shortlist validation (`shortlist=16`, `steps=2`):
+   - step0: `~7768 ms` (initial tile preparation)
+   - step1: `~123 ms` (cache hits; no evictions)
+   - final lazy stats: `hits=16`, `misses=16`, `evictions=0`
 
 ### USBMON LM-head compare
 
@@ -87,8 +106,8 @@ Key diff (CPU LM-head vs Coral LM-head run):
 ### Notes
 
 1. `coral-preload` remains the best exact full-vocab decode mode for throughput.
-2. `coral-lazy` needs either high cache coverage or a future shortlist/approx
-   decode strategy to avoid full-vocab tile thrash.
+2. `coral-lazy` now supports shortlist/approx decode and can avoid full-vocab
+   thrash on low cache capacities; it trades token quality for speed.
 
 ## 2026-02-22
 
