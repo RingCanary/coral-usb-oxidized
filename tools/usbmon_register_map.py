@@ -2,8 +2,11 @@
 """Extract candidate register-map activity from usbmon logs.
 
 Focuses on control transfers used by EdgeTPU USB runtime:
-- vendor 64-bit read/write: bmRequestType c0/40, bRequest 00, wIndex 0004, wLength 0008
-- vendor 32-bit read/write: bmRequestType c0/40, bRequest 01, wIndex 0001, wLength 0004
+- vendor 64-bit read/write: bmRequestType c0/40, bRequest 00, wLength 0008
+- vendor 32-bit read/write: bmRequestType c0/40, bRequest 01, wLength 0004
+
+For vendor control requests, the full 32-bit CSR offset is:
+  full_offset = (wIndex << 16) | wValue
 """
 
 from __future__ import annotations
@@ -29,11 +32,52 @@ class Entry:
     tokens: List[str]
 
 
+# Curated register names from publicly available DarwiNN/Beagle maps:
+# - google-coral/libedgetpu (usb_ml_commands, usb_driver)
+# - ricardodeazambuja/libredgetpu (generated beagle register map)
+KNOWN_REGISTER_NAMES = {
+    0x00044018: "scalarCoreRunControl",
+    0x00048788: "tileconfig0",
+    0x0001A30C: "scu_ctrl_0",
+    0x00048528: "output_actv_queue_base",
+    0x00048540: "output_actv_queue_tail",
+    0x00048550: "output_actv_queue_completed_head",
+    0x00048590: "instruction_queue_base",
+    0x000485A8: "instruction_queue_tail",
+    0x000485B0: "instruction_queue_fetched_head",
+    0x000485B8: "instruction_queue_completed_head",
+    0x000485F8: "input_actv_queue_base",
+    0x00048610: "input_actv_queue_tail",
+    0x00048620: "input_actv_queue_completed_head",
+    0x00048660: "param_queue_base",
+    0x00048678: "param_queue_tail",
+    0x00048688: "param_queue_completed_head",
+}
+
+
 def parse_int(value: str) -> Optional[int]:
     try:
         return int(value)
     except ValueError:
         return None
+
+
+def parse_hex_u16(value: str) -> Optional[int]:
+    try:
+        iv = int(value, 16)
+    except ValueError:
+        return None
+    if iv < 0 or iv > 0xFFFF:
+        return None
+    return iv
+
+
+def full_offset_from_setup(wval: str, widx: str) -> Optional[int]:
+    lo = parse_hex_u16(wval)
+    hi = parse_hex_u16(widx)
+    if lo is None or hi is None:
+        return None
+    return (hi << 16) | lo
 
 
 def parse_line(line: str) -> Optional[Entry]:
@@ -120,10 +164,25 @@ def classify_control(parts: List[str]) -> Dict[str, str]:
             "wlen": wlen,
             "op": "standard",
             "addr": wval,
+            "addr_full": "",
+            "reg_name": "",
         }
 
+    full = full_offset_from_setup(wval=wval, widx=widx)
+    reg_name = KNOWN_REGISTER_NAMES.get(full, "")
+    addr_full = f"{full:08x}" if full is not None else ""
+
     # Vendor control path used by EdgeTPU runtime.
-    if bm == "40" and breq == "00" and widx == "0004" and wlen == "0008":
+    # bRequest 0 -> 64-bit register access, expected wLength=0008
+    # bRequest 1 -> 32-bit register access, expected wLength=0004
+    if bm in {"40", "c0"} and breq in {"00", "01"}:
+        if breq == "00":
+            op_base = "read64" if bm == "c0" else "write64"
+            expect_wlen = "0008"
+        else:
+            op_base = "read32" if bm == "c0" else "write32"
+            expect_wlen = "0004"
+        op = op_base if wlen == expect_wlen else f"{op_base}_len_mismatch"
         return {
             "kind": "vendor",
             "bm": bm,
@@ -131,41 +190,10 @@ def classify_control(parts: List[str]) -> Dict[str, str]:
             "wval": wval,
             "widx": widx,
             "wlen": wlen,
-            "op": "write64",
+            "op": op,
             "addr": wval,
-        }
-    if bm == "c0" and breq == "00" and widx == "0004" and wlen == "0008":
-        return {
-            "kind": "vendor",
-            "bm": bm,
-            "breq": breq,
-            "wval": wval,
-            "widx": widx,
-            "wlen": wlen,
-            "op": "read64",
-            "addr": wval,
-        }
-    if bm == "40" and breq == "01" and widx == "0001" and wlen == "0004":
-        return {
-            "kind": "vendor",
-            "bm": bm,
-            "breq": breq,
-            "wval": wval,
-            "widx": widx,
-            "wlen": wlen,
-            "op": "write32",
-            "addr": wval,
-        }
-    if bm == "c0" and breq == "01" and widx == "0001" and wlen == "0004":
-        return {
-            "kind": "vendor",
-            "bm": bm,
-            "breq": breq,
-            "wval": wval,
-            "widx": widx,
-            "wlen": wlen,
-            "op": "read32",
-            "addr": wval,
+            "addr_full": addr_full,
+            "reg_name": reg_name,
         }
 
     return {
@@ -177,6 +205,8 @@ def classify_control(parts: List[str]) -> Dict[str, str]:
         "wlen": wlen,
         "op": "unknown",
         "addr": wval,
+        "addr_full": addr_full,
+        "reg_name": reg_name,
     }
 
 
@@ -214,6 +244,9 @@ def analyze_log(path: Path, bus: Optional[str], device: Optional[str], bo_b: int
     by_op_phase = Counter()
     by_addr_op = Counter()
     by_addr_op_phase = Counter()
+    by_addr_op_low16 = Counter()
+    by_addr_op_low16_phase = Counter()
+    by_reg_name_op = Counter()
     by_standard_sig = Counter()
 
     for e in entries:
@@ -244,12 +277,18 @@ def analyze_log(path: Path, bus: Optional[str], device: Optional[str], bo_b: int
             unknown_control += 1
 
         op = c.get("op", "unknown")
-        addr = c.get("addr", "????")
+        addr_low16 = c.get("addr", "????")
+        addr_full = c.get("addr_full") or addr_low16
+        reg_name = c.get("reg_name", "")
         phase = phase_for_ts(e.ts, first_bo_b=first_bo_b, last_bi_out=last_bi_out)
         by_op[op] += 1
         by_op_phase[(op, phase)] += 1
-        by_addr_op[(addr, op)] += 1
-        by_addr_op_phase[(addr, op, phase)] += 1
+        by_addr_op[(addr_full, op)] += 1
+        by_addr_op_phase[(addr_full, op, phase)] += 1
+        by_addr_op_low16[(addr_low16, op)] += 1
+        by_addr_op_low16_phase[(addr_low16, op, phase)] += 1
+        if reg_name:
+            by_reg_name_op[(reg_name, op)] += 1
 
     return {
         "log_path": str(path),
@@ -270,6 +309,11 @@ def analyze_log(path: Path, bus: Optional[str], device: Optional[str], bo_b: int
         "by_addr_op_phase": {
             f"{k[0]}::{k[1]}::{k[2]}": v for k, v in sorted(by_addr_op_phase.items())
         },
+        "by_addr_op_low16": {f"{k[0]}::{k[1]}": v for k, v in sorted(by_addr_op_low16.items())},
+        "by_addr_op_low16_phase": {
+            f"{k[0]}::{k[1]}::{k[2]}": v for k, v in sorted(by_addr_op_low16_phase.items())
+        },
+        "by_reg_name_op": {f"{k[0]}::{k[1]}": v for k, v in sorted(by_reg_name_op.items())},
         "standard_signatures": dict(by_standard_sig),
     }
 
@@ -297,6 +341,11 @@ def render_report_text(data: Dict[str, object], top: int) -> str:
     pairs.sort(reverse=True)
     lines.append("top_addr_ops:")
     for count, addr, op in pairs[:top]:
+        reg_name = ""
+        try:
+            reg_name = KNOWN_REGISTER_NAMES.get(int(addr, 16), "")
+        except ValueError:
+            reg_name = ""
         phase_counts = []
         for phase in ("setup_only", "pre_loop", "loop", "post_loop"):
             k = f"{addr}::{op}::{phase}"
@@ -304,7 +353,10 @@ def render_report_text(data: Dict[str, object], top: int) -> str:
             if v:
                 phase_counts.append(f"{phase}:{v}")
         phase_s = ",".join(phase_counts) if phase_counts else "-"
-        lines.append(f"  {addr} {op} count={count} phases={phase_s}")
+        suffix = f" name={reg_name}" if reg_name else ""
+        lines.append(f"  {addr} {op} count={count} phases={phase_s}{suffix}")
+    if data.get("by_reg_name_op"):
+        lines.append("named_register_ops=" + json.dumps(data["by_reg_name_op"], sort_keys=True))
     return "\n".join(lines)
 
 

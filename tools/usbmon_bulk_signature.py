@@ -18,6 +18,17 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 HEX_WORD_RE = re.compile(r"^[0-9a-fA-F]{8}$")
 
+HEADER_TAG_NAMES = {
+    0: "Instructions",
+    1: "InputActivations",
+    2: "Parameters",
+    3: "OutputActivations",
+    4: "Interrupt0",
+    5: "Interrupt1",
+    6: "Interrupt2",
+    7: "Interrupt3",
+}
+
 
 @dataclass
 class Entry:
@@ -125,6 +136,26 @@ def signature(words: List[str], prefix_words: int) -> str:
     if not words:
         return "(no-payload)"
     return " ".join(words[:prefix_words])
+
+
+def decode_ml_header_from_sig(sig: str) -> Optional[Dict[str, object]]:
+    parts = sig.split()
+    if len(parts) < 2:
+        return None
+    try:
+        w0 = bytes.fromhex(parts[0])
+        w1 = bytes.fromhex(parts[1])
+    except ValueError:
+        return None
+    if len(w0) != 4 or len(w1) != 4:
+        return None
+    length = int.from_bytes(w0, byteorder="little", signed=False)
+    tag = w1[0]
+    return {
+        "payload_length": length,
+        "tag": tag,
+        "tag_name": HEADER_TAG_NAMES.get(tag, f"UnknownTag{tag}"),
+    }
 
 
 def analyze_log(
@@ -239,7 +270,14 @@ def render_report_text(data: Dict[str, object], top: int) -> str:
     submit_items.sort(reverse=True)
     for count, transfer, size, sig in submit_items[:top]:
         phases = format_phase_counts(data["submit_signatures_phase"], transfer, size, sig)
-        lines.append(f"  {transfer} size={size} sig={sig} count={count} phases={phases}")
+        extra = ""
+        if transfer == "Bo" and size == 8:
+            decoded = decode_ml_header_from_sig(sig)
+            if decoded is not None:
+                extra = " header_len={} tag={}({})".format(
+                    decoded["payload_length"], decoded["tag"], decoded["tag_name"]
+                )
+        lines.append(f"  {transfer} size={size} sig={sig} count={count} phases={phases}{extra}")
 
     lines.append("top_complete_signatures:")
     complete_items = []

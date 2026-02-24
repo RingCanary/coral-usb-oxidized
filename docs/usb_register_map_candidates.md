@@ -1,7 +1,7 @@
 # USB Register Map Candidates (EdgeTPU Coral USB)
 
-This note captures current hypotheses from usbmon control-transfer analysis.
-All mappings are inferred from observed `Ci/Co` setup packets and run behavior.
+This note captures current protocol findings from usbmon control-transfer
+analysis and cross-reference against public `libedgetpu`/DarwiNN register maps.
 
 ## Data sources
 
@@ -28,12 +28,16 @@ Generated artifacts:
 
 ## Operation-class inference
 
-From setup fields (`bmRequestType`, `bRequest`, `wIndex`, `wLength`):
+From setup fields (`bmRequestType`, `bRequest`, `wValue`, `wIndex`, `wLength`):
 
 - `40 00 xxxx 0004 0008` -> candidate `write64`
 - `c0 00 xxxx 0004 0008` -> candidate `read64`
 - `40 01 xxxx 0001 0004` -> candidate `write32`
 - `c0 01 xxxx 0001 0004` -> candidate `read32`
+
+For vendor register requests, full 32-bit CSR offset is:
+
+- `full_offset = (wIndex << 16) | wValue`
 
 ## Cross-run invariants
 
@@ -73,7 +77,12 @@ These labels are hypotheses, based on repetition and phase placement.
 - `a500`, `a558`, `a600`, `a658` (`write32`)
 - `907c` (`write32`, post-loop only in U4)
 
-Hypothesis: lifecycle/status bits and shutdown/ack paths.
+Known mappings now confirmed for observed offsets:
+
+- `a30c` + `wIndex=0001` -> `0x1a30c` -> `scu_ctrl_0`
+
+Hypothesis (remaining): lifecycle/status bits and shutdown/ack paths for other
+members of this group.
 
 ### Group B: fabric/queue/channel config (mostly 64-bit writes)
 
@@ -82,13 +91,20 @@ Hypothesis: lifecycle/status bits and shutdown/ack paths.
 - `00c0`, `0110`, `0150`, `0190`, `01d0`, `0210`, `0250`, `0298`, `02e0`, `0328` (`write64`)
 - `c058`, `c060`, `c070`, `c080`, `c090`, `c0a0`, `c148`, `c160` (`write64`)
 
-Hypothesis: queue/ring/channel enables and teardown/reset sequencing.
+Known mappings now confirmed for observed offsets:
+
+- `4018` + `wIndex=0004` -> `0x44018` -> `scalarCoreRunControl`
+
+Hypothesis (remaining): queue/ring/channel enables and teardown/reset
+sequencing for other members of this group.
 
 ### Group C: repeated handshake knob
 
 - `8788` (`write64` and `read64`, both pre-loop and post-loop)
 
-Hypothesis: gate/perf/ready handshake register.
+Known mapping now confirmed:
+
+- `8788` + `wIndex=0004` -> `0x48788` -> `tileconfig0`
 
 ## Bulk-loop signature markers (U4/baseline)
 
@@ -104,8 +120,17 @@ Completion signatures:
 - `Bi size=1008 sig=00000000 00000000` (count 35, loop)
 - `Bi size=16 sig=00000000 00000000` (count 36, status path)
 
-Hypothesis: the two 8-byte signatures are loop control words around payload
-submission and completion polling.
+`Bo size=8` signatures decode as USB ML packet headers:
+
+- first 4 bytes (little-endian): payload length
+- byte 4: descriptor tag (`0=Instructions`, `1=InputActivations`,
+  `2=Parameters`, `3=OutputActivations`, `4..7=Interrupt0..3`)
+- bytes 5..7: padding
+
+Example:
+
+- `20720300 00000000` -> `length=225824`, `tag=0 (Instructions)`
+- `004c0200 01000000` -> `length=150528`, `tag=1 (InputActivations)`
 
 ## Standard USB setup signatures
 
@@ -126,7 +151,8 @@ Observed each run during enumeration/setup:
 - Medium confidence:
   - grouping addresses by subsystem role
 - Low confidence:
-  - exact semantic meaning of each register address
+  - exact semantic meaning of still-unnamed register addresses beyond the
+    confirmed set above
 
 ## Reproduction
 

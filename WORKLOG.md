@@ -177,6 +177,28 @@ Key outcomes:
      - `traces/phase-b-diff-256-vs-512-exec0/exec_chunk_diff_report.json`
      - `traces/phase-b-diff-256-vs-512-exec0/chunk_dump_manifest.json`
 
+### External findings ingestion (`coral_research_findings-1/2`)
+
+1. Verified key claims against upstream/public sources (`libedgetpu` and
+   `libredgetpu`):
+   - register mappings:
+     - `0x44018 -> scalarCoreRunControl`
+     - `0x48788 -> tileconfig0`
+     - `0x1a30c -> scu_ctrl_0`
+   - endpoint roles:
+     - interrupt endpoint `0x83` (`kInterruptInEndpoint = 3`)
+     - event endpoint `0x82` (`kEventInEndpoint = 2`)
+   - 8-byte bulk-out header format:
+     - `[len_le32][tag_u8][pad_u24]`
+2. Upgraded `tools/usbmon_register_map.py`:
+   - now computes full CSR offsets with:
+     - `full_offset = (wIndex << 16) | wValue`
+   - includes known register name annotations for key DarwiNN offsets.
+3. Upgraded `tools/usbmon_bulk_signature.py`:
+   - decodes `Bo size=8` headers into payload length + stream tag names.
+4. Updated protocol notes in `docs/usb_register_map_candidates.md` to include
+   verified mappings and header semantics.
+
 ## 2026-02-22
 
 ### Objective
