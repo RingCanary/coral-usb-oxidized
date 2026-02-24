@@ -7,7 +7,8 @@ This example runs an autoregressive Function-Gemma decode loop in Rust with:
 - RMSNorm + SwiGLU on CPU
 - LM head selectable as:
   - `cpu`: tied embedding projection on CPU
-  - `coral`: tiled Coral LM-head projection (`hidden -> vocab`)
+  - `coral-preload` (`coral` alias): preload all LM tiles once
+  - `coral-lazy`: on-demand LM tile prep with LRU cache
 
 ## Command
 
@@ -19,7 +20,7 @@ cargo run --example function_gemma_decode_loop -- \
   --steps 8 \
   --rounds 2 \
   --weight-quant per-channel \
-  --lm-head coral-lazy \
+  --lm-head coral-preload \
   --lm-template <dense_640x2624_quant_edgetpu.tflite>
 ```
 
@@ -34,8 +35,9 @@ shape classes:
 - `dense_640x2048_quant_edgetpu.tflite` (`gate` / `up`)
 - `dense_2048x640_quant_edgetpu.tflite` (`down`)
 
-For `--lm-head coral`, provide a tiled LM-head template (default tile output
-size is `2624`, so an `input=640, output=2624` template is expected).
+For `--lm-head coral-preload` / `--lm-head coral-lazy`, provide a tiled
+LM-head template (default tile output size is `2624`, so an
+`input=640, output=2624` template is expected).
 
 ## Notes
 
@@ -50,6 +52,9 @@ size is `2624`, so an `input=640, output=2624` template is expected).
   and is the recommended mode for better decode quality.
 - `--lm-head coral-lazy` uses an LRU tile cache (`--lm-cache-capacity`) to
   reduce setup/memory spikes compared to eager full-vocab preload.
+- `--lm-head coral-lazy` with `cache_capacity < tile_count` performs exact
+  full-vocab top-k with repeated tile evictions, which can be significantly
+  slower than `coral-preload`.
 - On Pi5, use runtime env exports before running:
 
 ```bash
@@ -58,25 +63,38 @@ eval "$(./tools/bootstrap_arch_stack.sh print-env)"
 
 ## Pi5 benchmark snapshot
 
-Using the same prompt/config on Pi5, switching LM-head from CPU to Coral-tiled
-changes decode latency substantially:
+Pi5 runtime matrix (`prompt=2,2516,29901`, Function-Gemma 270M, default tile
+size `2624`):
 
-1. `--max-layers 18 --lm-head cpu --steps 1`:
-   - `ms_per_token ~= 17226`
-2. `--max-layers 18 --lm-head coral --steps 2`:
-   - `ms_per_token ~= 978`
+1. `--max-layers 1 --lm-head cpu --steps 1`
+   - `setup_ms ~= 5953`
+   - `decode_ms_per_token ~= 16670`
+2. `--max-layers 1 --lm-head coral-preload --steps 1`
+   - `setup_ms ~= 56737`
+   - `decode_ms_per_token ~= 642`
+3. `--max-layers 1 --lm-head coral-lazy --lm-cache-capacity 32 --steps 1`
+   - `setup_ms ~= 4571`
+   - `decode_ms_per_token ~= 51883`
+   - cache stats showed strong churn (`misses >> hits`, high evictions)
 
-Observed improvement:
+Observations:
 
-- ~`17.6x` faster token decode with Coral-tiled LM-head for the same model and
-  decode path.
+- `coral-preload` gives the best steady-state decode throughput.
+- `coral-lazy` can reduce setup cost but is only practical for exact full-vocab
+  decoding when cache capacity is close to tile count.
+- `--prefill-logits` is expensive and should stay disabled unless explicitly
+  needed:
+  - prefill off: `~47.6 ms`
+  - prefill on: `~103810 ms`
 
 ## Practical guidance
 
-1. Use `--lm-head cpu` only for bring-up/debug (simpler, lower setup).
-2. Use `--lm-head coral` for real decode throughput.
-3. Expect higher one-time setup time with Coral LM-head:
+1. Use `--lm-head cpu` only for bring-up/debug.
+2. Use `--lm-head coral-preload` for exact full-vocab decode throughput.
+3. Use `--lm-head coral-lazy` only when constrained by setup memory/time and
+   with sufficient cache capacity.
+4. Expect higher one-time setup time with Coral LM-head:
    - per-layer stage preparation
    - LM vocab tile preparation (`640x2624`, `100` tiles for vocab `262146`).
-4. For long decode runs, setup amortizes quickly and Coral LM-head gives the
-   better steady-state path.
+5. For long decode runs, setup amortizes quickly and Coral LM-head gives the
+  better steady-state path.

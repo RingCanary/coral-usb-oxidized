@@ -113,7 +113,7 @@ cargo run --example clip_vit_block_tpu_pipeline -- /path/to/model.safetensors /p
 cargo run --example clip_vit_full_forward -- /path/to/model.safetensors /path/to/template_768x768_edgetpu.tflite /path/to/template_768x3072_edgetpu.tflite /path/to/template_3072x768_edgetpu.tflite --max-layers 12 --out-norm-f32le /tmp/clip_embed_norm.f32le
 cargo run --example function_gemma_layer_tpu_probe -- /path/to/model.safetensors /path/to/template_edgetpu.tflite 0 q 20 32 100
 cargo run --example function_gemma_lm_head_sanity -- /path/to/model.safetensors 42 10
-cargo run --example function_gemma_decode_loop -- /path/to/model.safetensors /path/to/functiongemma-templates-b1 2,2516,29901 --steps 8 --rounds 2 --weight-quant per-channel --lm-head coral-lazy --lm-template /path/to/dense_640x2624_quant_edgetpu.tflite --lm-cache-capacity 32
+cargo run --example function_gemma_decode_loop -- /path/to/model.safetensors /path/to/functiongemma-templates-b1 2,2516,29901 --steps 8 --rounds 2 --weight-quant per-channel --lm-head coral-preload --lm-template /path/to/dense_640x2624_quant_edgetpu.tflite
 cargo run --example rusb_control_plane_probe -- --verbose-configs
 ```
 
@@ -187,7 +187,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `examples/clip_vit_full_forward.rs` (patch embedding + transformer blocks + projection, with Coral-backed linear stages and optional reference compare)
 - `examples/function_gemma_layer_tpu_probe.rs` (Function-Gemma BF16 stage loader + quantize/patch/execute probe for q/k/v/o/gate/up/down)
 - `examples/function_gemma_lm_head_sanity.rs` (CPU embedding lookup + tied LM-head top-k sanity pass for Function-Gemma checkpoints)
-- `examples/function_gemma_decode_loop.rs` (autoregressive decode loop with Coral-backed q/k/v/o/gate/up/down and optional Coral-tiled LM-head)
+- `examples/function_gemma_decode_loop.rs` (autoregressive decode loop with Coral-backed q/k/v/o/gate/up/down and LM-head modes: cpu, coral-preload, coral-lazy)
 - `examples/rusb_control_plane_probe.rs` (pure-rusb control-plane baseline: enumerate/open/claim/get-status)
 
 Detailed workflow and caveats are documented in `docs/usb_tracing.md`.

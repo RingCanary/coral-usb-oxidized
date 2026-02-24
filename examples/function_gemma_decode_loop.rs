@@ -1732,6 +1732,19 @@ fn main() -> Result<(), Box<dyn Error>> {
             lazy: CoralLazyLmHead::new(&model, &delegate, &config, hidden_dim)?,
         },
     };
+    if let LmHeadBackend::CoralLazy { lazy } = &lm_backend {
+        if lazy.cache_capacity < lazy.tile_count {
+            println!(
+                "WARN coral-lazy cache may thrash for full-vocab exact top-k: cache_capacity={} tile_count={} (consider coral-preload or cache>=tile_count)",
+                lazy.cache_capacity, lazy.tile_count
+            );
+        } else {
+            println!(
+                "LM cache: coral-lazy fully covered (capacity={} tile_count={})",
+                lazy.cache_capacity, lazy.tile_count
+            );
+        }
+    }
 
     let setup_ms = setup_started.elapsed().as_secs_f64() * 1000.0;
     println!("Setup complete: {:.3} ms", setup_ms);

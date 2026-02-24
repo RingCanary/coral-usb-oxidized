@@ -1,5 +1,95 @@
 # WORKLOG
 
+## 2026-02-24
+
+### Objective
+
+Push Function-Gemma decode runtime forward on Pi5 by adding LM-head runtime
+policies, reducing memory pressure, capturing LM-head USB deltas, and probing a
+pure-`rusb` control-plane baseline.
+
+### Changes
+
+1. Decode runtime modes and quality controls in
+   `examples/function_gemma_decode_loop.rs`:
+   - LM-head mode split:
+     - `cpu`
+     - `coral-preload` (`coral` alias)
+     - `coral-lazy` (LRU tile cache)
+   - `--lm-cache-capacity` for lazy mode.
+   - `--rounds` for repeated decode rounds in one process.
+   - `--prefill-logits` made opt-in (default off).
+   - `--weight-quant per-tensor|per-channel` (default `per-channel`).
+   - `--verify-rows` for stage verification rows.
+2. Added lazy-cache thrash warning for exact full-vocab decode when
+   `cache_capacity < tile_count`.
+3. Added pure-`rusb` control-plane probe:
+   - `examples/rusb_control_plane_probe.rs`
+   - docs: `docs/rusb_control_plane_probe.md`
+4. Added LM-head capture/diff helper:
+   - `tools/re_capture_decode_lm_compare.sh`
+   - compares CPU LM-head vs Coral LM-head decode usbmon traces and emits
+     phase/bulk diffs.
+5. Updated docs/README:
+   - `docs/function_gemma_decode_loop.md`
+   - `README.md`
+
+### Pi5 validation
+
+Host: `rpilm3.local` (`Linux 6.12.62+rpt-rpi-2712`, aarch64)
+
+Runtime matrix artifact root:
+
+- `/home/rpc/clip-traces/functiongemma-runtime-matrix-20260224T155555Z`
+
+Selected results:
+
+1. `cpu_l1` (`--lm-head cpu`, `--max-layers 1`, `--steps 1`)
+   - `setup_ms ~= 5953`
+   - `ms_per_token ~= 16670`
+2. `coral_preload_l1` (`--lm-head coral-preload`, `--max-layers 1`, `--steps 1`)
+   - `setup_ms ~= 56737`
+   - `ms_per_token ~= 642`
+3. `coral_lazy32_l1` (`--lm-head coral-lazy --lm-cache-capacity 32`)
+   - `setup_ms ~= 4571`
+   - `ms_per_token ~= 51883`
+   - cache stats indicated eviction-heavy churn (`misses=200`, `evictions=168`)
+4. Prefill logits toggle:
+   - `prefill off`: `~47.6 ms`
+   - `prefill on`: `~103810 ms`
+5. Quant mode comparison (`--max-layers 18`, lazy cache32 constrained run):
+   - `per-tensor`: broader stage correlation spread (~0.92-0.99)
+   - `per-channel`: mostly `~0.998-0.999+` stage correlation
+
+### USBMON LM-head compare
+
+Capture root:
+
+- `/home/rpc/clip-traces/re-decode-lm-compare-20260224T1610Z`
+
+Produced:
+
+- `cpu_phase.json`
+- `coral_phase.json`
+- `cpu_vs_coral_diff.json`
+- `cpu_bulk.txt`
+- `coral_bulk.txt`
+
+Key diff (CPU LM-head vs Coral LM-head run):
+
+1. Transfer counts:
+   - CPU: `Bi=302`, `Bo=584`, `Ii=8`
+   - Coral: `Bi=3066`, `Bo=4984`, `Ii=20`
+2. Duration:
+   - CPU run: `~21.6 s`
+   - Coral run: `~57.4 s` (includes Coral LM tile setup/preload path)
+
+### Notes
+
+1. `coral-preload` remains the best exact full-vocab decode mode for throughput.
+2. `coral-lazy` needs either high cache coverage or a future shortlist/approx
+   decode strategy to avoid full-vocab tile thrash.
+
 ## 2026-02-22
 
 ### Objective
