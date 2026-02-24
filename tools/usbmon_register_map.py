@@ -358,6 +358,8 @@ def extract_vendor_sequence(
     bo_b: int,
     bi_out: int,
     phases: Optional[List[str]] = None,
+    writes_only: bool = False,
+    known_only: bool = False,
 ) -> Dict[str, object]:
     entries_all = load_entries(path)
     if bus is not None:
@@ -390,23 +392,29 @@ def extract_vendor_sequence(
         c = classify_control(e.tokens)
         if c.get("kind") != "vendor":
             continue
+        op = c.get("op", "")
+        if writes_only and not str(op).startswith("write"):
+            continue
         phase = phase_for_ts(e.ts, first_bo_b=first_bo_b, last_bi_out=last_bi_out)
         if "all" not in phase_allow and phase not in phase_allow:
             continue
+        reg_name = c.get("reg_name", "")
+        if known_only and not reg_name:
+            continue
 
         payload_words = parse_payload_words(e.tokens)
-        value = decode_write_payload(c.get("op", ""), payload_words)
+        value = decode_write_payload(str(op), payload_words)
         row: Dict[str, object] = {
             "ts": e.ts,
             "phase": phase,
             "transfer": e.transfer,
-            "op": c.get("op"),
+            "op": op,
             "bm": c.get("bm"),
             "breq": c.get("breq"),
             "wlen": c.get("wlen"),
             "addr_low16": c.get("addr"),
             "addr_full": c.get("addr_full", c.get("addr")),
-            "reg_name": c.get("reg_name", ""),
+            "reg_name": reg_name,
             "payload_words": payload_words,
         }
         if value is not None:
@@ -520,6 +528,10 @@ def render_sequence_text(data: Dict[str, object], top: int) -> str:
         )
     )
     lines.append("phases=" + ",".join(data.get("phases", [])))
+    if "writes_only" in data:
+        lines.append(f"writes_only={data['writes_only']}")
+    if "known_only" in data:
+        lines.append(f"known_only={data['known_only']}")
     lines.append(f"sequence_count={data['sequence_count']}")
     lines.append("sequence_preview:")
     for row in data["sequence"][:top]:
@@ -595,6 +607,16 @@ def main() -> int:
         choices=["setup_only", "pre_loop", "loop", "post_loop", "all"],
         help="Filter sequence by phase (default: all).",
     )
+    seq.add_argument(
+        "--writes-only",
+        action="store_true",
+        help="Keep only write32/write64 operations.",
+    )
+    seq.add_argument(
+        "--known-only",
+        action="store_true",
+        help="Keep only entries with known register-name mapping.",
+    )
     seq.add_argument("--top", type=int, default=80)
     seq.add_argument("--json", action="store_true")
 
@@ -640,7 +662,11 @@ def main() -> int:
             bo_b=args.bo_b,
             bi_out=args.bi_out,
             phases=phases,
+            writes_only=args.writes_only,
+            known_only=args.known_only,
         )
+        data["writes_only"] = bool(args.writes_only)
+        data["known_only"] = bool(args.known_only)
         if args.json:
             print(json.dumps(data, indent=2, sort_keys=True))
         else:
