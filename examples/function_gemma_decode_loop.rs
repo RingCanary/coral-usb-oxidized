@@ -76,6 +76,7 @@ struct Config {
     lm_template_path: Option<String>,
     lm_tile_out_dim: usize,
     lm_cache_capacity: usize,
+    lm_shortlist_tiles: usize,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -165,6 +166,11 @@ struct CoralLazyLmHead<'a> {
     hits: usize,
     misses: usize,
     evictions: usize,
+    shortlist_tiles: usize,
+    shortlist_cursor: usize,
+    prev_top_tiles: Vec<usize>,
+    eval_calls: usize,
+    eval_tiles_total: usize,
 }
 
 enum LmHeadBackend<'a> {
@@ -203,9 +209,10 @@ fn usage(program: &str) {
     println!("  --lm-template PATH      Required when --lm-head coral");
     println!("  --lm-tile-out N         Coral LM-head tile output dim (default: 2624)");
     println!("  --lm-cache-capacity N   Tile cache size for coral-lazy (default: 32)");
+    println!("  --lm-shortlist-tiles N  Approximate coral-lazy: evaluate only N LM tiles per step (default: 0 = exact full vocab)");
     println!("Example:");
     println!(
-        "  {program} /path/model.safetensors /path/templates 2,2516,29901 --steps 16 --rounds 4 --lm-head coral-lazy --lm-template /path/dense_640x2624_quant_edgetpu.tflite --lm-cache-capacity 32"
+        "  {program} /path/model.safetensors /path/templates 2,2516,29901 --steps 16 --rounds 4 --lm-head coral-lazy --lm-template /path/dense_640x2624_quant_edgetpu.tflite --lm-cache-capacity 32 --lm-shortlist-tiles 16"
     );
 }
 
@@ -266,6 +273,7 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         lm_template_path: None,
         lm_tile_out_dim: 2624,
         lm_cache_capacity: 32,
+        lm_shortlist_tiles: 0,
     };
 
     let mut idx = 4usize;
@@ -383,6 +391,13 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                     .ok_or("--lm-cache-capacity requires a value")?
                     .parse()?;
             }
+            "--lm-shortlist-tiles" => {
+                idx += 1;
+                config.lm_shortlist_tiles = args
+                    .get(idx)
+                    .ok_or("--lm-shortlist-tiles requires a value")?
+                    .parse()?;
+            }
             other => return Err(format!("unknown argument: {}", other).into()),
         }
         idx += 1;
@@ -417,6 +432,9 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
     }
     if config.lm_head_mode == LmHeadMode::CoralLazy && config.lm_cache_capacity == 0 {
         return Err("--lm-cache-capacity must be >= 1 for --lm-head coral-lazy".into());
+    }
+    if config.lm_shortlist_tiles > 0 && config.lm_head_mode != LmHeadMode::CoralLazy {
+        return Err("--lm-shortlist-tiles requires --lm-head coral-lazy".into());
     }
 
     if config.lm_head_mode != LmHeadMode::Cpu && config.lm_template_path.is_none() {
@@ -1379,6 +1397,11 @@ impl<'a> CoralLazyLmHead<'a> {
             hits: 0,
             misses: 0,
             evictions: 0,
+            shortlist_tiles: config.lm_shortlist_tiles,
+            shortlist_cursor: 0,
+            prev_top_tiles: Vec::new(),
+            eval_calls: 0,
+            eval_tiles_total: 0,
         })
     }
 
@@ -1476,9 +1499,56 @@ impl<'a> CoralLazyLmHead<'a> {
             .ok_or_else(|| "lm tile missing after insert".into())
     }
 
+    fn push_unique_tile(tiles: &mut Vec<usize>, tile_idx: usize, budget: usize) {
+        if tiles.len() >= budget {
+            return;
+        }
+        if !tiles.contains(&tile_idx) {
+            tiles.push(tile_idx);
+        }
+    }
+
+    fn candidate_tiles(&mut self, input_token: usize) -> Vec<usize> {
+        if self.shortlist_tiles == 0 || self.shortlist_tiles >= self.tile_count {
+            return (0..self.tile_count).collect();
+        }
+
+        let budget = self.shortlist_tiles.min(self.tile_count);
+        let mut chosen = Vec::with_capacity(budget);
+
+        let input_tile = input_token / self.tile_out;
+        if input_tile < self.tile_count {
+            Self::push_unique_tile(&mut chosen, input_tile, budget);
+        }
+
+        for &tile_idx in &self.prev_top_tiles {
+            Self::push_unique_tile(&mut chosen, tile_idx, budget);
+            if chosen.len() >= budget {
+                break;
+            }
+        }
+
+        for &tile_idx in self.lru.iter().rev() {
+            Self::push_unique_tile(&mut chosen, tile_idx, budget);
+            if chosen.len() >= budget {
+                break;
+            }
+        }
+
+        let mut scanned = 0usize;
+        while chosen.len() < budget && scanned < self.tile_count {
+            let tile_idx = (self.shortlist_cursor + scanned) % self.tile_count;
+            Self::push_unique_tile(&mut chosen, tile_idx, budget);
+            scanned += 1;
+        }
+        self.shortlist_cursor = (self.shortlist_cursor + budget) % self.tile_count;
+        chosen
+    }
+
     fn topk(
         &mut self,
         hidden_state: &[f32],
+        input_token: usize,
         act_qmax: i32,
         topk: usize,
     ) -> Result<Vec<(usize, f32)>, Box<dyn Error>> {
@@ -1488,8 +1558,12 @@ impl<'a> CoralLazyLmHead<'a> {
         let input_scale = symmetric_scale_for_qmax(hidden_state, act_qmax);
         let input_q = quantize_symmetric_i8(hidden_state, input_scale, act_qmax);
 
+        let candidate_tiles = self.candidate_tiles(input_token);
+        self.eval_calls += 1;
+        self.eval_tiles_total += candidate_tiles.len();
+
         let mut best: Vec<(usize, f32)> = Vec::with_capacity(topk);
-        for tile_idx in 0..self.tile_count {
+        for tile_idx in candidate_tiles {
             let tile = self.get_or_prepare_tile(tile_idx)?;
             let logits = tile.stage.forward_from_quantized(&input_q, input_scale)?;
             for (local_idx, logit) in logits.iter().take(tile.valid_tokens).enumerate() {
@@ -1498,17 +1572,34 @@ impl<'a> CoralLazyLmHead<'a> {
             }
         }
         best.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+
+        self.prev_top_tiles.clear();
+        for (token_id, _) in &best {
+            let tile_idx = token_id / self.tile_out;
+            if tile_idx < self.tile_count && !self.prev_top_tiles.contains(&tile_idx) {
+                self.prev_top_tiles.push(tile_idx);
+            }
+        }
+
         Ok(best)
     }
 
     fn cache_stats(&self) -> String {
+        let avg_eval_tiles = if self.eval_calls > 0 {
+            self.eval_tiles_total as f64 / self.eval_calls as f64
+        } else {
+            0.0
+        };
         format!(
-            "tiles_loaded={} capacity={} hits={} misses={} evictions={}",
+            "tiles_loaded={} capacity={} hits={} misses={} evictions={} shortlist_tiles={} eval_calls={} avg_eval_tiles={:.2}",
             self.cache.len(),
             self.cache_capacity,
             self.hits,
             self.misses,
-            self.evictions
+            self.evictions,
+            self.shortlist_tiles,
+            self.eval_calls,
+            avg_eval_tiles,
         )
     }
 }
@@ -1585,7 +1676,9 @@ fn forward_single_token(
         LmHeadBackend::CoralPreload { tiled } => {
             tiled.topk(&hidden, config.act_qmax, config.topk)?
         }
-        LmHeadBackend::CoralLazy { lazy } => lazy.topk(&hidden, config.act_qmax, config.topk)?,
+        LmHeadBackend::CoralLazy { lazy } => {
+            lazy.topk(&hidden, token_id, config.act_qmax, config.topk)?
+        }
     };
     Ok(Some(topk))
 }
@@ -1628,7 +1721,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .join(",")
     );
     println!(
-        "Decode config: steps={} rounds={} weight_qmax={} weight_quant={:?} act_qmax={} clip_percentile={} calibration_rows={} verify_rows={} prefill_logits={} lm_head={:?} lm_cache_capacity={}",
+        "Decode config: steps={} rounds={} weight_qmax={} weight_quant={:?} act_qmax={} clip_percentile={} calibration_rows={} verify_rows={} prefill_logits={} lm_head={:?} lm_cache_capacity={} lm_shortlist_tiles={}",
         config.steps,
         config.rounds,
         config.weight_qmax,
@@ -1638,9 +1731,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         config.calibration_rows,
         config.verify_rows,
         config.prefill_compute_logits,
-        config.lm_head_mode
-        ,
-        config.lm_cache_capacity
+        config.lm_head_mode,
+        config.lm_cache_capacity,
+        config.lm_shortlist_tiles
     );
 
     let setup_started = Instant::now();
@@ -1733,7 +1826,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         },
     };
     if let LmHeadBackend::CoralLazy { lazy } = &lm_backend {
-        if lazy.cache_capacity < lazy.tile_count {
+        if lazy.shortlist_tiles > 0 {
+            println!(
+                "LM shortlist: enabled tiles_per_step={} tile_count={} (approximate decode)",
+                lazy.shortlist_tiles, lazy.tile_count
+            );
+            if lazy.shortlist_tiles > lazy.cache_capacity {
+                println!(
+                    "WARN coral-lazy shortlist may still churn cache: shortlist_tiles={} cache_capacity={}",
+                    lazy.shortlist_tiles, lazy.cache_capacity
+                );
+            }
+        } else if lazy.cache_capacity < lazy.tile_count {
             println!(
                 "WARN coral-lazy cache may thrash for full-vocab exact top-k: cache_capacity={} tile_count={} (consider coral-preload or cache>=tile_count)",
                 lazy.cache_capacity, lazy.tile_count

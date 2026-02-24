@@ -114,6 +114,7 @@ cargo run --example clip_vit_full_forward -- /path/to/model.safetensors /path/to
 cargo run --example function_gemma_layer_tpu_probe -- /path/to/model.safetensors /path/to/template_edgetpu.tflite 0 q 20 32 100
 cargo run --example function_gemma_lm_head_sanity -- /path/to/model.safetensors 42 10
 cargo run --example function_gemma_decode_loop -- /path/to/model.safetensors /path/to/functiongemma-templates-b1 2,2516,29901 --steps 8 --rounds 2 --weight-quant per-channel --lm-head coral-preload --lm-template /path/to/dense_640x2624_quant_edgetpu.tflite
+cargo run --example function_gemma_decode_loop -- /path/to/model.safetensors /path/to/functiongemma-templates-b1 2,2516,29901 --steps 8 --rounds 2 --weight-quant per-channel --lm-head coral-lazy --lm-template /path/to/dense_640x2624_quant_edgetpu.tflite --lm-cache-capacity 32 --lm-shortlist-tiles 16
 cargo run --example rusb_control_plane_probe -- --verbose-configs
 ```
 

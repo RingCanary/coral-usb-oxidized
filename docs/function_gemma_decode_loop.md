@@ -55,6 +55,10 @@ LM-head template (default tile output size is `2624`, so an
 - `--lm-head coral-lazy` with `cache_capacity < tile_count` performs exact
   full-vocab top-k with repeated tile evictions, which can be significantly
   slower than `coral-preload`.
+- `--lm-shortlist-tiles N` enables approximate decode for `coral-lazy` by
+  evaluating only `N` LM tiles per step (`0` keeps exact full-vocab behavior).
+- shortlist mode is intended for low-cache Pi runs where exact lazy mode
+  thrashes; it trades output quality for speed.
 - On Pi5, use runtime env exports before running:
 
 ```bash
@@ -76,6 +80,9 @@ size `2624`):
    - `setup_ms ~= 4571`
    - `decode_ms_per_token ~= 51883`
    - cache stats showed strong churn (`misses >> hits`, high evictions)
+4. `--max-layers 1 --lm-head coral-lazy --lm-cache-capacity 32 --lm-shortlist-tiles 16 --steps 1`
+   - expected behavior: sharply reduced tile evaluations per step and much
+     lower decode latency than exact lazy mode (approximate logits)
 
 Observations:
 
@@ -93,8 +100,10 @@ Observations:
 2. Use `--lm-head coral-preload` for exact full-vocab decode throughput.
 3. Use `--lm-head coral-lazy` only when constrained by setup memory/time and
    with sufficient cache capacity.
-4. Expect higher one-time setup time with Coral LM-head:
+4. For low cache capacities, add `--lm-shortlist-tiles` to bound per-step tile
+   work and avoid full-vocab lazy thrash.
+5. Expect higher one-time setup time with Coral LM-head:
    - per-layer stage preparation
    - LM vocab tile preparation (`640x2624`, `100` tiles for vocab `262146`).
-5. For long decode runs, setup amortizes quickly and Coral LM-head gives the
+6. For long decode runs, setup amortizes quickly and Coral LM-head gives the
   better steady-state path.
