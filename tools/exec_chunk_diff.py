@@ -56,7 +56,9 @@ def _iso_utc_now() -> str:
 
 
 def _path_label(path: Path) -> str:
-    parts = list(path.parts)
+    parts = [part for part in path.parts if part not in ("/", "\\", "")]
+    if not parts:
+        return "root"
     return "__".join(parts).replace(":", "_")
 
 

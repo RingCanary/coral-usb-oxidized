@@ -158,6 +158,8 @@ Key outcomes:
      - relocation-byte overlap vs non-relocation changes
    - supports chunk dump export (`--dump-chunks`) and exec-index filtering for
      directory inputs (`--only-exec-index`).
+   - fixed absolute-path chunk-label handling after Pi validation (prevents
+     dump path escaping to `/...`).
 2. Added workflow documentation:
    - `docs/executable_opcode_diff.md`
 3. Added persistent four-point focus tracker:
