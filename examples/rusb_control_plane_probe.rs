@@ -407,7 +407,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         || !config.vendor_read64.is_empty()
         || !config.vendor_write32.is_empty()
         || !config.vendor_write64.is_empty();
-    let needs_io = has_vendor_ops || config.read_event_count > 0 || config.read_interrupt_count > 0;
+    let needs_endpoint_io = config.read_event_count > 0 || config.read_interrupt_count > 0;
+    let needs_io = has_vendor_ops || needs_endpoint_io;
     let need_open = config.claim_interface || config.reset_device || config.get_status || needs_io;
 
     if need_open {
@@ -422,7 +423,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let handle = device.open()?;
         let _ = handle.set_auto_detach_kernel_driver(true);
         let timeout = Duration::from_millis(config.timeout_ms);
-        let should_claim = config.claim_interface || needs_io;
+        let should_claim = config.claim_interface || needs_endpoint_io;
         let mut claimed = false;
 
         if should_claim {
@@ -431,7 +432,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             if config.claim_interface {
                 println!("Claimed interface 0");
             } else {
-                println!("Claimed interface 0 (required for requested vendor/endpoint ops)");
+                println!("Claimed interface 0 (required for requested endpoint ops)");
             }
         }
 
