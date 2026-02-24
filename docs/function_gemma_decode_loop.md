@@ -17,7 +17,9 @@ cargo run --example function_gemma_decode_loop -- \
   <templates_dir> \
   <prompt_token_ids_csv> \
   --steps 8 \
-  --lm-head coral \
+  --rounds 2 \
+  --weight-quant per-channel \
+  --lm-head coral-lazy \
   --lm-template <dense_640x2624_quant_edgetpu.tflite>
 ```
 
@@ -40,6 +42,14 @@ size is `2624`, so an `input=640, output=2624` template is expected).
 - Prompt is token IDs CSV (for example `2,2516,29901`).
 - The example prints per-step token predictions and top-k logits.
 - `--max-layers` can be used for faster bring-up before full-depth runs.
+- `--prefill-logits` is disabled by default to avoid wasting LM-head work on
+  prompt tokens whose logits are discarded.
+- `--rounds N` reuses one prepared process (delegate/stages/lm cache) across
+  repeated decode rounds to amortize setup.
+- `--weight-quant per-channel` is supported for stage and LM-tile quantization
+  and is the recommended mode for better decode quality.
+- `--lm-head coral-lazy` uses an LRU tile cache (`--lm-cache-capacity`) to
+  reduce setup/memory spikes compared to eager full-vocab preload.
 - On Pi5, use runtime env exports before running:
 
 ```bash
