@@ -271,7 +271,7 @@ fn vendor_read32(
     handle: &rusb::DeviceHandle<Context>,
     offset: u32,
     timeout: Duration,
-) -> Result<u32, Box<dyn Error>> {
+) -> rusb::Result<u32> {
     let (w_value, w_index) = split_offset(offset);
     let mut buf = [0u8; 4];
     let read = handle.read_control(
@@ -283,7 +283,7 @@ fn vendor_read32(
         timeout,
     )?;
     if read != 4 {
-        return Err(format!("vendor_read32 short read: expected 4, got {}", read).into());
+        return Err(rusb::Error::Other);
     }
     Ok(u32::from_le_bytes(buf))
 }
@@ -292,7 +292,7 @@ fn vendor_read64(
     handle: &rusb::DeviceHandle<Context>,
     offset: u32,
     timeout: Duration,
-) -> Result<u64, Box<dyn Error>> {
+) -> rusb::Result<u64> {
     let (w_value, w_index) = split_offset(offset);
     let mut buf = [0u8; 8];
     let read = handle.read_control(
@@ -304,7 +304,7 @@ fn vendor_read64(
         timeout,
     )?;
     if read != 8 {
-        return Err(format!("vendor_read64 short read: expected 8, got {}", read).into());
+        return Err(rusb::Error::Other);
     }
     Ok(u64::from_le_bytes(buf))
 }
@@ -314,7 +314,7 @@ fn vendor_write32(
     offset: u32,
     value: u32,
     timeout: Duration,
-) -> Result<(), Box<dyn Error>> {
+) -> rusb::Result<()> {
     let (w_value, w_index) = split_offset(offset);
     let bytes = value.to_le_bytes();
     let written = handle.write_control(
@@ -326,7 +326,7 @@ fn vendor_write32(
         timeout,
     )?;
     if written != 4 {
-        return Err(format!("vendor_write32 short write: expected 4, got {}", written).into());
+        return Err(rusb::Error::Other);
     }
     Ok(())
 }
@@ -336,7 +336,7 @@ fn vendor_write64(
     offset: u32,
     value: u64,
     timeout: Duration,
-) -> Result<(), Box<dyn Error>> {
+) -> rusb::Result<()> {
     let (w_value, w_index) = split_offset(offset);
     let bytes = value.to_le_bytes();
     let written = handle.write_control(
@@ -348,7 +348,7 @@ fn vendor_write64(
         timeout,
     )?;
     if written != 8 {
-        return Err(format!("vendor_write64 short write: expected 8, got {}", written).into());
+        return Err(rusb::Error::Other);
     }
     Ok(())
 }
@@ -447,32 +447,92 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         for offset in &config.vendor_read32 {
-            let val = vendor_read32(&handle, *offset, timeout)?;
-            println!(
-                "VENDOR_READ32 {} => 0x{val:08x} ({val})",
-                format_reg(*offset)
-            );
+            match vendor_read32(&handle, *offset, timeout) {
+                Ok(val) => {
+                    println!(
+                        "VENDOR_READ32 {} => 0x{val:08x} ({val})",
+                        format_reg(*offset)
+                    );
+                }
+                Err(rusb::Error::Timeout) => {
+                    println!(
+                        "VENDOR_READ32 {} => timeout after {} ms",
+                        format_reg(*offset),
+                        config.timeout_ms
+                    );
+                }
+                Err(err) => {
+                    return Err(
+                        format!("vendor_read32 {} failed: {}", format_reg(*offset), err).into(),
+                    );
+                }
+            }
         }
         for offset in &config.vendor_read64 {
-            let val = vendor_read64(&handle, *offset, timeout)?;
-            println!(
-                "VENDOR_READ64 {} => 0x{val:016x} ({val})",
-                format_reg(*offset)
-            );
+            match vendor_read64(&handle, *offset, timeout) {
+                Ok(val) => {
+                    println!(
+                        "VENDOR_READ64 {} => 0x{val:016x} ({val})",
+                        format_reg(*offset)
+                    );
+                }
+                Err(rusb::Error::Timeout) => {
+                    println!(
+                        "VENDOR_READ64 {} => timeout after {} ms",
+                        format_reg(*offset),
+                        config.timeout_ms
+                    );
+                }
+                Err(err) => {
+                    return Err(
+                        format!("vendor_read64 {} failed: {}", format_reg(*offset), err).into(),
+                    );
+                }
+            }
         }
         for (offset, value) in &config.vendor_write32 {
-            vendor_write32(&handle, *offset, *value, timeout)?;
-            println!(
-                "VENDOR_WRITE32 {} <= 0x{value:08x} ({value})",
-                format_reg(*offset)
-            );
+            match vendor_write32(&handle, *offset, *value, timeout) {
+                Ok(()) => {
+                    println!(
+                        "VENDOR_WRITE32 {} <= 0x{value:08x} ({value})",
+                        format_reg(*offset)
+                    );
+                }
+                Err(rusb::Error::Timeout) => {
+                    println!(
+                        "VENDOR_WRITE32 {} <= 0x{value:08x}: timeout after {} ms",
+                        format_reg(*offset),
+                        config.timeout_ms
+                    );
+                }
+                Err(err) => {
+                    return Err(
+                        format!("vendor_write32 {} failed: {}", format_reg(*offset), err).into(),
+                    );
+                }
+            }
         }
         for (offset, value) in &config.vendor_write64 {
-            vendor_write64(&handle, *offset, *value, timeout)?;
-            println!(
-                "VENDOR_WRITE64 {} <= 0x{value:016x} ({value})",
-                format_reg(*offset)
-            );
+            match vendor_write64(&handle, *offset, *value, timeout) {
+                Ok(()) => {
+                    println!(
+                        "VENDOR_WRITE64 {} <= 0x{value:016x} ({value})",
+                        format_reg(*offset)
+                    );
+                }
+                Err(rusb::Error::Timeout) => {
+                    println!(
+                        "VENDOR_WRITE64 {} <= 0x{value:016x}: timeout after {} ms",
+                        format_reg(*offset),
+                        config.timeout_ms
+                    );
+                }
+                Err(err) => {
+                    return Err(
+                        format!("vendor_write64 {} failed: {}", format_reg(*offset), err).into(),
+                    );
+                }
+            }
         }
 
         if config.read_event_count > 0 {
