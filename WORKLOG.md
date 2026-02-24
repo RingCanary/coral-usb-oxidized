@@ -147,6 +147,34 @@ Key outcomes:
      - `setup ~34558.8 ms`
      - `decode ~8085.4 ms/token`
 
+### Phase-B RE tooling upgrade (EXECUTION_ONLY diff prep)
+
+1. Added dedicated chunk-diff tool:
+   - `tools/exec_chunk_diff.py`
+   - compares instruction chunks from `serialized_executable_*.bin`
+   - reports:
+     - changed bytes per chunk
+     - changed instruction-word count (configurable width)
+     - relocation-byte overlap vs non-relocation changes
+   - supports chunk dump export (`--dump-chunks`) and exec-index filtering for
+     directory inputs (`--only-exec-index`).
+2. Added workflow documentation:
+   - `docs/executable_opcode_diff.md`
+3. Added persistent four-point focus tracker:
+   - `docs/focus_points.md`
+   - used as the long-standing list to keep work centered on the primary
+     outcome.
+4. Local validation sample:
+   - command:
+     - `python3 tools/exec_chunk_diff.py traces/dense-template-256x256-20260222T062154Z/extract/package_000 traces/dense-template-512x512-20260222T062006Z/extract/package_000 --only-exec-index 0 --out-dir traces/phase-b-diff-256-vs-512-exec0 --dump-chunks`
+   - output:
+     - `changed_bytes=3433`
+     - `instr_changed=360/514`
+     - `reloc_changed=3`
+   - artifacts:
+     - `traces/phase-b-diff-256-vs-512-exec0/exec_chunk_diff_report.json`
+     - `traces/phase-b-diff-256-vs-512-exec0/chunk_dump_manifest.json`
+
 ## 2026-02-22
 
 ### Objective

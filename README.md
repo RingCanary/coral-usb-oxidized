@@ -161,6 +161,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `tools/usbmon_bulk_signature.py` (bulk payload header/signature extraction by phase)
 - `tools/usbmon_three_stage_signature.py` (dedicated 3-stage bulk loop signature parser)
 - `tools/parse_edgetpu_executable.py` (schema-aware parser for serialized executables)
+- `tools/exec_chunk_diff.py` (EXECUTION_ONLY chunk diff + relocation-overlap analysis for Phase-B ISA work)
 - `tools/tensorizer_patch_edgetpu.py` (in-place parameter patcher for compiled `*_edgetpu.tflite`)
 - `tools/generate_dense_quant_tflite.py` (single-layer Dense INT8 model generator)
 - `tools/generate_conv2d_quant_tflite.py` (single-layer Conv2D INT8 model generator)
@@ -200,6 +201,8 @@ Current reverse-engineering notes:
 - `docs/next_usbmon_capture_matrix.md`
 - `docs/usb_register_map_candidates.md`
 - `docs/usb_executable_transport_correlation.md`
+- `docs/executable_opcode_diff.md`
+- `docs/focus_points.md`
 - `docs/tensorizer_mvp.md`
 - `docs/tensorizer_dense_template.md`
 - `docs/research_frontier_platform.md`
@@ -219,6 +222,10 @@ Current reverse-engineering notes:
 - `docs/schema/libedgetpu_executable.fbs`
 - `docs/external_research_2026-02-21.md`
 - `traces/re-matrix-20260221T092342Z/USBMON_PACKET_VALIDATION_20260221T1035Z.md`
+
+Long-standing priority list (kept intentionally to four points only):
+
+- `docs/focus_points.md`
 
 ## Arch bootstrap (local prefix)
 
