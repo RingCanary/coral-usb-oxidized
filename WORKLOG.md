@@ -199,6 +199,28 @@ Key outcomes:
 4. Updated protocol notes in `docs/usb_register_map_candidates.md` to include
    verified mappings and header semantics.
 
+### Phase-A probe expansion (`rusb_control_plane_probe`)
+
+1. Upgraded `examples/rusb_control_plane_probe.rs` from passive topology probe
+   to actionable control-plane harness with:
+   - vendor register reads:
+     - `--vendor-read32 OFF`
+     - `--vendor-read64 OFF`
+   - vendor register writes:
+     - `--vendor-write32 OFF=VAL`
+     - `--vendor-write64 OFF=VAL`
+   - endpoint reads:
+     - `--read-event N` (endpoint `0x82`, event descriptor decode)
+     - `--read-interrupt N` (endpoint `0x83`, `raw_data` decode)
+   - configurable timeout:
+     - `--timeout-ms N`
+2. Added known CSR name annotation in probe output for key mapped registers:
+   - `scalarCoreRunControl`, `tileconfig0`, `scu_ctrl_0`,
+     queue base/tail/completed head offsets.
+3. Updated docs:
+   - `docs/rusb_control_plane_probe.md`
+   - `docs/focus_points.md` status notes for points 1 and 2.
+
 ## 2026-02-22
 
 ### Objective

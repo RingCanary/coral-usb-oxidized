@@ -10,8 +10,11 @@ change should map to one (or more) of these points.
   (`wValue`/`wIndex` register paths), including queue base, doorbell, status,
   and reset/ack flow.
 - Current status:
-  Partial. Address clusters are known and stable (`a30c`, `4018`, `8788`, ...),
-  but symbolic meaning is still hypothesis-level.
+  Partial. Core mappings are now verified for:
+  - `0x44018 -> scalarCoreRunControl`
+  - `0x48788 -> tileconfig0`
+  - `0x1a30c -> scu_ctrl_0`
+  Remaining register groups still need semantic confirmation.
 - Success signal:
   A named register map where each critical control write is explained and tested
   against usbmon traces.
@@ -22,8 +25,9 @@ change should map to one (or more) of these points.
   Execute model invoke lifecycle through `rusb` only:
   device transition, control sequence, bulk submit/reap, completion polling.
 - Current status:
-  Early. Baseline control-plane probe exists, but full invoke replay still
-  depends on `libedgetpu`.
+  Early-mid. Probe now supports vendor CSR read/write plus event (`0x82`) and
+  interrupt (`0x83`) decoding, but full invoke replay still depends on
+  `libedgetpu`.
 - Success signal:
   A Rust example that runs one known template end-to-end and returns valid output
   without `libedgetpu`.
