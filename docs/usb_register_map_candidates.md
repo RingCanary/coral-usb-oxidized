@@ -159,6 +159,7 @@ Observed each run during enumeration/setup:
 ```bash
 python3 tools/usbmon_register_map.py report <usbmon.log> --bus 4 --device 005
 python3 tools/usbmon_register_map.py matrix --run U1=<log1> --run U2=<log2> --run U3=<log3> --run U4=<log4> --bus 4 --device 005
+python3 tools/usbmon_register_map.py sequence <usbmon.log> --bus 4 --device 005 --phase pre_loop --json > /tmp/vendor-seq-preloop.json
 python3 tools/usbmon_bulk_signature.py <usbmon.log> --bus 4 --device 005 --prefix-words 2
 python3 tools/usbmon_three_stage_signature.py <usbmon.log> --bus 4 --device 005
 ```

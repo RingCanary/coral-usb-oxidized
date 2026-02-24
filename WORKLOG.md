@@ -221,6 +221,27 @@ Key outcomes:
    - `docs/rusb_control_plane_probe.md`
    - `docs/focus_points.md` status notes for points 1 and 2.
 
+### Control-sequence extraction tooling
+
+1. Extended `tools/usbmon_register_map.py` with `sequence` mode:
+   - emits ordered vendor control operations (timestamped) for selected phases
+   - includes:
+     - full CSR offset (`(wIndex << 16) | wValue`)
+     - operation class (`read32/read64/write32/write64`)
+     - known register name (when mapped)
+     - decoded write payload values for CSR writes
+2. Validation sample (local trace):
+   - command:
+     - `python3 tools/usbmon_register_map.py sequence traces/usbmon-20260221T090004Z-bus4/usbmon-bus4-20260221T090004Z.log --bus 4 --device 005 --phase pre_loop --json`
+   - result:
+     - `sequence_count=52` pre-loop vendor ops
+     - includes decoded writes such as:
+       - `scu_ctrl_0` write value `0x000f0059`
+       - `scalarCoreRunControl` write value `0x1`
+       - `tileconfig0` write value `0x7f`
+3. Updated `docs/usb_register_map_candidates.md` reproduction commands with
+   `sequence` extraction flow.
+
 ## 2026-02-22
 
 ### Objective

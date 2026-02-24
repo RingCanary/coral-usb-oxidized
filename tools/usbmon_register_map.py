@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,6 +31,9 @@ class Entry:
     status: str
     size: Optional[int]
     tokens: List[str]
+
+
+HEX_WORD_RE = re.compile(r"^[0-9a-fA-F]{8}$")
 
 
 # Curated register names from publicly available DarwiNN/Beagle maps:
@@ -112,6 +116,35 @@ def load_entries(path: Path) -> List[Entry]:
             if e is not None:
                 out.append(e)
     return out
+
+
+def parse_payload_words(tokens: List[str]) -> List[str]:
+    if "=" not in tokens:
+        return []
+    idx = tokens.index("=")
+    out: List[str] = []
+    for tok in tokens[idx + 1 :]:
+        t = tok.strip().lower()
+        if HEX_WORD_RE.match(t):
+            out.append(t)
+    return out
+
+
+def decode_write_payload(op: str, payload_words: List[str]) -> Optional[int]:
+    if op not in {"write32", "write64"}:
+        return None
+    want_bytes = 4 if op == "write32" else 8
+    raw = bytearray()
+    for word in payload_words:
+        try:
+            raw.extend(bytes.fromhex(word))
+        except ValueError:
+            return None
+        if len(raw) >= want_bytes:
+            break
+    if len(raw) < want_bytes:
+        return None
+    return int.from_bytes(bytes(raw[:want_bytes]), byteorder="little", signed=False)
 
 
 def dominant_device(entries: Iterable[Entry], bus: Optional[str]) -> Optional[str]:
@@ -318,6 +351,81 @@ def analyze_log(path: Path, bus: Optional[str], device: Optional[str], bo_b: int
     }
 
 
+def extract_vendor_sequence(
+    path: Path,
+    bus: Optional[str],
+    device: Optional[str],
+    bo_b: int,
+    bi_out: int,
+    phases: Optional[List[str]] = None,
+) -> Dict[str, object]:
+    entries_all = load_entries(path)
+    if bus is not None:
+        entries_bus = [e for e in entries_all if e.bus == bus]
+    else:
+        entries_bus = entries_all
+    dev = device or dominant_device(entries_bus, bus)
+    if dev is None:
+        return {"log_path": str(path), "error": "no matching bus/device entries"}
+    entries = [e for e in entries_bus if e.dev == dev]
+    if not entries:
+        return {"log_path": str(path), "bus": bus, "device": dev, "error": "no entries for device"}
+
+    first_bo_b, last_bi_out = detect_loop_window(entries, bo_b=bo_b, bi_out=bi_out)
+    phase_allow = set(phases or ["all"])
+
+    seq: List[Dict[str, object]] = []
+    for e in entries:
+        if e.event != "S":
+            continue
+        if e.transfer not in {"Ci", "Co"}:
+            continue
+        if e.ep != "0":
+            continue
+        if len(e.tokens) < 10:
+            continue
+        if e.tokens[4] != "s":
+            continue
+
+        c = classify_control(e.tokens)
+        if c.get("kind") != "vendor":
+            continue
+        phase = phase_for_ts(e.ts, first_bo_b=first_bo_b, last_bi_out=last_bi_out)
+        if "all" not in phase_allow and phase not in phase_allow:
+            continue
+
+        payload_words = parse_payload_words(e.tokens)
+        value = decode_write_payload(c.get("op", ""), payload_words)
+        row: Dict[str, object] = {
+            "ts": e.ts,
+            "phase": phase,
+            "transfer": e.transfer,
+            "op": c.get("op"),
+            "bm": c.get("bm"),
+            "breq": c.get("breq"),
+            "wlen": c.get("wlen"),
+            "addr_low16": c.get("addr"),
+            "addr_full": c.get("addr_full", c.get("addr")),
+            "reg_name": c.get("reg_name", ""),
+            "payload_words": payload_words,
+        }
+        if value is not None:
+            row["value_u64"] = int(value)
+            row["value_hex"] = f"0x{int(value):x}"
+        seq.append(row)
+
+    return {
+        "log_path": str(path),
+        "bus": bus,
+        "device": dev,
+        "line_count": len(entries),
+        "loop_window": {"first_bo_b_ts": first_bo_b, "last_bi_out_ts": last_bi_out},
+        "sequence_count": len(seq),
+        "phases": sorted(phase_allow),
+        "sequence": seq,
+    }
+
+
 def render_report_text(data: Dict[str, object], top: int) -> str:
     if "error" in data:
         return f"ERROR: {data['error']}"
@@ -399,6 +507,31 @@ def render_matrix_text(matrix: Dict[str, object], top: int) -> str:
     return "\n".join(lines)
 
 
+def render_sequence_text(data: Dict[str, object], top: int) -> str:
+    if "error" in data:
+        return f"ERROR: {data['error']}"
+    lines: List[str] = []
+    lines.append(f"log={data['log_path']}")
+    lines.append(f"bus={data['bus'] or '*'} device={data['device']} lines={data['line_count']}")
+    lw = data["loop_window"]
+    lines.append(
+        "loop_window first_bo_b_ts={} last_bi_out_ts={}".format(
+            lw["first_bo_b_ts"], lw["last_bi_out_ts"]
+        )
+    )
+    lines.append("phases=" + ",".join(data.get("phases", [])))
+    lines.append(f"sequence_count={data['sequence_count']}")
+    lines.append("sequence_preview:")
+    for row in data["sequence"][:top]:
+        label = f"{row['ts']} {row['phase']} {row['transfer']} {row['op']} {row['addr_full']}"
+        if row.get("reg_name"):
+            label += f" ({row['reg_name']})"
+        if row.get("value_hex"):
+            label += f" value={row['value_hex']}"
+        lines.append("  " + label)
+    return "\n".join(lines)
+
+
 def build_matrix(reports: Dict[str, Dict[str, object]]) -> Dict[str, object]:
     totals = Counter()
     active_counts = {}
@@ -449,6 +582,22 @@ def main() -> int:
     mat.add_argument("--top", type=int, default=40)
     mat.add_argument("--json", action="store_true")
 
+    seq = sub.add_parser("sequence", help="Extract ordered vendor control sequence for replay.")
+    seq.add_argument("log", type=Path)
+    seq.add_argument("--bus")
+    seq.add_argument("--device")
+    seq.add_argument("--bo-b", type=int, default=150_528)
+    seq.add_argument("--bi-out", type=int, default=1_008)
+    seq.add_argument(
+        "--phase",
+        action="append",
+        default=[],
+        choices=["setup_only", "pre_loop", "loop", "post_loop", "all"],
+        help="Filter sequence by phase (default: all).",
+    )
+    seq.add_argument("--top", type=int, default=80)
+    seq.add_argument("--json", action="store_true")
+
     args = parser.parse_args()
 
     if args.cmd == "report":
@@ -481,6 +630,22 @@ def main() -> int:
         else:
             print(render_matrix_text(matrix, top=args.top))
         return 0
+
+    if args.cmd == "sequence":
+        phases = args.phase if args.phase else ["all"]
+        data = extract_vendor_sequence(
+            path=args.log,
+            bus=args.bus,
+            device=args.device,
+            bo_b=args.bo_b,
+            bi_out=args.bi_out,
+            phases=phases,
+        )
+        if args.json:
+            print(json.dumps(data, indent=2, sort_keys=True))
+        else:
+            print(render_sequence_text(data, top=args.top))
+        return 0 if "error" not in data else 1
 
     return 1
 
