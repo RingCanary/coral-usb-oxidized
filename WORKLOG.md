@@ -242,6 +242,36 @@ Key outcomes:
 3. Updated `docs/usb_register_map_candidates.md` reproduction commands with
    `sequence` extraction flow.
 
+### Fresh Pi capture + replay-candidate extraction
+
+1. Recovered device from DFU state and captured fresh delegate bring-up trace:
+   - `traces/usbmon-20260224T182649Z-bus4/usbmon-bus4-20260224T182649Z.log`
+   - observed expected transition:
+     - `1a6e:089a -> 18d1:9302`
+2. Extracted ordered control sequence from the runtime-side device ID stream
+   (`device=016` in this capture):
+   - artifacts:
+     - `/home/rpc/clip-traces/replay-seq-usbmon-20260224T182649Z-bus4/device016-seq.json`
+     - `/home/rpc/clip-traces/replay-seq-usbmon-20260224T182649Z-bus4/device016-seq.txt`
+   - `sequence_count=95` vendor ops
+3. Added replay-oriented sequence filters:
+   - `--writes-only`
+   - `--known-only`
+4. Replay candidate artifacts from same capture:
+   - all writes:
+     - `/home/rpc/clip-traces/replay-seq-usbmon-20260224T182649Z-bus4/device016-writes.json`
+     - `count=73`
+   - known-register writes only:
+     - `/home/rpc/clip-traces/replay-seq-usbmon-20260224T182649Z-bus4/device016-known-writes.json`
+     - `count=6`
+     - sequence:
+       - `scu_ctrl_0 <= 0x000f0059`
+       - `tileconfig0 <= 0x7f`
+       - `scalarCoreRunControl <= 0x1`
+       - `tileconfig0 <= 0x7f`
+       - `scalarCoreRunControl <= 0x2`
+       - `tileconfig0 <= 0x7f`
+
 ## 2026-02-22
 
 ### Objective
