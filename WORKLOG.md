@@ -109,6 +109,44 @@ Key diff (CPU LM-head vs Coral LM-head run):
 2. `coral-lazy` now supports shortlist/approx decode and can avoid full-vocab
    thrash on low cache capacities; it trades token quality for speed.
 
+### End-to-end completion matrix (Pi5, 2026-02-24)
+
+Artifact root:
+
+- `/home/rpc/clip-traces/functiongemma-e2e-20260224T163033Z`
+
+Cases executed end-to-end (same prompt `2,2516,29901`):
+
+1. `C1_cpu_l1_s1`
+2. `C2_coral_preload_l1_s1`
+3. `C3_coral_lazy_exact_l1_s1`
+4. `C4_coral_lazy_short16_l1_s1`
+5. `C5_coral_lazy_short16_l1_s2`
+6. `C6_coral_preload_l18_s1`
+7. `C7_coral_lazy_short16_l18_s1`
+
+Key outcomes:
+
+1. Exact parity check (`l1`, `steps=1`):
+   - CPU next token: `155904`
+   - Coral preload next token: `155904` (match)
+2. Per-token latency:
+   - CPU `l1`: `~14628.6 ms`
+   - Coral preload `l1`: `~640.1 ms`
+   - Coral lazy exact `l1` (cache32): `~48030.2 ms`
+   - Coral lazy shortlist16 `l1` (cache32): `~7932.6 ms`
+3. Multi-step shortlist reuse (`l1`, `steps=2`, shortlist16):
+   - step0 `~7918.9 ms`
+   - step1 `~122.4 ms`
+   - final cache stats: `hits=16`, `misses=16`, `evictions=0`
+4. Full-depth (`18` layers) decode:
+   - Coral preload:
+     - `setup ~83816.6 ms`
+     - `decode ~995.3 ms/token`
+   - Coral lazy shortlist16:
+     - `setup ~34558.8 ms`
+     - `decode ~8085.4 ms/token`
+
 ## 2026-02-22
 
 ### Objective

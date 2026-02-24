@@ -99,6 +99,33 @@ Observations:
   - prefill off: `~47.6 ms`
   - prefill on: `~103810 ms`
 
+## End-to-end Pi5 matrix (2026-02-24)
+
+Artifact root:
+
+- `/home/rpc/clip-traces/functiongemma-e2e-20260224T163033Z`
+
+Key checks from one deterministic prompt (`2,2516,29901`):
+
+1. Exact-vocab parity check at `--max-layers 1 --steps 1`
+   - `cpu` top-1 token: `155904`
+   - `coral-preload` top-1 token: `155904` (matches CPU)
+2. Throughput snapshot
+   - `cpu l1`: `~14628.6 ms/token`
+   - `coral-preload l1`: `~640.1 ms/token`
+   - `coral-lazy exact l1 cache32`: `~48030.2 ms/token`
+   - `coral-lazy shortlist16 l1 cache32`: `~7932.6 ms/token`
+3. Full-depth (`18` layers) snapshot
+   - `coral-preload`: `setup ~83816.6 ms`, `decode ~995.3 ms/token`
+   - `coral-lazy shortlist16`: `setup ~34558.8 ms`, `decode ~8085.4 ms/token`
+
+Interpretation:
+
+- `coral-preload` remains the recommended exact full-vocab mode for decode
+  throughput.
+- shortlist mode is a setup/memory-oriented approximate path and is useful when
+  avoiding full-vocab lazy thrash is more important than exact token parity.
+
 ## Practical guidance
 
 1. Use `--lm-head cpu` only for bring-up/debug.
