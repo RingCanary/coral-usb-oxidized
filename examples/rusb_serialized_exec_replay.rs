@@ -139,6 +139,14 @@ struct Config {
     param_submit_log_every: usize,
     param_require_post_instr_event: bool,
     param_post_instr_event_timeout_ms: u64,
+    param_interleave_window_bytes: Option<usize>,
+    param_interleave_require_event: bool,
+    param_interleave_event_timeout_ms: u64,
+    param_csr_probe_offsets: Vec<usize>,
+    param_poison_probe_offset: Option<usize>,
+    script1_interleave: bool,
+    script2_queue_probe: bool,
+    script3_poison_diff: bool,
 }
 
 fn usage(program: &str) {
@@ -303,6 +311,30 @@ fn usage(program: &str) {
     );
     println!(
         "  --param-post-instr-event-timeout-ms N  Timeout for required post-instr event (default: 100)"
+    );
+    println!(
+        "  --param-interleave-window-bytes N  Script1: split param payload into windows and inject instruction chunk between windows"
+    );
+    println!(
+        "  --param-interleave-require-event   Script1: require EP 0x82 event after each injected interleave instruction chunk"
+    );
+    println!(
+        "  --param-interleave-event-timeout-ms N  Timeout for Script1 interleave required event (default: 100)"
+    );
+    println!(
+        "  --param-csr-probe-offsets LIST  Script2: capture queue/runcontrol CSR snapshot when param bytes cross offsets"
+    );
+    println!(
+        "  --param-poison-probe-offset N   Script3: probe bridge/scu CSR liveness when param bytes cross offset"
+    );
+    println!(
+        "  --script1-interleave            Enable Script1 profile defaults (interleave window=32768)"
+    );
+    println!(
+        "  --script2-queue-probe          Enable Script2 profile defaults (csr probe=32000, chunk=256)"
+    );
+    println!(
+        "  --script3-poison-diff          Enable Script3 profile defaults (poison probe offset=33024, chunk=256)"
     );
     println!(
         "  --param-write-sleep-us N    Sleep between parameter chunks to pace stream (default: 0)"
@@ -475,6 +507,14 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         param_submit_log_every: 0,
         param_require_post_instr_event: false,
         param_post_instr_event_timeout_ms: 100,
+        param_interleave_window_bytes: None,
+        param_interleave_require_event: false,
+        param_interleave_event_timeout_ms: 100,
+        param_csr_probe_offsets: Vec::new(),
+        param_poison_probe_offset: None,
+        script1_interleave: false,
+        script2_queue_probe: false,
+        script3_poison_diff: false,
     };
 
     let mut i = 1usize;
@@ -858,6 +898,46 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                         .ok_or("--param-post-instr-event-timeout-ms requires value")?,
                 )?;
             }
+            "--param-interleave-window-bytes" => {
+                i += 1;
+                config.param_interleave_window_bytes = Some(parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-interleave-window-bytes requires value")?,
+                )?);
+            }
+            "--param-interleave-require-event" => {
+                config.param_interleave_require_event = true;
+            }
+            "--param-interleave-event-timeout-ms" => {
+                i += 1;
+                config.param_interleave_event_timeout_ms = parse_u64_auto(
+                    args.get(i)
+                        .ok_or("--param-interleave-event-timeout-ms requires value")?,
+                )?;
+            }
+            "--param-csr-probe-offsets" => {
+                i += 1;
+                config.param_csr_probe_offsets = parse_usize_list_auto(
+                    args.get(i)
+                        .ok_or("--param-csr-probe-offsets requires value")?,
+                )?;
+            }
+            "--param-poison-probe-offset" => {
+                i += 1;
+                config.param_poison_probe_offset = Some(parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-poison-probe-offset requires value")?,
+                )?);
+            }
+            "--script1-interleave" => {
+                config.script1_interleave = true;
+            }
+            "--script2-queue-probe" => {
+                config.script2_queue_probe = true;
+            }
+            "--script3-poison-diff" => {
+                config.script3_poison_diff = true;
+            }
             "--param-write-sleep-us" => {
                 i += 1;
                 config.param_write_sleep_us = parse_u64_auto(
@@ -868,6 +948,33 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
             other => return Err(format!("unknown argument: {}", other).into()),
         }
         i += 1;
+    }
+
+    if config.script1_interleave && config.param_interleave_window_bytes.is_none() {
+        config.param_interleave_window_bytes = Some(32_768);
+    }
+    if config.script2_queue_probe {
+        if config.param_csr_probe_offsets.is_empty() {
+            config.param_csr_probe_offsets = vec![32_000];
+        }
+        if config.param_stream_chunk_size.is_none() {
+            config.param_stream_chunk_size = Some(256);
+        }
+        if config.param_csr_snapshot_start_bytes.is_none() {
+            config.param_csr_snapshot_start_bytes = Some(30_720);
+        }
+        if config.param_csr_snapshot_end_bytes.is_none() {
+            config.param_csr_snapshot_end_bytes = Some(33_792);
+        }
+        config.param_csr_snapshot_on_error = true;
+    }
+    if config.script3_poison_diff {
+        if config.param_poison_probe_offset.is_none() {
+            config.param_poison_probe_offset = Some(33_024);
+        }
+        if config.param_stream_chunk_size.is_none() {
+            config.param_stream_chunk_size = Some(256);
+        }
     }
 
     if config.model_path.is_empty() {
@@ -887,6 +994,15 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
     }
     if matches!(config.param_stream_chunk_size, Some(0)) {
         return Err("--param-stream-chunk-size must be >= 1".into());
+    }
+    if matches!(config.param_interleave_window_bytes, Some(0)) {
+        return Err("--param-interleave-window-bytes must be >= 1".into());
+    }
+    if config.param_interleave_require_event && config.param_interleave_window_bytes.is_none() {
+        return Err(
+            "set --param-interleave-window-bytes (or --script1-interleave) when using --param-interleave-require-event"
+                .into(),
+        );
     }
     if matches!(config.param_descriptor_split_bytes, Some(0)) {
         return Err("--param-descriptor-split-bytes must be >= 1".into());
@@ -1292,22 +1408,23 @@ const PARAM_SNAPSHOT_CSRS: [(&str, u32); 9] = [
     ("param_queue_int_status", 0x0004_8698),
 ];
 
+const PARAM_POISON_PROBE_CSRS: [(&str, u32); 2] = [
+    ("usbTopInterruptStatus", 0x0004_c060),
+    ("scu_ctr_7", 0x0001_a33c),
+];
+
 fn has_param_csr_snapshot(config: &Config) -> bool {
     config.param_csr_snapshot_start_bytes.is_some()
         && config.param_csr_snapshot_end_bytes.is_some()
 }
 
-fn capture_param_csr_snapshot(
+fn dump_param_csr_snapshot(
     driver: &EdgeTpuUsbDriver,
-    config: &Config,
     phase_label: &str,
     reason: &str,
     chunk_idx: usize,
     param_bytes_written: usize,
 ) {
-    if !has_param_csr_snapshot(config) {
-        return;
-    }
     println!(
         "      {}: csr snapshot reason={} chunk={} offset={}",
         phase_label, reason, chunk_idx, param_bytes_written
@@ -1332,6 +1449,20 @@ fn capture_param_csr_snapshot(
     }
 }
 
+fn capture_param_csr_snapshot(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    phase_label: &str,
+    reason: &str,
+    chunk_idx: usize,
+    param_bytes_written: usize,
+) {
+    if !has_param_csr_snapshot(config) {
+        return;
+    }
+    dump_param_csr_snapshot(driver, phase_label, reason, chunk_idx, param_bytes_written);
+}
+
 fn should_capture_param_csr_snapshot(
     config: &Config,
     chunk_idx: usize,
@@ -1346,6 +1477,63 @@ fn should_capture_param_csr_snapshot(
         return false;
     }
     chunk_idx % config.param_csr_snapshot_every_chunks == 0
+}
+
+fn run_pending_param_csr_probes(
+    driver: &EdgeTpuUsbDriver,
+    phase_label: &str,
+    chunk_idx: usize,
+    param_bytes_written: usize,
+    probe_offsets: &[usize],
+    probe_cursor: &mut usize,
+) {
+    while *probe_cursor < probe_offsets.len() && param_bytes_written >= probe_offsets[*probe_cursor] {
+        dump_param_csr_snapshot(
+            driver,
+            phase_label,
+            "probe_offset",
+            chunk_idx,
+            param_bytes_written,
+        );
+        *probe_cursor += 1;
+    }
+}
+
+fn run_param_poison_probe(
+    driver: &EdgeTpuUsbDriver,
+    phase_label: &str,
+    chunk_idx: usize,
+    param_bytes_written: usize,
+    poison_probe_offset: Option<usize>,
+    poison_probe_done: &mut bool,
+) {
+    if *poison_probe_done {
+        return;
+    }
+    let Some(offset) = poison_probe_offset else {
+        return;
+    };
+    if param_bytes_written < offset {
+        return;
+    }
+
+    println!(
+        "      {}: poison probe chunk={} offset={} threshold={}",
+        phase_label, chunk_idx, param_bytes_written, offset
+    );
+    for (name, reg) in PARAM_POISON_PROBE_CSRS {
+        match driver.vendor_read32(reg) {
+            Ok(value) => println!(
+                "      {}: poison csr {:<22} 0x{:08x} => 0x{:08x} (ok)",
+                phase_label, name, reg, value
+            ),
+            Err(err) => println!(
+                "      {}: poison csr {:<22} 0x{:08x} => err='{}'",
+                phase_label, name, reg, err
+            ),
+        }
+    }
+    *poison_probe_done = true;
 }
 
 fn run_pending_known_good_gates(
@@ -1470,6 +1658,14 @@ fn has_param_known_good_gates(config: &Config) -> bool {
         || (config.param_gate_window_start_bytes.is_some()
             && config.param_gate_window_end_bytes.is_some()
             && config.param_gate_window_step_bytes.is_some())
+}
+
+fn has_param_csr_probes(config: &Config) -> bool {
+    !config.param_csr_probe_offsets.is_empty()
+}
+
+fn has_param_poison_probe(config: &Config) -> bool {
+    config.param_poison_probe_offset.is_some()
 }
 
 fn has_param_admission_wait(config: &Config) -> bool {
@@ -2048,6 +2244,9 @@ fn stream_parameter_chunks(
     let mut param_bytes_written = 0usize;
     let mut gate_cursor = 0usize;
     let gate_offsets = &config.param_gate_known_good_offsets;
+    let mut csr_probe_cursor = 0usize;
+    let csr_probe_offsets = &config.param_csr_probe_offsets;
+    let mut poison_probe_done = false;
     let window_gate = match (
         config.param_gate_window_start_bytes,
         config.param_gate_window_end_bytes,
@@ -2086,6 +2285,22 @@ fn stream_parameter_chunks(
                     param_bytes_written,
                 );
             }
+            run_pending_param_csr_probes(
+                driver,
+                phase_label,
+                global_chunk_idx,
+                param_bytes_written,
+                csr_probe_offsets,
+                &mut csr_probe_cursor,
+            );
+            run_param_poison_probe(
+                driver,
+                phase_label,
+                global_chunk_idx,
+                param_bytes_written,
+                config.param_poison_probe_offset,
+                &mut poison_probe_done,
+            );
             if config.param_gate_placement.run_before() {
                 run_pending_known_good_gates(
                     driver,
@@ -2121,6 +2336,23 @@ fn stream_parameter_chunks(
             param_bytes_written += chunk.len();
             descriptor_offset = end;
             global_chunk_idx += 1;
+
+            run_pending_param_csr_probes(
+                driver,
+                phase_label,
+                global_chunk_idx,
+                param_bytes_written,
+                csr_probe_offsets,
+                &mut csr_probe_cursor,
+            );
+            run_param_poison_probe(
+                driver,
+                phase_label,
+                global_chunk_idx,
+                param_bytes_written,
+                config.param_poison_probe_offset,
+                &mut poison_probe_done,
+            );
 
             if config.param_gate_placement.run_after() {
                 run_pending_known_good_gates(
@@ -2347,6 +2579,78 @@ fn stream_parameter_chunks_with_optional_async_lanes(
     result
 }
 
+fn send_parameter_payload_with_instruction_interleave(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    payload: &[u8],
+    phase_label: &str,
+    interleave_window_bytes: usize,
+    instruction_chunks: &[Vec<u8>],
+) -> Result<(), Box<dyn Error>> {
+    if payload.is_empty() {
+        return Ok(());
+    }
+    if instruction_chunks.is_empty() {
+        return Err(format!(
+            "{}: interleave requested but no instruction chunks are available",
+            phase_label
+        )
+        .into());
+    }
+
+    let mut segment_start = 0usize;
+    let mut segment_idx = 0usize;
+    while segment_start < payload.len() {
+        let segment_end = (segment_start + interleave_window_bytes).min(payload.len());
+        let segment_label = format!(
+            "{} interleave-seg{} [{}..{})",
+            phase_label, segment_idx + 1, segment_start, segment_end
+        );
+        send_parameter_payload(
+            driver,
+            config,
+            &payload[segment_start..segment_end],
+            &segment_label,
+        )?;
+        segment_start = segment_end;
+        segment_idx += 1;
+
+        if segment_start >= payload.len() {
+            break;
+        }
+
+        let instr_idx = (segment_idx - 1) % instruction_chunks.len();
+        let instr_chunk = &instruction_chunks[instr_idx];
+        println!(
+            "    {}: interleave instruction chunk {} ({} bytes) after param offset={}",
+            phase_label,
+            instr_idx,
+            instr_chunk.len(),
+            segment_start
+        );
+        driver.send_descriptor_payload_raw(config.instructions_tag, instr_chunk)?;
+
+        if config.param_interleave_require_event {
+            let timeout = Duration::from_millis(config.param_interleave_event_timeout_ms);
+            match driver.read_event_packet_with_timeout(timeout) {
+                Ok(event) => println!(
+                    "    {}: interleave post-instr event: tag={} offset=0x{:016x} length={}",
+                    phase_label, event.tag, event.offset, event.length
+                ),
+                Err(err) => {
+                    return Err(format!(
+                        "{}: interleave required event failed after segment {}: {}",
+                        phase_label, segment_idx, err
+                    )
+                    .into())
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn send_parameter_payload(
     driver: &EdgeTpuUsbDriver,
     config: &Config,
@@ -2372,6 +2676,8 @@ fn send_parameter_payload(
         || has_param_submit_lanes(config)
         || has_param_known_good_gates(config)
         || has_param_csr_snapshot(config)
+        || has_param_csr_probes(config)
+        || has_param_poison_probe(config)
         || has_param_admission_wait(config);
     if !use_custom_stream {
         driver.send_descriptor_payload_raw(config.parameters_tag, payload)?;
@@ -2393,7 +2699,7 @@ fn send_parameter_payload(
     let interrupt_poll_timeout = Duration::from_millis(config.param_interrupt_timeout_ms);
 
     println!(
-        "    {}: streaming parameters len={} header_len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} csr_snapshot_start={:?} csr_snapshot_end={:?} csr_snapshot_every_chunks={} csr_snapshot_on_error={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
+        "    {}: streaming parameters len={} header_len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} csr_snapshot_start={:?} csr_snapshot_end={:?} csr_snapshot_every_chunks={} csr_snapshot_on_error={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} interleave_window={:?} interleave_require_event={} interleave_event_timeout_ms={} csr_probe_offsets={:?} poison_probe_offset={:?}",
         phase_label,
         stream_len,
         header_total_len,
@@ -2441,7 +2747,12 @@ fn send_parameter_payload(
         config.param_submit_buffer_size,
         config.param_submit_timeout_ms,
         config.param_submit_event_poll_ms,
-        config.param_submit_log_every
+        config.param_submit_log_every,
+        config.param_interleave_window_bytes,
+        config.param_interleave_require_event,
+        config.param_interleave_event_timeout_ms,
+        config.param_csr_probe_offsets,
+        config.param_poison_probe_offset
     );
 
     stream_parameter_chunks_with_optional_async_lanes(
@@ -2506,10 +2817,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         || has_param_submit_lanes(&config)
         || has_param_known_good_gates(&config)
         || has_param_csr_snapshot(&config)
+        || has_param_csr_probes(&config)
+        || has_param_poison_probe(&config)
         || has_param_admission_wait(&config)
     {
         println!(
-            "Parameter stream controls: chunk={:?} max_bytes={:?} force_full_header_len={} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} csr_snapshot_start={:?} csr_snapshot_end={:?} csr_snapshot_every_chunks={} csr_snapshot_on_error={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} require_post_instr_event={} post_instr_event_timeout_ms={}",
+            "Parameter stream controls: chunk={:?} max_bytes={:?} force_full_header_len={} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} csr_snapshot_start={:?} csr_snapshot_end={:?} csr_snapshot_every_chunks={} csr_snapshot_on_error={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} require_post_instr_event={} post_instr_event_timeout_ms={} interleave_window={:?} interleave_require_event={} interleave_event_timeout_ms={} csr_probe_offsets={:?} poison_probe_offset={:?} script1={} script2={} script3={}",
             config.param_stream_chunk_size,
             config.param_stream_max_bytes,
             config.param_force_full_header_len,
@@ -2559,7 +2872,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.param_submit_event_poll_ms,
             config.param_submit_log_every,
             config.param_require_post_instr_event,
-            config.param_post_instr_event_timeout_ms
+            config.param_post_instr_event_timeout_ms,
+            config.param_interleave_window_bytes,
+            config.param_interleave_require_event,
+            config.param_interleave_event_timeout_ms,
+            config.param_csr_probe_offsets,
+            config.param_poison_probe_offset,
+            config.script1_interleave,
+            config.script2_queue_probe,
+            config.script3_poison_diff
         );
     }
     println!("Extracted executables: {}", executables.len());
@@ -2701,7 +3022,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                     }
                 }
-                send_parameter_payload(&driver, &config, &exe.parameters_stream, "bootstrap param")?;
+                if let Some(window_bytes) = config.param_interleave_window_bytes {
+                    let interleave_chunks: &[Vec<u8>] = if !exe.instruction_bitstreams.is_empty() {
+                        &exe.instruction_bitstreams
+                    } else {
+                        &run_exe.instruction_bitstreams
+                    };
+                    send_parameter_payload_with_instruction_interleave(
+                        &driver,
+                        &config,
+                        &exe.parameters_stream,
+                        "bootstrap param",
+                        window_bytes,
+                        interleave_chunks,
+                    )?;
+                } else {
+                    send_parameter_payload(&driver, &config, &exe.parameters_stream, "bootstrap param")?;
+                }
             }
             match driver.read_event_packet() {
                 Ok(event) => println!(
@@ -2738,7 +3075,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                     }
                 }
-                send_parameter_payload(&driver, &config, &exe.parameters_stream, "preload param")?;
+                if let Some(window_bytes) = config.param_interleave_window_bytes {
+                    let interleave_chunks: &[Vec<u8>] = if !exe.instruction_bitstreams.is_empty() {
+                        &exe.instruction_bitstreams
+                    } else {
+                        &run_exe.instruction_bitstreams
+                    };
+                    send_parameter_payload_with_instruction_interleave(
+                        &driver,
+                        &config,
+                        &exe.parameters_stream,
+                        "preload param",
+                        window_bytes,
+                        interleave_chunks,
+                    )?;
+                } else {
+                    send_parameter_payload(&driver, &config, &exe.parameters_stream, "preload param")?;
+                }
             }
         }
     } else {

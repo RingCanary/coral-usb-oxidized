@@ -669,6 +669,48 @@ Implication:
 2. this further supports a deeper firmware/runtime state progression failure
    (host-visible control plane dies) rather than missing static tuple content.
 
+### Script1/2/3 transaction probes (first-class replay modes)
+
+Replay now includes explicit script flags:
+1. Script1 interleave:
+   - `--script1-interleave`
+   - `--param-interleave-window-bytes`
+   - `--param-interleave-require-event`
+   - `--param-interleave-event-timeout-ms`
+2. Script2 queue probe:
+   - `--script2-queue-probe`
+   - `--param-csr-probe-offsets`
+3. Script3 poison differentiator:
+   - `--script3-poison-diff`
+   - `--param-poison-probe-offset`
+
+Pi5 artifacts:
+1. `traces/script123-fw-20260225T145825Z/script2_queue_probe.log`
+2. `traces/script3-poison-only-20260225T150128Z/run.log`
+3. `traces/script1-interleave-only-20260225T150231Z/run.log`
+
+Observed:
+1. Script2 (`chunk=256`, `max=65536`):
+   - control/queue CSRs remain `0x0` through `32768`
+   - first full timeout snapshot at `33024`
+   - write failure at `offset=33024`
+2. Script3 (`chunk=256`, `max=65536`):
+   - at threshold `33024`, both probes timeout:
+     - `usbTopInterruptStatus` (`0x0004c060`)
+     - `scu_ctr_7` (`0x0001a33c`)
+   - stream fails at same boundary.
+3. Script1 (`window=32768`, `max=131072`):
+   - first segment `[0..32768)` succeeds
+   - interleaved instruction chunk is injected
+   - second segment fails immediately on first write (`offset 0` of segment).
+
+Interpretation:
+1. injecting an additional instruction chunk between 32 KiB windows is not
+   sufficient to unlock class-2 ingestion.
+2. the poison boundary remains anchored at ~`33024` in these runs.
+3. both bridge-domain and SCU-domain control reads become unavailable at the
+   same threshold in Script3.
+
 ## Practical next debug steps
 
 1. Instrument runcontrol/doorbell CSR state immediately before and after each

@@ -3030,3 +3030,62 @@ Fast confirmation (`--timeout-ms 200`) reproduced identical transition:
    observed queue int-status bit transition.
 3. this strengthens the state-progression/firmware-liveness hypothesis over a
    simple missing register write.
+
+### 2026-02-25 - Script1/2/3 transaction probes implemented and executed on Pi5
+
+#### Implementation
+
+Added script-oriented controls to `examples/rusb_serialized_exec_replay.rs`:
+1. Script1 interleave:
+   - `--script1-interleave`
+   - `--param-interleave-window-bytes`
+   - `--param-interleave-require-event`
+   - `--param-interleave-event-timeout-ms`
+2. Script2 queue probe:
+   - `--script2-queue-probe`
+   - `--param-csr-probe-offsets`
+3. Script3 poison differentiator:
+   - `--script3-poison-diff`
+   - `--param-poison-probe-offset`
+
+Runtime hooks added:
+1. offset-triggered CSR snapshots (`probe_offset`) using queue/runcontrol set.
+2. poison probe at configured offset:
+   - `usbTopInterruptStatus` (`0x0004c060`)
+   - `scu_ctr_7` (`0x0001a33c`)
+3. parameter segmentation + interleaved instruction chunk injection between
+   segments.
+
+#### Pi5 artifacts
+
+1. `traces/script123-fw-20260225T145825Z/script2_queue_probe.log`
+2. `traces/script3-poison-only-20260225T150128Z/run.log`
+3. `traces/script1-interleave-only-20260225T150231Z/run.log`
+
+#### Results
+
+Script2 (`--script2-queue-probe`, chunk `256`, max-bytes `65536`):
+1. CSR reads at/below `32768` remain `0x0`.
+2. first full liveness loss occurs at `33024` (all queue/runcontrol reads timeout).
+3. parameter bulk write fails at `offset=33024` (`chunk=129`).
+
+Script3 (`--script3-poison-diff`, chunk `256`, max-bytes `65536`):
+1. at poison threshold `33024`, both probes timeout:
+   - `0x0004c060` (`usbTopInterruptStatus`)
+   - `0x0001a33c` (`scu_ctr_7`)
+2. stream then fails at same boundary (`offset=33024`).
+
+Script1 (`--script1-interleave`, window `32768`, max-bytes `131072`):
+1. first segment `[0..32768)` succeeds.
+2. interleave instruction chunk injection executes.
+3. second segment `[32768..65536)` fails immediately on first bulk write
+   (`offset 0 of segment`).
+
+#### Interpretation
+
+1. interleaving an extra instruction chunk at `32768` is insufficient to unlock
+   class-2 ingress beyond wall.
+2. queue/runcontrol snapshot behavior is consistent with previous runs:
+   quiescent reads before cliff, then abrupt unreadable state.
+3. poison state affects both bridge-domain and SCU-domain control reads at the
+   same threshold.
