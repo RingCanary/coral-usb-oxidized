@@ -214,6 +214,17 @@ impl EdgeTpuUsbDriver {
         Ok(())
     }
 
+    pub fn raw_libusb_handle(&self) -> *mut rusb::ffi::libusb_device_handle {
+        self.handle.as_raw()
+    }
+
+    pub fn handle_events_timeout(&self, timeout: Option<Duration>) -> Result<(), CoralError> {
+        self.handle
+            .context()
+            .handle_events(timeout)
+            .map_err(CoralError::from)
+    }
+
     pub fn set_configuration_1(&self) -> Result<(), CoralError> {
         self.handle
             .set_active_configuration(1)

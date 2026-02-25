@@ -3,9 +3,16 @@ use coral_usb_oxidized::{
     EdgeTpuUsbDriver, SerializedExecutableBlob, VendorDirection,
     EDGETPUXRAY_RUNTIME_SETUP_SEQUENCE,
 };
+use rusb::ffi as libusb;
 use std::env;
 use std::error::Error;
-use std::time::Duration;
+use std::ffi::CStr;
+use std::os::raw::c_int;
+use std::sync::{
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+    Arc,
+};
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 struct Config {
@@ -35,6 +42,25 @@ struct Config {
     param_drain_event_every_descriptors: usize,
     param_read_interrupt_every: usize,
     param_interrupt_timeout_ms: u64,
+    param_a0d8_handshake: bool,
+    param_a0d8_write_value: u32,
+    param_prepost_bulk_in_reads: usize,
+    param_prepost_bulk_in_size: usize,
+    param_prepost_event_reads: usize,
+    param_prepost_interrupt_reads: usize,
+    param_prepost_timeout_ms: u64,
+    param_async_bulk_in_lanes: usize,
+    param_async_bulk_in_size: usize,
+    param_async_event_lanes: usize,
+    param_async_interrupt_lanes: usize,
+    param_async_timeout_ms: u64,
+    param_submit_bulk_in_lanes: usize,
+    param_submit_event_lanes: usize,
+    param_submit_interrupt_lanes: usize,
+    param_submit_buffer_size: usize,
+    param_submit_timeout_ms: u64,
+    param_submit_event_poll_ms: u64,
+    param_submit_log_every: usize,
 }
 
 fn usage(program: &str) {
@@ -83,6 +109,63 @@ fn usage(program: &str) {
     );
     println!(
         "  --param-interrupt-timeout-ms N  Timeout for interrupt polls during parameter stream (default: 1)"
+    );
+    println!(
+        "  --param-a0d8-handshake      Enable pre-ingress handshake before each parameter descriptor"
+    );
+    println!(
+        "  --param-a0d8-write-value N  Vendor write32 value for 0x0001a0d8 (default: 0x80000000)"
+    );
+    println!(
+        "  --param-prepost-bulk-in-reads N  Number of pre/post EP 0x81 read attempts per descriptor (default: 0)"
+    );
+    println!(
+        "  --param-prepost-bulk-in-size N   EP 0x81 pre/post read buffer size (default: 1024)"
+    );
+    println!(
+        "  --param-prepost-event-reads N    Number of pre/post EP 0x82 read attempts per descriptor (default: 0)"
+    );
+    println!(
+        "  --param-prepost-interrupt-reads N  Number of pre/post EP 0x83 read attempts per descriptor (default: 0)"
+    );
+    println!(
+        "  --param-prepost-timeout-ms N  Timeout for pre/post reads (default: 1)"
+    );
+    println!(
+        "  --param-async-bulk-in-lanes N  Concurrent EP 0x81 read lanes during param stream (default: 0)"
+    );
+    println!(
+        "  --param-async-bulk-in-size N   EP 0x81 async read buffer size (default: 1024)"
+    );
+    println!(
+        "  --param-async-event-lanes N    Concurrent EP 0x82 read lanes during param stream (default: 0)"
+    );
+    println!(
+        "  --param-async-interrupt-lanes N  Concurrent EP 0x83 read lanes during param stream (default: 0)"
+    );
+    println!(
+        "  --param-async-timeout-ms N     Timeout per async lane read attempt (default: 100)"
+    );
+    println!(
+        "  --param-submit-bulk-in-lanes N  libusb_submit_transfer lanes on EP 0x81 (default: 0)"
+    );
+    println!(
+        "  --param-submit-event-lanes N    libusb_submit_transfer lanes on EP 0x82 (default: 0)"
+    );
+    println!(
+        "  --param-submit-interrupt-lanes N  libusb_submit_transfer lanes on EP 0x83 (default: 0)"
+    );
+    println!(
+        "  --param-submit-buffer-size N    Buffer size for submit lanes (default: 1024)"
+    );
+    println!(
+        "  --param-submit-timeout-ms N     Per-transfer timeout for submit lanes (default: 100)"
+    );
+    println!(
+        "  --param-submit-event-poll-ms N  Event loop poll timeout for submit lanes (default: 1)"
+    );
+    println!(
+        "  --param-submit-log-every N      Callback log cadence per lane (0=off, default: 0)"
     );
     println!(
         "  --param-write-sleep-us N    Sleep between parameter chunks to pace stream (default: 0)"
@@ -174,6 +257,25 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         param_drain_event_every_descriptors: 0,
         param_read_interrupt_every: 0,
         param_interrupt_timeout_ms: 1,
+        param_a0d8_handshake: false,
+        param_a0d8_write_value: 0x8000_0000,
+        param_prepost_bulk_in_reads: 0,
+        param_prepost_bulk_in_size: 1024,
+        param_prepost_event_reads: 0,
+        param_prepost_interrupt_reads: 0,
+        param_prepost_timeout_ms: 1,
+        param_async_bulk_in_lanes: 0,
+        param_async_bulk_in_size: 1024,
+        param_async_event_lanes: 0,
+        param_async_interrupt_lanes: 0,
+        param_async_timeout_ms: 100,
+        param_submit_bulk_in_lanes: 0,
+        param_submit_event_lanes: 0,
+        param_submit_interrupt_lanes: 0,
+        param_submit_buffer_size: 1024,
+        param_submit_timeout_ms: 100,
+        param_submit_event_poll_ms: 1,
+        param_submit_log_every: 0,
     };
 
     let mut i = 1usize;
@@ -306,6 +408,134 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                         .ok_or("--param-interrupt-timeout-ms requires value")?,
                 )?;
             }
+            "--param-a0d8-handshake" => config.param_a0d8_handshake = true,
+            "--param-a0d8-write-value" => {
+                i += 1;
+                config.param_a0d8_write_value = parse_tag_u32(
+                    args.get(i)
+                        .ok_or("--param-a0d8-write-value requires value")?,
+                    "--param-a0d8-write-value",
+                )?;
+            }
+            "--param-prepost-bulk-in-reads" => {
+                i += 1;
+                config.param_prepost_bulk_in_reads = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-prepost-bulk-in-reads requires value")?,
+                )?;
+            }
+            "--param-prepost-bulk-in-size" => {
+                i += 1;
+                config.param_prepost_bulk_in_size = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-prepost-bulk-in-size requires value")?,
+                )?;
+            }
+            "--param-prepost-event-reads" => {
+                i += 1;
+                config.param_prepost_event_reads = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-prepost-event-reads requires value")?,
+                )?;
+            }
+            "--param-prepost-interrupt-reads" => {
+                i += 1;
+                config.param_prepost_interrupt_reads = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-prepost-interrupt-reads requires value")?,
+                )?;
+            }
+            "--param-prepost-timeout-ms" => {
+                i += 1;
+                config.param_prepost_timeout_ms = parse_u64_auto(
+                    args.get(i)
+                        .ok_or("--param-prepost-timeout-ms requires value")?,
+                )?;
+            }
+            "--param-async-bulk-in-lanes" => {
+                i += 1;
+                config.param_async_bulk_in_lanes = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-async-bulk-in-lanes requires value")?,
+                )?;
+            }
+            "--param-async-bulk-in-size" => {
+                i += 1;
+                config.param_async_bulk_in_size = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-async-bulk-in-size requires value")?,
+                )?;
+            }
+            "--param-async-event-lanes" => {
+                i += 1;
+                config.param_async_event_lanes = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-async-event-lanes requires value")?,
+                )?;
+            }
+            "--param-async-interrupt-lanes" => {
+                i += 1;
+                config.param_async_interrupt_lanes = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-async-interrupt-lanes requires value")?,
+                )?;
+            }
+            "--param-async-timeout-ms" => {
+                i += 1;
+                config.param_async_timeout_ms = parse_u64_auto(
+                    args.get(i)
+                        .ok_or("--param-async-timeout-ms requires value")?,
+                )?;
+            }
+            "--param-submit-bulk-in-lanes" => {
+                i += 1;
+                config.param_submit_bulk_in_lanes = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-submit-bulk-in-lanes requires value")?,
+                )?;
+            }
+            "--param-submit-event-lanes" => {
+                i += 1;
+                config.param_submit_event_lanes = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-submit-event-lanes requires value")?,
+                )?;
+            }
+            "--param-submit-interrupt-lanes" => {
+                i += 1;
+                config.param_submit_interrupt_lanes = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-submit-interrupt-lanes requires value")?,
+                )?;
+            }
+            "--param-submit-buffer-size" => {
+                i += 1;
+                config.param_submit_buffer_size = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-submit-buffer-size requires value")?,
+                )?;
+            }
+            "--param-submit-timeout-ms" => {
+                i += 1;
+                config.param_submit_timeout_ms = parse_u64_auto(
+                    args.get(i)
+                        .ok_or("--param-submit-timeout-ms requires value")?,
+                )?;
+            }
+            "--param-submit-event-poll-ms" => {
+                i += 1;
+                config.param_submit_event_poll_ms = parse_u64_auto(
+                    args.get(i)
+                        .ok_or("--param-submit-event-poll-ms requires value")?,
+                )?;
+            }
+            "--param-submit-log-every" => {
+                i += 1;
+                config.param_submit_log_every = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-submit-log-every requires value")?,
+                )?;
+            }
             "--param-write-sleep-us" => {
                 i += 1;
                 config.param_write_sleep_us = parse_u64_auto(
@@ -338,6 +568,32 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
     }
     if matches!(config.param_descriptor_split_bytes, Some(0)) {
         return Err("--param-descriptor-split-bytes must be >= 1".into());
+    }
+    if config.param_prepost_bulk_in_size == 0 {
+        return Err("--param-prepost-bulk-in-size must be >= 1".into());
+    }
+    if config.param_async_bulk_in_size == 0 {
+        return Err("--param-async-bulk-in-size must be >= 1".into());
+    }
+    if config.param_submit_buffer_size == 0 {
+        return Err("--param-submit-buffer-size must be >= 1".into());
+    }
+    if config.param_submit_buffer_size > c_int::MAX as usize {
+        return Err(format!(
+            "--param-submit-buffer-size exceeds i32 max: {} > {}",
+            config.param_submit_buffer_size,
+            c_int::MAX
+        )
+        .into());
+    }
+    if config.param_submit_event_poll_ms == 0 {
+        return Err("--param-submit-event-poll-ms must be >= 1".into());
+    }
+    if has_param_async_lanes(&config) && has_param_submit_lanes(&config) {
+        return Err(
+            "choose either thread-blocking async lanes (--param-async-*) or libusb submit lanes (--param-submit-*), not both"
+                .into(),
+        );
     }
 
     Ok(config)
@@ -394,56 +650,684 @@ fn fnv1a64(bytes: &[u8]) -> u64 {
     hash
 }
 
-fn send_parameter_payload(
+fn run_param_prepost_reads(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    timeout: Duration,
+    phase_label: &str,
+    descriptor_idx: usize,
+    stage: &str,
+) {
+    for attempt in 0..config.param_prepost_bulk_in_reads {
+        match driver.read_output_bytes_with_timeout(config.param_prepost_bulk_in_size, timeout) {
+            Ok(bytes) => {
+                let head_len = bytes.len().min(16);
+                println!(
+                    "      {}: {} descriptor {} bulk-in read {} => {} bytes head={:02x?}",
+                    phase_label,
+                    stage,
+                    descriptor_idx,
+                    attempt + 1,
+                    bytes.len(),
+                    &bytes[..head_len]
+                );
+            }
+            Err(CoralError::UsbError(rusb::Error::Timeout)) => println!(
+                "      {}: {} descriptor {} bulk-in read {} => timeout",
+                phase_label,
+                stage,
+                descriptor_idx,
+                attempt + 1
+            ),
+            Err(err) => println!(
+                "      {}: {} descriptor {} bulk-in read {} => error: {}",
+                phase_label,
+                stage,
+                descriptor_idx,
+                attempt + 1,
+                err
+            ),
+        }
+    }
+
+    for attempt in 0..config.param_prepost_event_reads {
+        match driver.read_event_packet_with_timeout(timeout) {
+            Ok(event) => println!(
+                "      {}: {} descriptor {} event read {} => tag={} offset=0x{:016x} length={}",
+                phase_label,
+                stage,
+                descriptor_idx,
+                attempt + 1,
+                event.tag,
+                event.offset,
+                event.length
+            ),
+            Err(CoralError::UsbError(rusb::Error::Timeout)) => println!(
+                "      {}: {} descriptor {} event read {} => timeout",
+                phase_label,
+                stage,
+                descriptor_idx,
+                attempt + 1
+            ),
+            Err(err) => println!(
+                "      {}: {} descriptor {} event read {} => error: {}",
+                phase_label,
+                stage,
+                descriptor_idx,
+                attempt + 1,
+                err
+            ),
+        }
+    }
+
+    for attempt in 0..config.param_prepost_interrupt_reads {
+        match driver.read_interrupt_packet_with_timeout(timeout) {
+            Ok(pkt) => println!(
+                "      {}: {} descriptor {} interrupt read {} => raw=0x{:08x} fatal={} top_level_mask=0x{:08x}",
+                phase_label,
+                stage,
+                descriptor_idx,
+                attempt + 1,
+                pkt.raw,
+                pkt.fatal,
+                pkt.top_level_mask
+            ),
+            Err(CoralError::UsbError(rusb::Error::Timeout)) => println!(
+                "      {}: {} descriptor {} interrupt read {} => timeout",
+                phase_label,
+                stage,
+                descriptor_idx,
+                attempt + 1
+            ),
+            Err(err) => println!(
+                "      {}: {} descriptor {} interrupt read {} => error: {}",
+                phase_label,
+                stage,
+                descriptor_idx,
+                attempt + 1,
+                err
+            ),
+        }
+    }
+}
+
+fn run_param_pre_ingress_handshake(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    phase_label: &str,
+    descriptor_idx: usize,
+) {
+    let has_prepost_reads = config.param_prepost_bulk_in_reads > 0
+        || config.param_prepost_event_reads > 0
+        || config.param_prepost_interrupt_reads > 0;
+    if !config.param_a0d8_handshake && !has_prepost_reads {
+        return;
+    }
+
+    let timeout = Duration::from_millis(config.param_prepost_timeout_ms);
+    println!(
+        "      {}: pre-ingress descriptor {} handshake={} a0d8_write=0x{:08x} bulk_reads={} bulk_size={} event_reads={} intr_reads={} timeout_ms={}",
+        phase_label,
+        descriptor_idx,
+        config.param_a0d8_handshake,
+        config.param_a0d8_write_value,
+        config.param_prepost_bulk_in_reads,
+        config.param_prepost_bulk_in_size,
+        config.param_prepost_event_reads,
+        config.param_prepost_interrupt_reads,
+        config.param_prepost_timeout_ms
+    );
+
+    run_param_prepost_reads(driver, config, timeout, phase_label, descriptor_idx, "pre");
+
+    if config.param_a0d8_handshake {
+        match driver.vendor_read32(0x0001_a0d8) {
+            Ok(value) => println!(
+                "      {}: handshake descriptor {} read 0x0001a0d8 => 0x{:08x}",
+                phase_label, descriptor_idx, value
+            ),
+            Err(err) => println!(
+                "      {}: handshake descriptor {} read 0x0001a0d8 error: {}",
+                phase_label, descriptor_idx, err
+            ),
+        }
+        match driver.vendor_write32(0x0001_a0d8, config.param_a0d8_write_value) {
+            Ok(()) => println!(
+                "      {}: handshake descriptor {} write 0x0001a0d8 <= 0x{:08x}",
+                phase_label, descriptor_idx, config.param_a0d8_write_value
+            ),
+            Err(err) => println!(
+                "      {}: handshake descriptor {} write 0x0001a0d8 error: {}",
+                phase_label, descriptor_idx, err
+            ),
+        }
+    }
+
+    run_param_prepost_reads(driver, config, timeout, phase_label, descriptor_idx, "post");
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ParamAsyncLaneKind {
+    BulkIn,
+    Event,
+    Interrupt,
+}
+
+impl ParamAsyncLaneKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            ParamAsyncLaneKind::BulkIn => "bulk_in",
+            ParamAsyncLaneKind::Event => "event",
+            ParamAsyncLaneKind::Interrupt => "interrupt",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ParamAsyncLaneStats {
+    kind: ParamAsyncLaneKind,
+    lane_idx: usize,
+    reads: usize,
+    ok: usize,
+    timeouts: usize,
+    errors: usize,
+}
+
+impl ParamAsyncLaneStats {
+    fn new(kind: ParamAsyncLaneKind, lane_idx: usize) -> Self {
+        Self {
+            kind,
+            lane_idx,
+            reads: 0,
+            ok: 0,
+            timeouts: 0,
+            errors: 0,
+        }
+    }
+}
+
+fn has_param_async_lanes(config: &Config) -> bool {
+    config.param_async_bulk_in_lanes > 0
+        || config.param_async_event_lanes > 0
+        || config.param_async_interrupt_lanes > 0
+}
+
+fn has_param_submit_lanes(config: &Config) -> bool {
+    config.param_submit_bulk_in_lanes > 0
+        || config.param_submit_event_lanes > 0
+        || config.param_submit_interrupt_lanes > 0
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ParamSubmitLaneKind {
+    BulkIn,
+    Event,
+    Interrupt,
+}
+
+impl ParamSubmitLaneKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            ParamSubmitLaneKind::BulkIn => "bulk_in",
+            ParamSubmitLaneKind::Event => "event",
+            ParamSubmitLaneKind::Interrupt => "interrupt",
+        }
+    }
+
+    fn endpoint(self) -> u8 {
+        match self {
+            ParamSubmitLaneKind::BulkIn => 0x81,
+            ParamSubmitLaneKind::Event => 0x82,
+            ParamSubmitLaneKind::Interrupt => 0x83,
+        }
+    }
+}
+
+#[derive(Default)]
+struct ParamSubmitLaneCounters {
+    callbacks: AtomicUsize,
+    completed: AtomicUsize,
+    timed_out: AtomicUsize,
+    cancelled: AtomicUsize,
+    stalled: AtomicUsize,
+    no_device: AtomicUsize,
+    overflow: AtomicUsize,
+    errors: AtomicUsize,
+    submit_errors: AtomicUsize,
+}
+
+struct ParamSubmitLaneUserData {
+    kind: ParamSubmitLaneKind,
+    lane_idx: usize,
+    stop: Arc<AtomicBool>,
+    submitted: Arc<AtomicBool>,
+    counters: Arc<ParamSubmitLaneCounters>,
+    log_every: usize,
+}
+
+struct ParamSubmitLane {
+    kind: ParamSubmitLaneKind,
+    lane_idx: usize,
+    transfer: *mut libusb::libusb_transfer,
+    user_data: *mut ParamSubmitLaneUserData,
+    submitted: Arc<AtomicBool>,
+    counters: Arc<ParamSubmitLaneCounters>,
+    _buffer: Vec<u8>,
+}
+
+impl Drop for ParamSubmitLane {
+    fn drop(&mut self) {
+        if self.submitted.load(Ordering::Relaxed) {
+            println!(
+                "      async submit lane {}#{} still submitted during drop; leaking transfer for safety",
+                self.kind.as_str(),
+                self.lane_idx
+            );
+            return;
+        }
+        unsafe {
+            if !self.transfer.is_null() {
+                libusb::libusb_free_transfer(self.transfer);
+            }
+            if !self.user_data.is_null() {
+                let _ = Box::from_raw(self.user_data);
+            }
+        }
+    }
+}
+
+fn libusb_error_name(code: c_int) -> String {
+    unsafe {
+        let ptr = libusb::libusb_error_name(code);
+        if ptr.is_null() {
+            return format!("code {}", code);
+        }
+        CStr::from_ptr(ptr).to_string_lossy().into_owned()
+    }
+}
+
+fn libusb_transfer_status_name(status: c_int) -> &'static str {
+    match status {
+        libusb::constants::LIBUSB_TRANSFER_COMPLETED => "completed",
+        libusb::constants::LIBUSB_TRANSFER_ERROR => "error",
+        libusb::constants::LIBUSB_TRANSFER_TIMED_OUT => "timed_out",
+        libusb::constants::LIBUSB_TRANSFER_CANCELLED => "cancelled",
+        libusb::constants::LIBUSB_TRANSFER_STALL => "stall",
+        libusb::constants::LIBUSB_TRANSFER_NO_DEVICE => "no_device",
+        libusb::constants::LIBUSB_TRANSFER_OVERFLOW => "overflow",
+        _ => "unknown",
+    }
+}
+
+extern "system" fn param_submit_transfer_callback(transfer: *mut libusb::libusb_transfer) {
+    unsafe {
+        if transfer.is_null() {
+            return;
+        }
+        let user_data_ptr = (*transfer).user_data as *mut ParamSubmitLaneUserData;
+        if user_data_ptr.is_null() {
+            return;
+        }
+        let user_data = &*user_data_ptr;
+        let counters = &user_data.counters;
+        let callback_idx = counters.callbacks.fetch_add(1, Ordering::Relaxed) + 1;
+        let status = (*transfer).status;
+
+        match status {
+            libusb::constants::LIBUSB_TRANSFER_COMPLETED => {
+                counters.completed.fetch_add(1, Ordering::Relaxed);
+            }
+            libusb::constants::LIBUSB_TRANSFER_TIMED_OUT => {
+                counters.timed_out.fetch_add(1, Ordering::Relaxed);
+            }
+            libusb::constants::LIBUSB_TRANSFER_CANCELLED => {
+                counters.cancelled.fetch_add(1, Ordering::Relaxed);
+            }
+            libusb::constants::LIBUSB_TRANSFER_STALL => {
+                counters.stalled.fetch_add(1, Ordering::Relaxed);
+            }
+            libusb::constants::LIBUSB_TRANSFER_NO_DEVICE => {
+                counters.no_device.fetch_add(1, Ordering::Relaxed);
+            }
+            libusb::constants::LIBUSB_TRANSFER_OVERFLOW => {
+                counters.overflow.fetch_add(1, Ordering::Relaxed);
+            }
+            _ => {
+                counters.errors.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+
+        if user_data.log_every > 0 && (callback_idx % user_data.log_every == 0) {
+            println!(
+                "      async submit lane {}#{} callback={} status={} actual_length={}",
+                user_data.kind.as_str(),
+                user_data.lane_idx,
+                callback_idx,
+                libusb_transfer_status_name(status),
+                (*transfer).actual_length
+            );
+        }
+
+        if user_data.stop.load(Ordering::Relaxed) {
+            user_data.submitted.store(false, Ordering::Relaxed);
+            return;
+        }
+
+        let rc = libusb::libusb_submit_transfer(transfer);
+        if rc == 0 {
+            user_data.submitted.store(true, Ordering::Relaxed);
+            return;
+        }
+
+        counters.submit_errors.fetch_add(1, Ordering::Relaxed);
+        user_data.submitted.store(false, Ordering::Relaxed);
+        println!(
+            "      async submit lane {}#{} resubmit failed: {} ({})",
+            user_data.kind.as_str(),
+            user_data.lane_idx,
+            rc,
+            libusb_error_name(rc)
+        );
+    }
+}
+
+fn create_param_submit_lane(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    stop: Arc<AtomicBool>,
+    kind: ParamSubmitLaneKind,
+    lane_idx: usize,
+) -> Result<ParamSubmitLane, Box<dyn Error>> {
+    let transfer = unsafe { libusb::libusb_alloc_transfer(0) };
+    if transfer.is_null() {
+        return Err(format!(
+            "failed to allocate libusb transfer for lane {}#{}",
+            kind.as_str(),
+            lane_idx
+        )
+        .into());
+    }
+
+    let mut buffer = vec![0u8; config.param_submit_buffer_size];
+    let submitted = Arc::new(AtomicBool::new(false));
+    let counters = Arc::new(ParamSubmitLaneCounters::default());
+    let user_data = Box::new(ParamSubmitLaneUserData {
+        kind,
+        lane_idx,
+        stop,
+        submitted: Arc::clone(&submitted),
+        counters: Arc::clone(&counters),
+        log_every: config.param_submit_log_every,
+    });
+    let user_data_ptr = Box::into_raw(user_data);
+
+    unsafe {
+        match kind {
+            ParamSubmitLaneKind::Interrupt => libusb::libusb_fill_interrupt_transfer(
+                transfer,
+                driver.raw_libusb_handle(),
+                kind.endpoint(),
+                buffer.as_mut_ptr(),
+                buffer.len() as c_int,
+                param_submit_transfer_callback,
+                user_data_ptr as *mut _,
+                config.param_submit_timeout_ms.min(u32::MAX as u64) as u32,
+            ),
+            ParamSubmitLaneKind::BulkIn | ParamSubmitLaneKind::Event => {
+                libusb::libusb_fill_bulk_transfer(
+                    transfer,
+                    driver.raw_libusb_handle(),
+                    kind.endpoint(),
+                    buffer.as_mut_ptr(),
+                    buffer.len() as c_int,
+                    param_submit_transfer_callback,
+                    user_data_ptr as *mut _,
+                    config.param_submit_timeout_ms.min(u32::MAX as u64) as u32,
+                )
+            }
+        }
+
+        let rc = libusb::libusb_submit_transfer(transfer);
+        if rc != 0 {
+            let _ = Box::from_raw(user_data_ptr);
+            libusb::libusb_free_transfer(transfer);
+            return Err(format!(
+                "failed to submit async lane {}#{}: {} ({})",
+                kind.as_str(),
+                lane_idx,
+                rc,
+                libusb_error_name(rc)
+            )
+            .into());
+        }
+    }
+    submitted.store(true, Ordering::Relaxed);
+
+    Ok(ParamSubmitLane {
+        kind,
+        lane_idx,
+        transfer,
+        user_data: user_data_ptr,
+        submitted,
+        counters,
+        _buffer: buffer,
+    })
+}
+
+fn cancel_param_submit_lanes(lanes: &[ParamSubmitLane], phase_label: &str) {
+    for lane in lanes {
+        if !lane.submitted.load(Ordering::Relaxed) {
+            continue;
+        }
+        let rc = unsafe { libusb::libusb_cancel_transfer(lane.transfer) };
+        if rc == 0 {
+            continue;
+        }
+        if rc == libusb::constants::LIBUSB_ERROR_NOT_FOUND
+            || rc == libusb::constants::LIBUSB_ERROR_NO_DEVICE
+        {
+            continue;
+        }
+        println!(
+            "      {}: async submit lane {}#{} cancel rc={} ({})",
+            phase_label,
+            lane.kind.as_str(),
+            lane.lane_idx,
+            rc,
+            libusb_error_name(rc)
+        );
+    }
+}
+
+fn print_param_submit_lane_stats(lanes: &[ParamSubmitLane], phase_label: &str) {
+    for lane in lanes {
+        let counters = &lane.counters;
+        println!(
+            "      {}: async submit lane {}#{} callbacks={} completed={} timed_out={} cancelled={} stall={} no_device={} overflow={} errors={} submit_errors={} submitted={}",
+            phase_label,
+            lane.kind.as_str(),
+            lane.lane_idx,
+            counters.callbacks.load(Ordering::Relaxed),
+            counters.completed.load(Ordering::Relaxed),
+            counters.timed_out.load(Ordering::Relaxed),
+            counters.cancelled.load(Ordering::Relaxed),
+            counters.stalled.load(Ordering::Relaxed),
+            counters.no_device.load(Ordering::Relaxed),
+            counters.overflow.load(Ordering::Relaxed),
+            counters.errors.load(Ordering::Relaxed),
+            counters.submit_errors.load(Ordering::Relaxed),
+            lane.submitted.load(Ordering::Relaxed)
+        );
+    }
+}
+
+fn stream_parameter_chunks_with_submit_lanes(
     driver: &EdgeTpuUsbDriver,
     config: &Config,
     payload: &[u8],
     phase_label: &str,
+    stream_len: usize,
+    stream_chunk_size: usize,
+    descriptor_split_size: usize,
+    poll_timeout: Duration,
+    interrupt_poll_timeout: Duration,
 ) -> Result<(), Box<dyn Error>> {
-    if payload.is_empty() {
-        return Ok(());
-    }
-
-    let use_custom_stream = config.param_stream_chunk_size.is_some()
-        || config.param_stream_max_bytes.is_some()
-        || config.param_read_event_every > 0
-        || config.param_read_interrupt_every > 0
-        || config.param_write_sleep_us > 0
-        || config.param_descriptor_split_bytes.is_some()
-        || config.param_drain_event_every_descriptors > 0;
-    if !use_custom_stream {
-        driver.send_descriptor_payload_raw(config.parameters_tag, payload)?;
-        return Ok(());
-    }
-
-    let stream_len = config
-        .param_stream_max_bytes
-        .map(|max| max.min(payload.len()))
-        .unwrap_or(payload.len());
-    let stream_chunk_size = config.param_stream_chunk_size.unwrap_or(config.chunk_size);
-    let descriptor_split_size = config.param_descriptor_split_bytes.unwrap_or(stream_len.max(1));
-    let poll_timeout = Duration::from_millis(config.param_event_timeout_ms);
-    let interrupt_poll_timeout = Duration::from_millis(config.param_interrupt_timeout_ms);
-
     println!(
-        "    {}: streaming parameters len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={}",
+        "      {}: libusb submit lanes bulk_in={} event={} interrupt={} buffer_size={} transfer_timeout_ms={} event_poll_ms={} log_every={}",
         phase_label,
-        stream_len,
-        stream_chunk_size,
-        descriptor_split_size,
-        config.param_read_event_every,
-        config.param_read_interrupt_every,
-        config.param_drain_event_every_descriptors,
-        config.param_write_sleep_us,
-        config.parameters_tag
+        config.param_submit_bulk_in_lanes,
+        config.param_submit_event_lanes,
+        config.param_submit_interrupt_lanes,
+        config.param_submit_buffer_size,
+        config.param_submit_timeout_ms,
+        config.param_submit_event_poll_ms,
+        config.param_submit_log_every
     );
 
+    let stream_stop = Arc::new(AtomicBool::new(false));
+    let event_loop_stop = Arc::new(AtomicBool::new(false));
+    let event_loop_polls = Arc::new(AtomicUsize::new(0));
+    let event_loop_errors = Arc::new(AtomicUsize::new(0));
+    let mut lanes = Vec::new();
+
+    for lane_idx in 0..config.param_submit_bulk_in_lanes {
+        lanes.push(create_param_submit_lane(
+            driver,
+            config,
+            Arc::clone(&stream_stop),
+            ParamSubmitLaneKind::BulkIn,
+            lane_idx + 1,
+        )?);
+    }
+    for lane_idx in 0..config.param_submit_event_lanes {
+        lanes.push(create_param_submit_lane(
+            driver,
+            config,
+            Arc::clone(&stream_stop),
+            ParamSubmitLaneKind::Event,
+            lane_idx + 1,
+        )?);
+    }
+    for lane_idx in 0..config.param_submit_interrupt_lanes {
+        lanes.push(create_param_submit_lane(
+            driver,
+            config,
+            Arc::clone(&stream_stop),
+            ParamSubmitLaneKind::Interrupt,
+            lane_idx + 1,
+        )?);
+    }
+
+    let event_poll_timeout = Duration::from_millis(config.param_submit_event_poll_ms);
+    let result = std::thread::scope(|scope| -> Result<(), Box<dyn Error>> {
+        let event_loop_stop_for_thread = Arc::clone(&event_loop_stop);
+        let event_loop_polls_for_thread = Arc::clone(&event_loop_polls);
+        let event_loop_errors_for_thread = Arc::clone(&event_loop_errors);
+        let event_thread = scope.spawn(move || {
+            while !event_loop_stop_for_thread.load(Ordering::Relaxed) {
+                event_loop_polls_for_thread.fetch_add(1, Ordering::Relaxed);
+                if let Err(err) = driver.handle_events_timeout(Some(event_poll_timeout)) {
+                    event_loop_errors_for_thread.fetch_add(1, Ordering::Relaxed);
+                    if !matches!(err, CoralError::UsbError(rusb::Error::Timeout)) {
+                        println!("      async submit event loop error: {}", err);
+                    }
+                }
+            }
+        });
+
+        let stream_result = stream_parameter_chunks(
+            driver,
+            config,
+            payload,
+            phase_label,
+            stream_len,
+            stream_chunk_size,
+            descriptor_split_size,
+            poll_timeout,
+            interrupt_poll_timeout,
+        );
+
+        stream_stop.store(true, Ordering::Relaxed);
+        cancel_param_submit_lanes(&lanes, phase_label);
+
+        let settle_deadline = Instant::now()
+            + Duration::from_millis(config.param_submit_timeout_ms.saturating_mul(4).max(200));
+        while Instant::now() < settle_deadline {
+            if lanes.iter().all(|lane| !lane.submitted.load(Ordering::Relaxed)) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+
+        event_loop_stop.store(true, Ordering::Relaxed);
+        let _ = event_thread.join();
+        stream_result
+    });
+
+    println!(
+        "      {}: async submit event loop polls={} errors={}",
+        phase_label,
+        event_loop_polls.load(Ordering::Relaxed),
+        event_loop_errors.load(Ordering::Relaxed)
+    );
+    print_param_submit_lane_stats(&lanes, phase_label);
+    result
+}
+
+fn run_param_async_lane_loop(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    stop: &AtomicBool,
+    kind: ParamAsyncLaneKind,
+    lane_idx: usize,
+) -> ParamAsyncLaneStats {
+    let timeout = Duration::from_millis(config.param_async_timeout_ms);
+    let mut stats = ParamAsyncLaneStats::new(kind, lane_idx);
+    while !stop.load(Ordering::Relaxed) {
+        stats.reads += 1;
+        match kind {
+            ParamAsyncLaneKind::BulkIn => {
+                match driver.read_output_bytes_with_timeout(config.param_async_bulk_in_size, timeout) {
+                    Ok(_) => stats.ok += 1,
+                    Err(CoralError::UsbError(rusb::Error::Timeout)) => stats.timeouts += 1,
+                    Err(_) => stats.errors += 1,
+                }
+            }
+            ParamAsyncLaneKind::Event => match driver.read_event_packet_with_timeout(timeout) {
+                Ok(_) => stats.ok += 1,
+                Err(CoralError::UsbError(rusb::Error::Timeout)) => stats.timeouts += 1,
+                Err(_) => stats.errors += 1,
+            },
+            ParamAsyncLaneKind::Interrupt => {
+                match driver.read_interrupt_packet_with_timeout(timeout) {
+                    Ok(_) => stats.ok += 1,
+                    Err(CoralError::UsbError(rusb::Error::Timeout)) => stats.timeouts += 1,
+                    Err(_) => stats.errors += 1,
+                }
+            }
+        }
+    }
+    stats
+}
+
+fn stream_parameter_chunks(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    payload: &[u8],
+    phase_label: &str,
+    stream_len: usize,
+    stream_chunk_size: usize,
+    descriptor_split_size: usize,
+    poll_timeout: Duration,
+    interrupt_poll_timeout: Duration,
+) -> Result<(), Box<dyn Error>> {
     let mut global_offset = 0usize;
     let mut global_chunk_idx = 0usize;
     let mut descriptor_idx = 0usize;
     while global_offset < stream_len {
         let descriptor_end = (global_offset + descriptor_split_size).min(stream_len);
         let descriptor_len = descriptor_end - global_offset;
+        run_param_pre_ingress_handshake(driver, config, phase_label, descriptor_idx + 1);
         driver.send_descriptor_header_raw(config.parameters_tag, descriptor_len)?;
 
         let mut descriptor_offset = global_offset;
@@ -509,6 +1393,217 @@ fn send_parameter_payload(
     Ok(())
 }
 
+fn stream_parameter_chunks_with_optional_async_lanes(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    payload: &[u8],
+    phase_label: &str,
+    stream_len: usize,
+    stream_chunk_size: usize,
+    descriptor_split_size: usize,
+    poll_timeout: Duration,
+    interrupt_poll_timeout: Duration,
+) -> Result<(), Box<dyn Error>> {
+    if has_param_submit_lanes(config) {
+        return stream_parameter_chunks_with_submit_lanes(
+            driver,
+            config,
+            payload,
+            phase_label,
+            stream_len,
+            stream_chunk_size,
+            descriptor_split_size,
+            poll_timeout,
+            interrupt_poll_timeout,
+        );
+    }
+
+    if !has_param_async_lanes(config) {
+        return stream_parameter_chunks(
+            driver,
+            config,
+            payload,
+            phase_label,
+            stream_len,
+            stream_chunk_size,
+            descriptor_split_size,
+            poll_timeout,
+            interrupt_poll_timeout,
+        );
+    }
+
+    println!(
+        "      {}: async read lanes bulk_in={} (size={}) event={} interrupt={} timeout_ms={}",
+        phase_label,
+        config.param_async_bulk_in_lanes,
+        config.param_async_bulk_in_size,
+        config.param_async_event_lanes,
+        config.param_async_interrupt_lanes,
+        config.param_async_timeout_ms
+    );
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let mut lane_stats: Vec<ParamAsyncLaneStats> = Vec::new();
+    let result = std::thread::scope(|scope| -> Result<(), Box<dyn Error>> {
+        let mut handles = Vec::new();
+        for lane_idx in 0..config.param_async_bulk_in_lanes {
+            let stop = Arc::clone(&stop);
+            handles.push(scope.spawn(move || {
+                run_param_async_lane_loop(
+                    driver,
+                    config,
+                    stop.as_ref(),
+                    ParamAsyncLaneKind::BulkIn,
+                    lane_idx + 1,
+                )
+            }));
+        }
+        for lane_idx in 0..config.param_async_event_lanes {
+            let stop = Arc::clone(&stop);
+            handles.push(scope.spawn(move || {
+                run_param_async_lane_loop(
+                    driver,
+                    config,
+                    stop.as_ref(),
+                    ParamAsyncLaneKind::Event,
+                    lane_idx + 1,
+                )
+            }));
+        }
+        for lane_idx in 0..config.param_async_interrupt_lanes {
+            let stop = Arc::clone(&stop);
+            handles.push(scope.spawn(move || {
+                run_param_async_lane_loop(
+                    driver,
+                    config,
+                    stop.as_ref(),
+                    ParamAsyncLaneKind::Interrupt,
+                    lane_idx + 1,
+                )
+            }));
+        }
+
+        let stream_result = stream_parameter_chunks(
+            driver,
+            config,
+            payload,
+            phase_label,
+            stream_len,
+            stream_chunk_size,
+            descriptor_split_size,
+            poll_timeout,
+            interrupt_poll_timeout,
+        );
+
+        stop.store(true, Ordering::Relaxed);
+        for handle in handles {
+            match handle.join() {
+                Ok(stats) => lane_stats.push(stats),
+                Err(_) => println!("      {}: async lane thread panicked", phase_label),
+            }
+        }
+
+        stream_result
+    });
+
+    for stats in lane_stats {
+        println!(
+            "      {}: async lane {}#{} reads={} ok={} timeouts={} errors={}",
+            phase_label,
+            stats.kind.as_str(),
+            stats.lane_idx,
+            stats.reads,
+            stats.ok,
+            stats.timeouts,
+            stats.errors
+        );
+    }
+
+    result
+}
+
+fn send_parameter_payload(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    payload: &[u8],
+    phase_label: &str,
+) -> Result<(), Box<dyn Error>> {
+    if payload.is_empty() {
+        return Ok(());
+    }
+
+    let use_custom_stream = config.param_stream_chunk_size.is_some()
+        || config.param_stream_max_bytes.is_some()
+        || config.param_read_event_every > 0
+        || config.param_read_interrupt_every > 0
+        || config.param_write_sleep_us > 0
+        || config.param_descriptor_split_bytes.is_some()
+        || config.param_drain_event_every_descriptors > 0
+        || config.param_a0d8_handshake
+        || config.param_prepost_bulk_in_reads > 0
+        || config.param_prepost_event_reads > 0
+        || config.param_prepost_interrupt_reads > 0
+        || has_param_async_lanes(config)
+        || has_param_submit_lanes(config);
+    if !use_custom_stream {
+        driver.send_descriptor_payload_raw(config.parameters_tag, payload)?;
+        return Ok(());
+    }
+
+    let stream_len = config
+        .param_stream_max_bytes
+        .map(|max| max.min(payload.len()))
+        .unwrap_or(payload.len());
+    let stream_chunk_size = config.param_stream_chunk_size.unwrap_or(config.chunk_size);
+    let descriptor_split_size = config.param_descriptor_split_bytes.unwrap_or(stream_len.max(1));
+    let poll_timeout = Duration::from_millis(config.param_event_timeout_ms);
+    let interrupt_poll_timeout = Duration::from_millis(config.param_interrupt_timeout_ms);
+
+    println!(
+        "    {}: streaming parameters len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
+        phase_label,
+        stream_len,
+        stream_chunk_size,
+        descriptor_split_size,
+        config.param_read_event_every,
+        config.param_read_interrupt_every,
+        config.param_drain_event_every_descriptors,
+        config.param_write_sleep_us,
+        config.parameters_tag,
+        config.param_a0d8_handshake,
+        config.param_a0d8_write_value,
+        config.param_prepost_bulk_in_reads,
+        config.param_prepost_bulk_in_size,
+        config.param_prepost_event_reads,
+        config.param_prepost_interrupt_reads,
+        config.param_prepost_timeout_ms,
+        config.param_async_bulk_in_lanes,
+        config.param_async_bulk_in_size,
+        config.param_async_event_lanes,
+        config.param_async_interrupt_lanes,
+        config.param_async_timeout_ms,
+        config.param_submit_bulk_in_lanes,
+        config.param_submit_event_lanes,
+        config.param_submit_interrupt_lanes,
+        config.param_submit_buffer_size,
+        config.param_submit_timeout_ms,
+        config.param_submit_event_poll_ms,
+        config.param_submit_log_every
+    );
+
+    stream_parameter_chunks_with_optional_async_lanes(
+        driver,
+        config,
+        payload,
+        phase_label,
+        stream_len,
+        stream_chunk_size,
+        descriptor_split_size,
+        poll_timeout,
+        interrupt_poll_timeout,
+    )
+}
+
 fn describe_executable(exe: &SerializedExecutableBlob) -> String {
     let param = match exe.parameter_region {
         Some((start, end)) => format!("param_region={}..{} ({} bytes)", start, end, end - start),
@@ -549,9 +1644,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         || config.param_write_sleep_us > 0
         || config.param_descriptor_split_bytes.is_some()
         || config.param_drain_event_every_descriptors > 0
+        || config.param_a0d8_handshake
+        || config.param_prepost_bulk_in_reads > 0
+        || config.param_prepost_event_reads > 0
+        || config.param_prepost_interrupt_reads > 0
+        || has_param_async_lanes(&config)
+        || has_param_submit_lanes(&config)
     {
         println!(
-            "Parameter stream controls: chunk={:?} max_bytes={:?} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={}",
+            "Parameter stream controls: chunk={:?} max_bytes={:?} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
             config.param_stream_chunk_size,
             config.param_stream_max_bytes,
             config.param_descriptor_split_bytes,
@@ -560,7 +1661,26 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.param_drain_event_every_descriptors,
             config.param_event_timeout_ms,
             config.param_interrupt_timeout_ms,
-            config.param_write_sleep_us
+            config.param_write_sleep_us,
+            config.param_a0d8_handshake,
+            config.param_a0d8_write_value,
+            config.param_prepost_bulk_in_reads,
+            config.param_prepost_bulk_in_size,
+            config.param_prepost_event_reads,
+            config.param_prepost_interrupt_reads,
+            config.param_prepost_timeout_ms,
+            config.param_async_bulk_in_lanes,
+            config.param_async_bulk_in_size,
+            config.param_async_event_lanes,
+            config.param_async_interrupt_lanes,
+            config.param_async_timeout_ms,
+            config.param_submit_bulk_in_lanes,
+            config.param_submit_event_lanes,
+            config.param_submit_interrupt_lanes,
+            config.param_submit_buffer_size,
+            config.param_submit_timeout_ms,
+            config.param_submit_event_poll_ms,
+            config.param_submit_log_every
         );
     }
     println!("Extracted executables: {}", executables.len());

@@ -272,6 +272,167 @@ Interpretation:
 3. This is consistent with a runcontrol/queue-state coupling issue, not a fixed
    static payload-size limit.
 
+## Handshake candidate at the 49 KiB wall (Pi5 extraction)
+
+A dedicated comparator was added:
+- `tools/usbmon_param_handshake_probe.py`
+
+Usage:
+
+```bash
+python3 tools/usbmon_param_handshake_probe.py <good.log> <bad.log> \
+  --bus 4 \
+  --threshold 49152 \
+  --context 20
+```
+
+What it does:
+1. finds parameter phase start from descriptor header (`Bo size=8`, `tag=2`),
+2. tracks cumulative parameter payload (`Bo size>8`),
+3. anchors around threshold crossing,
+4. diffs transfer/status/control tuples near the anchor.
+
+### Extracted signal from `traces/usbmon-transition-fixed-20260225T082936Z-bus4`
+
+Good log:
+- `libedgetpu_known_good/post/usbmon-bus4-20260225T083453Z.log`
+
+Bad logs:
+- `rusb_transition_sweep/resetkick_chunk32/...`
+- `rusb_transition_sweep/resetkick_chunk40/...`
+- `rusb_transition_sweep/resetkick_chunk47/...`
+
+Near-anchor comparison (`good` vs `resetkick_chunk32`):
+1. good transfer mix:
+   - `Bi`, `Bo`, `Ci`, `Co`, `Ii`
+2. bad transfer mix:
+   - `Bo` only
+3. control tuples present only in good:
+   - `Ci:c0:01:a0d8:0001:0004`
+   - `Co:40:01:a0d8:0001:0004`
+
+Known-good sequence excerpt (device `003`):
+1. `S Ci ... c0 01 a0d8 0001 0004`
+2. `S Co ... 40 01 a0d8 0001 0004 = 00000080`
+3. `S Bi ep2`, `S Ii ep3`, `S Bi ep1` pre-posts
+4. parameter descriptor/data `Bo` stream starts.
+
+Replay logs do not show that same pre-stream `a0d8` exchange + read-posting
+pattern around the class-2 wall.
+
+### Working hypothesis
+
+The missing condition is likely a host-visible handshake/state prep immediately
+before parameter ingress:
+1. `a0d8` control exchange (`Ci/Co`),
+2. posting async read endpoints (`Bi/Ii`),
+3. then parameter `Bo` submission.
+
+This is now the highest-value target for the next pure-`rusb` experiment pass.
+
+### Negative control (important)
+
+We explicitly tested replay variants to rule out the obvious simplification:
+1. baseline write-only setup,
+2. setup with read steps enabled (`--setup-include-reads`),
+3. setup with reads + per-chunk event/interrupt polling
+   (`--param-read-event-every 1 --param-read-interrupt-every 1`).
+
+All variants still stalled at:
+- `offset=49152 (chunk 48)`.
+
+So the gap is not "missing any read call", but more likely:
+1. pending async read-posting behavior (multiple outstanding `Bi/Ii` URBs), or
+2. another tightly ordered queue-arming transition adjacent to that behavior.
+
+### Descriptor-level pre-ingress emulation (new)
+
+Replay now supports an explicit pre-ingress emulation path in
+`rusb_serialized_exec_replay`:
+1. `--param-a0d8-handshake`
+2. `--param-a0d8-write-value`
+3. `--param-prepost-bulk-in-reads`
+4. `--param-prepost-bulk-in-size`
+5. `--param-prepost-event-reads`
+6. `--param-prepost-interrupt-reads`
+7. `--param-prepost-timeout-ms`
+
+Semantics:
+1. before each parameter descriptor header, run optional read bursts
+   (`EP 0x81/0x82/0x83`),
+2. optional `a0d8` read/write pulse,
+3. run optional post-read bursts.
+
+Pi5 reboot-isolated results:
+1. non-split stream (`chunk=1024`, `max=65536`, `tag=2`):
+   - baseline: `offset=49152`
+   - prepost-only: `offset=49152`
+   - prepost+`a0d8`: `offset=49152`
+2. split stream (`--param-descriptor-split-bytes 8192`):
+   - split baseline: `offset=48128`
+   - split prepost-only: `offset=48128`
+   - split prepost+`a0d8`: handshake succeeds on descriptors `1..5`, then
+     descriptor `6` `a0d8` read/write time out, followed by bulk-out timeout.
+
+Interpretation:
+1. synchronous emulation is not enough to bypass the class-2 wall,
+2. descriptor-6 failure in split mode suggests control-plane degradation begins
+   around `~40 KiB` cumulative ingress under this probe.
+
+### Concurrent read lanes during stream (new)
+
+To approximate pending reads, replay now supports concurrent lane threads:
+1. `--param-async-bulk-in-lanes`
+2. `--param-async-bulk-in-size`
+3. `--param-async-event-lanes`
+4. `--param-async-interrupt-lanes`
+5. `--param-async-timeout-ms`
+
+Observed on Pi5 (`setup-include-reads`, reboot-isolated):
+1. async lanes only (`bulk=1,event=1,intr=1,timeout=250ms`):
+   - lanes were active (multiple read attempts logged),
+   - stall unchanged at `offset=49152` (`chunk 48`).
+2. async lanes + `a0d8` handshake:
+   - handshake executes but stall remains `offset=49152`.
+3. split mode (`desc_split=8192`) + async lanes:
+   - stall remains `offset=48128` (`chunk 47`).
+
+Conclusion:
+1. thread-level concurrent blocking reads are insufficient.
+2. remaining hypothesis is stricter libusb async-transfer behavior
+   (persistent pending URBs/event-loop-driven completion semantics).
+
+### True `libusb_submit_transfer` lane path (new)
+
+Replay now includes a true async-submit mode built on raw libusb transfer APIs:
+1. `libusb_alloc_transfer` + `libusb_fill_bulk_transfer`/`libusb_fill_interrupt_transfer`
+2. initial `libusb_submit_transfer` on `EP 0x81/0x82/0x83`
+3. callback-driven resubmission while stream is active
+4. dedicated event-loop thread using `handle_events_timeout`
+5. explicit transfer cancellation and drain at stream end
+
+Flags:
+1. `--param-submit-bulk-in-lanes`
+2. `--param-submit-event-lanes`
+3. `--param-submit-interrupt-lanes`
+4. `--param-submit-buffer-size`
+5. `--param-submit-timeout-ms`
+6. `--param-submit-event-poll-ms`
+7. `--param-submit-log-every`
+
+Pi5 results (reboot-isolated):
+1. `tag=2`, `chunk=1024`, `max=65536`, submit lanes `1/1/1`:
+   - stall unchanged at `offset=49152` (`chunk 48`)
+2. same with `--param-descriptor-split-bytes 8192`:
+   - stall unchanged at `offset=48128` (`chunk 47`)
+3. lane callbacks were active but mostly `timed_out`; no successful data/event
+   completions observed on `0x81/0x82/0x83`.
+
+Interpretation:
+1. this rules out "lack of true submitted URBs" as the sole blocker.
+2. next gap is likely ordering/transition semantics around runcontrol/doorbell
+   and class-2 queue admission, not just read-lane mechanics.
+
 ## Practical next debug steps
 
 1. Instrument runcontrol/doorbell CSR state immediately before and after each

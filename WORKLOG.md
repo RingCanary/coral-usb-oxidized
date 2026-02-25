@@ -2391,3 +2391,225 @@ usbmon/phase summaries (`device=003` runtime lane):
 3. Compared to known-good `libedgetpu`, replay remains trapped in a class-2 ingest
    regime with no output path completion, reinforcing the missing-state-transition
    hypothesis.
+
+### 2026-02-25 - Missing-handshake candidate extraction around 49 KiB wall
+
+#### Objective
+
+Isolate control/interrupt behavior near the `~49 KiB` class-2 wall by comparing:
+1. known-good `libedgetpu` invoke lane,
+2. deterministic replay lane (`resetkick_chunk32/40/47`).
+
+#### Tooling
+
+Added:
+- `tools/usbmon_param_handshake_probe.py`
+
+Key behavior:
+1. Detects parameter phase by descriptor header (`S Bo size=8`, `tag=2`).
+2. Accumulates parameter payload writes (`S Bo size>8`).
+3. Anchors at threshold crossing (default `49152` bytes).
+4. Diffs transfer/status/control-request tuples near anchor.
+5. Emits text or JSON.
+
+#### Run artifacts (Pi5)
+
+Base:
+- `traces/usbmon-transition-fixed-20260225T082936Z-bus4`
+
+Outputs:
+- `analysis-resetkick_chunk32.txt`
+- `analysis-resetkick_chunk40.txt`
+- `analysis-resetkick_chunk47.txt`
+- `analysis-resetkick32.json`
+
+#### Findings
+
+Near-anchor (`--context 20`) tuple summary for known-good vs `resetkick_chunk32`:
+1. known-good near transfer mix:
+   - `{'Bi': 14, 'Bo': 22, 'Ci': 2, 'Co': 2, 'Ii': 1}`
+2. replay near transfer mix:
+   - `{'Bo': 24}`
+
+Near-anchor control tuple diff:
+1. only in known-good:
+   - `Ci:c0:01:a0d8:0001:0004`
+   - `Co:40:01:a0d8:0001:0004`
+2. only in replay:
+   - none (for chunk32 case)
+
+Known-good line-level sequence around parameter start (device `003`):
+1. `L669`: `S Ci ... c0 01 a0d8 0001 0004`
+2. `L671`: `S Co ... 40 01 a0d8 0001 0004 = 00000080`
+3. `L673..L682`: pre-posted `Bi/Ii` reads (`Bi ep2`, `Ii ep3`, `Bi ep1 x8`)
+4. `L683+`: descriptor+parameter `Bo` stream starts.
+
+Replay around wall shows continuous `Bo 1024` loop with no matching
+`a0d8` exchange or `Bi/Ii` pre-posting pattern.
+
+#### Interpretation
+
+Strong candidate missing handshake/state transition before parameter ingest:
+1. control exchange at `a0d8` (`Ci/Co` pair),
+2. asynchronous read posting (`Bi/Ii`) before large `Bo` queueing.
+
+This directly matches the hypothesis that class-2 admission requires host-side
+ack/state choreography, not just descriptor format correctness.
+
+#### Follow-up validation (same day)
+
+Tested replay variants on Pi5 (`rusb_serialized_exec_replay`, `tag=2`,
+`chunk=1024`, `max=65536`, reboot-isolated runs):
+1. baseline (write-only setup),
+2. `--setup-include-reads`,
+3. `--setup-include-reads --param-read-event-every 1 --param-read-interrupt-every 1`.
+
+All three failed at the same boundary:
+- `parameter stream write failed at offset 49152 (chunk 48)`.
+
+Interpretation update:
+1. simply adding synchronous reads and poll calls is insufficient,
+2. likely requirement is true async read posting semantics (pending `Bi/Ii` URBs)
+   or an equivalent queue-arming transition not reproduced by blocking polls.
+
+### 2026-02-25 - Pre-ingress handshake emulation path (descriptor-level) and results
+
+#### Implementation
+
+Extended `examples/rusb_serialized_exec_replay.rs` with opt-in pre-ingress controls:
+1. `--param-a0d8-handshake`
+2. `--param-a0d8-write-value N` (default `0x80000000`)
+3. `--param-prepost-bulk-in-reads N`
+4. `--param-prepost-bulk-in-size N` (default `1024`)
+5. `--param-prepost-event-reads N`
+6. `--param-prepost-interrupt-reads N`
+7. `--param-prepost-timeout-ms N` (default `1`)
+
+Behavior:
+1. Before each parameter descriptor header submit:
+   - optional pre-read burst (`EP 0x81`, `0x82`, `0x83`),
+   - optional `a0d8` read+write pulse,
+   - optional post-read burst.
+2. Read/handshake errors are logged and treated as non-fatal to keep probing.
+
+#### Pi5 reboot-isolated runs
+
+Common args:
+- `tag=2`, `chunk=1024`, `max=65536`, `--setup-include-reads`.
+
+Cases:
+1. baseline:
+   - fail at `offset=49152` (`chunk 48`).
+2. prepost-only (`bulk=8,event=1,intr=1`):
+   - fail at `offset=49152` (`chunk 48`).
+3. prepost + `a0d8` handshake:
+   - fail at `offset=49152` (`chunk 48`).
+
+Split descriptor probe (`--param-descriptor-split-bytes 8192`):
+1. split baseline:
+   - fail at `offset=48128` (`chunk 47`).
+2. split + prepost-only:
+   - fail at `offset=48128` (`chunk 47`).
+3. split + prepost + `a0d8` handshake:
+   - handshake succeeds for descriptors `1..5`,
+   - handshake read/write at descriptor `6` time out,
+   - immediate bulk-out timeout follows.
+
+Interpretation:
+1. Synchronous emulation of prepost + `a0d8` is insufficient to break the wall.
+2. Descriptor-6 collapse in split mode suggests control-plane degradation starts
+   around cumulative ingress near `~40 KiB`, preceding the classical `~49 KiB`
+   full stall.
+
+### 2026-02-25 - Concurrent read-lane emulation (shared handle) and outcome
+
+#### Implementation
+
+Added concurrent lane controls to `rusb_serialized_exec_replay`:
+1. `--param-async-bulk-in-lanes`
+2. `--param-async-bulk-in-size`
+3. `--param-async-event-lanes`
+4. `--param-async-interrupt-lanes`
+5. `--param-async-timeout-ms`
+
+Behavior:
+1. During parameter streaming, spawn background threads (same driver handle) for
+   selected lanes (`EP 0x81`, `0x82`, `0x83`).
+2. Main thread continues descriptor/chunk writes.
+3. Aggregate lane stats (`reads/ok/timeouts/errors`) printed after stream attempt.
+
+#### Pi5 validation
+
+Reboot-isolated runs (`tag=2`, `chunk=1024`, `max=65536`, `setup-include-reads`):
+1. baseline:
+   - fail `offset=49152` (`chunk 48`).
+2. async lanes only (`bulk=1,event=1,intr=1,timeout=250ms`):
+   - lane threads active (`24` read attempts each, all timeout),
+   - fail `offset=49152` (`chunk 48`).
+3. async lanes + `a0d8` handshake:
+   - handshake executes (`a0d8` read/write logged),
+   - fail `offset=49152` (`chunk 48`).
+
+Split probe (`--param-descriptor-split-bytes 8192`) with async lanes:
+1. fail remains `offset=48128` (`chunk 47`).
+
+#### Interpretation
+
+1. Even true concurrent blocking reads on shared handle do not alter admission wall.
+2. Most likely missing element is not thread-level concurrency but libusb async
+   transfer semantics (submitted URBs held pending in kernel/libusb event loop).
+
+### 2026-02-25 - True `libusb_submit_transfer` experiment path (EP 0x81/0x82/0x83)
+
+#### Implementation
+
+Added a dedicated async-submit mode in `examples/rusb_serialized_exec_replay.rs`
+that uses raw libusb transfer submission instead of blocking read threads:
+1. new CLI controls:
+   - `--param-submit-bulk-in-lanes`
+   - `--param-submit-event-lanes`
+   - `--param-submit-interrupt-lanes`
+   - `--param-submit-buffer-size`
+   - `--param-submit-timeout-ms`
+   - `--param-submit-event-poll-ms`
+   - `--param-submit-log-every`
+2. new behavior:
+   - allocate transfers with `libusb_alloc_transfer(0)`,
+   - fill bulk/interrupt transfers for endpoints `0x81/0x82/0x83`,
+   - submit with `libusb_submit_transfer`,
+   - callback resubmits until stream stop,
+   - dedicated event-loop thread (`handle_events_timeout`) drives completions,
+   - cancel + drain at end of parameter stream.
+3. driver plumbing:
+   - `EdgeTpuUsbDriver::raw_libusb_handle()`
+   - `EdgeTpuUsbDriver::handle_events_timeout()`
+
+#### Pi5 deterministic results
+
+Model: `templates/dense_2048x2048_quant_edgetpu.tflite`  
+Common options: `tag=2`, `chunk=1024`, `max=65536`, `setup-include-reads`,
+submit lanes `bulk=1,event=1,intr=1`, submit timeout `100ms`, event poll `1ms`.
+
+1. non-split stream:
+   - fails at `offset=49152` (`chunk 48`)
+2. split stream (`--param-descriptor-split-bytes 8192`):
+   - fails at `offset=48128` (`chunk 47`)
+
+Lane stats in both runs:
+1. callbacks active (`~60` per lane in run window),
+2. almost all callbacks complete with `timed_out`,
+3. no successful completions on `0x81/0x82/0x83`,
+4. cancellation/shutdown path succeeds cleanly.
+
+Interpretation:
+1. the experiment confirms true submitted URB/event-loop semantics are now
+   present in replay,
+2. class-2 admission wall is unchanged, so the missing behavior is likely not
+   merely "have pending reads", but a tighter ordering/transition requirement
+   around runcontrol/queue state and parameter-descriptor scheduling.
+
+#### Artifacts
+
+Pi5 usbmon capture for submit-URB replay:
+- `traces/usbmon-20260225T121056Z-bus4/usbmon-bus4-20260225T121056Z.log`
+- `traces/usbmon-20260225T121056Z-bus4/usbmon-bus4-20260225T121056Z.summary.txt`
