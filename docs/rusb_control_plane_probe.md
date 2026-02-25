@@ -22,6 +22,7 @@ cargo run --example rusb_control_plane_probe -- --claim-interface --get-status
 cargo run --example rusb_control_plane_probe -- --claim-interface --vendor-read64 0x00044018
 cargo run --example rusb_control_plane_probe -- --claim-interface --vendor-read64 0x00048788 --vendor-read32 0x0001a30c
 cargo run --example rusb_control_plane_probe -- --claim-interface --read-event 1 --read-interrupt 1
+cargo run --example rusb_control_plane_probe -- --led-blink 4 --led-mask 0x00700000 --led-on-ms 120 --led-off-ms 120
 ```
 
 ## Notes
@@ -35,4 +36,12 @@ cargo run --example rusb_control_plane_probe -- --claim-interface --read-event 1
 - `--reset-device` can trigger device re-enumeration.
 - `--vendor-write32` / `--vendor-write64` are explicit mutation paths; prefer
   reads first while validating mappings.
+- `--led-blink` is a guarded CSR toggle helper for side-channel experiments:
+  - Reads baseline register value first.
+  - Toggles `value ^ mask` for each blink.
+  - Restores baseline value after every pulse.
+  - Default target is `0x0001a704 (rambist_ctrl_1)` with mask `0x00700000`.
+- Safety: avoid arbitrary masks on `0x0001a30c (scu_ctrl_0)`. In Pi5 lab runs,
+  toggling low bits there returned `Input/Output Error` and could transiently
+  destabilize USB enumeration until replug/re-enumeration.
 - For permission issues, add proper udev rules or run with elevated privileges.

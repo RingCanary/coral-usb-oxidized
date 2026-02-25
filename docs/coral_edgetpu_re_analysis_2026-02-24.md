@@ -63,3 +63,151 @@ To build a custom compiler, we are missing the semantic understanding of:
 3.  **Descriptor Rings/Command Queues**: How are the `EXECUTION_ONLY` blobs unpacked by the hardware? Are they DMA descriptors that point to memory locations, or are they actual ALU instructions? The high latency and bulk USB loops suggest a Descriptor-driven DMA engine orchestrating a systolic array.
 
 **Solution Plan**: We must stop looking at `.tflite` payload layouts and start diffing the `EXECUTION_ONLY` chunks. By capturing hundreds of models with slight parameter variations, we can build a heuristic disassembler. Only when we map a bitfield to "Multiply row by column" can we build a custom compiler.
+
+---
+
+## 5. Current Status (As Implemented)
+
+The repository has progressed materially beyond a raw tensorizer MVP.
+
+1.  **Template Patching is Production-Grade for GEMM Workloads**
+    - Dense templates are validated across multiple dimensions, including
+      rectangular shapes used by CLIP and Function-Gemma paths.
+    - Weight re-stride formulas are recovered and implemented in Rust.
+    - Prepared interpreter reuse and tiled execution paths are in place.
+2.  **Real Model Bring-Up is Working**
+    - CLIP ViT linear stages and Function-Gemma linear stages run through Coral.
+    - Pi5 + Coral lab runs are stable and benchmarked end-to-end.
+    - Coral-tiled LM-head path removes the worst CPU bottleneck in decode loops.
+3.  **Control-Plane RE has Partial Named Ground Truth**
+    - Core CSR names are confirmed (`scalarCoreRunControl`, `tileconfig0`,
+      `scu_ctrl_0`) with repeatable usbmon extraction and replay tooling.
+    - Probe tooling supports vendor read/write plus event/interrupt endpoint
+      inspection.
+4.  **What is still missing**
+    - Full descriptor-ring semantics for queue programming.
+    - A full pure-Rust invoke path that does not call into `libedgetpu`.
+    - Instruction semantic decoding for `EXECUTION_ONLY`.
+
+---
+
+## 6. Next Execution Loop (Four-Point Aligned)
+
+This is the immediate plan that keeps work centered on
+`docs/focus_points.md`.
+
+### 6.1 Point 1: Control-Plane Map
+
+1.  Expand named mapping for remaining frequently observed control writes
+    (`0x85xx`, `0xa5xx`, `0xa6xx`, related queue head/tail/completion paths).
+2.  Convert from static naming to behavioral labels by perturbation:
+    - change one register write in replay
+    - run one invoke
+    - classify failure mode (no-complete, bad-output, timeout, device-reset).
+
+### 6.2 Point 2: Pure Rust USB Driver
+
+1.  Implement a single-invoke replay example in Rust (`rusb` only):
+    - device open / interface handling
+    - control sequence replay
+    - bulk-out submit of known instruction/input payload
+    - event/interrupt completion poll
+    - bulk-in output readback.
+2.  Success criterion: one known template inference returns stable output without
+    `libedgetpu` loaded.
+
+### 6.3 Point 3: EXECUTION_ONLY Semantics
+
+1.  Build an opcode-diff matrix across minimal models
+    (Dense/Conv/Depthwise, stride/shape/activation toggles).
+2.  Separate:
+    - relocation fields (already partially tagged by schema offsets)
+    - descriptor-like words
+    - candidate compute op fields.
+3.  Promote hypotheses only when reproducible across at least two operator
+    families.
+
+### 6.4 Point 4: Graph Lowering
+
+1.  Define a minimal internal command IR only after 6.1-6.3 prove stable.
+2.  First lowering target:
+    - one dynamic Dense-like segment
+    - no `edgetpu_compiler`
+    - generated command stream submitted via pure Rust driver.
+
+---
+
+## 7. Tough Nut (Primary Technical Unknown)
+
+The hardest unresolved problem is still the **descriptor-ring contract** between
+host and TPU runtime:
+
+1.  We can see control writes and bulk payloads.
+2.  We can run patched models with `libedgetpu`.
+3.  But we still lack a precise mapping from host-side queue/register writes to
+    hardware-side descriptor consumption rules and completion semantics.
+
+Until this contract is decoded, full compiler independence remains blocked even
+if weight/data paths are well understood.
+
+---
+
+## 8. New A/B Repro Run (Pi5, 2026-02-24)
+
+Fresh clean-state run on `rpilm3.local` established a sharper boundary for
+`scalarCoreRunControl (0x00044018)`:
+
+1.  `baseline (none)`:
+    - `RESULT status=ok`
+    - stable output head: `0..15`
+2.  `runcontrol=1`:
+    - `RESULT status=ok`
+    - same output head: `0..15`
+3.  `runcontrol=2`:
+    - immediate runtime abort:
+      `transfer on tag 2 failed. Abort. Deadline exceeded: USB transfer error 2`
+    - post-abort delegate creation fails, while device still enumerates as
+      `18d1:9302`
+    - user-observed side channel: onboard white LED starts blinking/brighter
+
+Artifacts (synced into local repo):
+
+- `traces/led-poison-ab-20260224T194024Z/00_baseline_none.log`
+- `traces/led-poison-ab-20260224T194024Z/01_runcontrol_1.log`
+- `traces/led-poison-ab-20260224T194024Z/02_runcontrol_2.log`
+- `traces/led-poison-ab-20260224T194024Z/03_delegate_post.log`
+
+### 8.1 Failure progression and recovery
+
+Observed sequence on Pi5:
+
+1.  Poison trigger (`runcontrol=2`) -> LED blinking + runtime abort.
+2.  Intermediate state: USB still present (`18d1:9302`), delegate unusable.
+3.  Later transition: device disappears from bus entirely.
+4.  Manual reattach restores healthy bring-up (`1a6e:089a -> 18d1:9302`) and
+    delegate success.
+
+This confirms `18d1:9302` enumeration alone is not a sufficient readiness check.
+
+### 8.2 Recovery-sequence test (no-replug attempt)
+
+A dedicated recovery run was executed from a clean pre-state:
+
+- `traces/runcontrol-recovery-20260224T194932Z`
+
+Sequence:
+1. Verify healthy delegate creation (passed).
+2. Induce poison once (`runcontrol=2`) (abort reproduced).
+3. Attempt software recovery without replug:
+   - write `runcontrol=1`
+   - write `runcontrol=0` then `runcontrol=1`
+   - device reset (`rusb` reset)
+
+Observed:
+1. After poison, all direct recovery writes to `0x00044018` timed out.
+2. Delegate remained failed after each recovery attempt.
+3. After reset attempt, device was not detected by delegate path.
+
+Implication:
+- In this fault depth, the control plane itself is no longer writable from host
+  userspace; no-replug recovery did not succeed.

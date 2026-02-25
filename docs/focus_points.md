@@ -14,6 +14,13 @@ change should map to one (or more) of these points.
   - `0x44018 -> scalarCoreRunControl`
   - `0x48788 -> tileconfig0`
   - `0x1a30c -> scu_ctrl_0`
+  Behavioral boundary now verified on Pi5:
+  - `runcontrol=1` is safe in invoke path.
+  - `runcontrol=2` reliably poisons runtime
+    (`USB transfer error 2`, delegate failure while still enumerated).
+  No-replug recovery sequence (`2->1`, `2->0->1`, reset-device) failed in
+  latest run due post-poison control-write timeouts; reattach still required in
+  worst case.
   Remaining register groups still need semantic confirmation.
 - Success signal:
   A named register map where each critical control write is explained and tested

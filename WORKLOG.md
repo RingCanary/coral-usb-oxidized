@@ -1829,3 +1829,209 @@ LM template generated on workstation and copied to Pi:
    projection bottleneck.
 2. Startup/setup cost rises due to one-time LM tile preparation; steady-state
    decode throughput improves by ~`17.6x`.
+
+### 2026-02-24 - Side Milestone: LED Pattern Probe (Pi5 + Coral USB)
+
+#### Objective
+
+Add a small, reproducible side-channel experiment to toggle a likely board LED
+control-related register path with strict restore safety.
+
+#### Code and docs changes
+
+1. Extended `examples/rusb_control_plane_probe.rs`:
+   - New flags:
+     - `--led-blink N`
+     - `--led-reg OFF`
+     - `--led-mask MASK`
+     - `--led-on-ms N`
+     - `--led-off-ms N`
+   - Behavior:
+     - read baseline register value
+     - write `baseline ^ mask`
+     - sleep for on-duration
+     - restore baseline
+     - repeat and verify final readback
+   - Added known-register labels for SCU/OMC/ABM candidates used in prior RE.
+2. Updated docs:
+   - `docs/rusb_control_plane_probe.md`
+   - Added LED mode usage and safety warning.
+
+#### Pi5 execution
+
+Host: `rpc@rpilm3.local`
+
+1. Runtime init:
+
+```bash
+cd ~/coral-usb-oxidized
+eval "$(./tools/bootstrap_arch_stack.sh print-env)"
+cargo run --example delegate_usage
+```
+
+2. LED pattern run:
+
+```bash
+cargo run --example rusb_control_plane_probe -- --led-blink 8 --led-on-ms 120 --led-off-ms 80
+```
+
+Observed register toggles:
+- baseline `0x0001a704 (rambist_ctrl_1) = 0x0070007f`
+- toggled `0x0000007f`
+- restored to baseline each pulse
+- final readback restored to `0x0070007f`
+
+3. usbmon artifact:
+
+```bash
+sudo ./tools/usbmon_capture.sh -b 4 -- \
+  cargo run --example rusb_control_plane_probe -- --led-blink 6 --led-on-ms 100 --led-off-ms 100
+```
+
+Artifact:
+- `traces/usbmon-20260224T184251Z-bus4/usbmon-bus4-20260224T184251Z.log`
+
+Trace contains alternating write32 submissions on `0x1a704`:
+- `= 7f000000` (LE `0x0000007f`)
+- `= 7f007000` (LE `0x0070007f`)
+repeated for 6 pulses.
+
+#### Safety finding
+
+- Direct low-bit toggle attempt on `0x0001a30c (scu_ctrl_0)` failed with
+  `Input/Output Error` and was followed by temporary USB instability on Pi5.
+- Default LED probe target was moved to `0x0001a704` mask `0x00700000`, which
+  is observed in normal runtime transitions and showed stable restore behavior.
+
+### 2026-02-24 - Descriptor Contract Perturbation Campaign (Pi5)
+
+#### Objective
+
+Stress-test candidate control CSRs during a real GEMM invoke to move from
+address-name mapping to behavioral semantics.
+
+#### New tooling
+
+1. Added invoke-coupled perturbation example:
+   - `examples/gemm_csr_perturb_probe.rs`
+   - Applies one CSR mutation in-process, runs bundled GEMM invoke, restores
+     register, emits structured `RESULT` lines.
+2. Added matrix runner:
+   - `tools/csr_perturbation_matrix.sh`
+
+#### Benign matrix result (clean state)
+
+Artifact:
+- `traces/csr-perturb-benign-20260224T191025Z/summary.tsv`
+
+Findings:
+1. Benign cases (`tileconfig` variants, `scu_ctr_7`, `rambist_ctrl_1`, ABM
+   toggles, `runcontrol=0`) all returned `status=ok`.
+2. Output head stayed stable (`0..15`) and restore checks passed.
+
+#### Poison case reproduction
+
+Poison mutation:
+- `scalarCoreRunControl (0x00044018) <- 0x2` before invoke.
+
+Artifact:
+- `traces/usbmon-20260224T191133Z-bus4/usbmon-bus4-20260224T191133Z.log`
+- plus derived reports (`register-report.json`, sequence and bulk signature
+  JSONs in the same folder).
+
+Observed:
+1. Runtime abort during invoke:
+   - `transfer on tag 2 failed ... USB transfer error 2`.
+2. Subsequent delegate creation failed repeatedly (`DelegateCreationFailed`)
+   while still enumerated as `18d1:9302`.
+3. Kernel showed repeated USB resets.
+4. User observed brighter/blinking white LED during this poison case.
+
+Interpretation:
+- `runcontrol=2` appears to trigger a sensitive control-state transition with
+  strict preconditions tied to descriptor/queue runtime state.
+
+### 2026-02-24 - Clean A/B poison boundary + LED correlation (Pi5)
+
+#### Objective
+
+Re-run a clean controlled A/B experiment to isolate `scalarCoreRunControl`
+semantics with user-visible LED state included in observations.
+
+#### Run set
+
+Artifact root:
+- `traces/led-poison-ab-20260224T194024Z`
+
+Cases:
+1. `baseline` (`none`)
+2. `runcontrol=1` (`0x00044018 <- 0x1`)
+3. `runcontrol=2` (`0x00044018 <- 0x2`)
+4. post-poison `delegate_usage`
+
+#### Findings
+
+1. Baseline and `runcontrol=1` were both healthy:
+   - `RESULT status=ok`
+   - identical output head `0,1,2,...,15`
+2. `runcontrol=2` triggered immediate runtime abort:
+   - `transfer on tag 2 failed. Abort. Deadline exceeded: USB transfer error 2`
+3. Post-poison runtime state:
+   - device still enumerated as `18d1:9302`
+   - delegate creation failed (`Failed to create EdgeTPU delegate`)
+4. User observed LED starts blinking/brighter at poison trigger.
+
+#### Progression observed after poison
+
+1. Intermediate state: `Enumerated-But-Unusable` (`18d1:9302`, delegate dead).
+2. Later state: device disappeared from bus entirely.
+3. Manual reattach restored healthy bring-up:
+   - `1a6e:089a -> 18d1:9302`
+   - delegate creation successful again.
+
+#### Additional synced artifacts
+
+1. `traces/led-poison-cycle-20260224T193536Z`
+2. `traces/led-blink-20260224T193434Z`
+
+These captures reinforce that enumeration status alone is not a valid readiness
+signal after poison conditions.
+
+### 2026-02-24 - No-replug recovery experiment after poison
+
+#### Objective
+
+Test whether a poisoned runtime (`runcontrol=2`) can be recovered in software,
+without physical reattach.
+
+#### Artifact
+
+- `traces/runcontrol-recovery-20260224T194932Z`
+
+#### Procedure
+
+1. Confirm healthy delegate path from clean attach.
+2. Induce poison once:
+   - `gemm_csr_perturb_probe 0x00044018 64 0x2 ...`
+3. Recovery attempts in same poisoned session:
+   - write `0x44018 <- 1`
+   - write `0x44018 <- 0`, then `0x44018 <- 1`
+   - `rusb_control_plane_probe --reset-device`
+4. Re-check delegate creation after each step.
+
+#### Results
+
+1. Pre-state was healthy (delegate creation succeeded).
+2. Poison reproduced immediately with known abort:
+   - `transfer on tag 2 failed ... USB transfer error 2`
+3. All direct recovery control writes timed out:
+   - `VENDOR_WRITE64 0x00044018 ... timeout after 500 ms`
+4. Delegate remained failed after all software recovery attempts.
+5. After reset attempt, delegate path reported no Coral device.
+
+#### Conclusion
+
+In this run, no-replug recovery was not possible once poisoned:
+- the control plane itself became non-responsive to runcontrol writes.
+- practical recovery remains physical reattach (or lower-level host/port power
+  recovery) after deep poison.

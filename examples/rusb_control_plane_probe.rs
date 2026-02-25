@@ -34,6 +34,11 @@ struct Config {
     read_event_count: usize,
     read_interrupt_count: usize,
     timeout_ms: u64,
+    led_blink_count: usize,
+    led_on_ms: u64,
+    led_off_ms: u64,
+    led_reg: u32,
+    led_mask: u32,
 }
 
 fn usage(program: &str) {
@@ -50,10 +55,16 @@ fn usage(program: &str) {
     println!("  --vendor-write64 O=V Write vendor register64 (offset=value)");
     println!("  --read-event N      Read N event packets from endpoint 0x82");
     println!("  --read-interrupt N  Read N interrupt packets from endpoint 0x83");
+    println!("  --led-blink N       Toggle a CSR bitmask N times (default reg: rambist_ctrl_1)");
+    println!("  --led-reg OFF       CSR offset for --led-blink (default: 0x0001a704)");
+    println!("  --led-mask MASK     Bitmask toggled by --led-blink (default: 0x00700000)");
+    println!("  --led-on-ms N       Toggle hold time in ms (default: 200)");
+    println!("  --led-off-ms N      Delay between blinks in ms (default: 200)");
     println!("Examples:");
     println!("  {program} --claim-interface --vendor-read64 0x00044018");
     println!("  {program} --claim-interface --vendor-read64 0x00048788 --read-interrupt 1");
     println!("  {program} --claim-interface --vendor-write32 0x0001a30c=0x00003800");
+    println!("  {program} --led-blink 4 --led-mask 0x00700000 --led-on-ms 120 --led-off-ms 120");
 }
 
 fn parse_u64_auto(value: &str) -> Result<u64, Box<dyn Error>> {
@@ -93,6 +104,21 @@ fn known_reg_name(offset: u32) -> Option<&'static str> {
         0x0004_4018 => Some("scalarCoreRunControl"),
         0x0004_8788 => Some("tileconfig0"),
         0x0001_a30c => Some("scu_ctrl_0"),
+        0x0001_a310 => Some("scu_ctrl_1"),
+        0x0001_a314 => Some("scu_ctrl_2"),
+        0x0001_a318 => Some("scu_ctrl_3"),
+        0x0001_a31c => Some("scu_ctrl_4"),
+        0x0001_a320 => Some("scu_ctrl_5"),
+        0x0001_a32c => Some("scu_ctr_6"),
+        0x0001_a33c => Some("scu_ctr_7"),
+        0x0001_a0d4 => Some("omc0_d4"),
+        0x0001_a0d8 => Some("omc0_d8"),
+        0x0001_a0dc => Some("omc0_dc"),
+        0x0001_a500 => Some("slv_abm_en"),
+        0x0001_a558 => Some("slv_err_resp_isr_mask"),
+        0x0001_a600 => Some("mst_abm_en"),
+        0x0001_a658 => Some("mst_err_resp_isr_mask"),
+        0x0001_a704 => Some("rambist_ctrl_1"),
         0x0004_8528 => Some("output_actv_queue_base"),
         0x0004_8540 => Some("output_actv_queue_tail"),
         0x0004_8550 => Some("output_actv_queue_completed_head"),
@@ -152,6 +178,11 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         read_event_count: 0,
         read_interrupt_count: 0,
         timeout_ms: 500,
+        led_blink_count: 0,
+        led_on_ms: 200,
+        led_off_ms: 200,
+        led_reg: 0x0001_a704,
+        led_mask: 0x0070_0000,
     };
 
     let mut idx = 1usize;
@@ -206,6 +237,36 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                     .ok_or("--read-interrupt requires value")?
                     .parse()?;
             }
+            "--led-blink" => {
+                idx += 1;
+                config.led_blink_count = args
+                    .get(idx)
+                    .ok_or("--led-blink requires value")?
+                    .parse()?;
+            }
+            "--led-reg" => {
+                idx += 1;
+                config.led_reg = parse_u32_auto(args.get(idx).ok_or("--led-reg requires value")?)?;
+            }
+            "--led-mask" => {
+                idx += 1;
+                config.led_mask =
+                    parse_u32_auto(args.get(idx).ok_or("--led-mask requires value")?)?;
+            }
+            "--led-on-ms" => {
+                idx += 1;
+                config.led_on_ms = args
+                    .get(idx)
+                    .ok_or("--led-on-ms requires value")?
+                    .parse()?;
+            }
+            "--led-off-ms" => {
+                idx += 1;
+                config.led_off_ms = args
+                    .get(idx)
+                    .ok_or("--led-off-ms requires value")?
+                    .parse()?;
+            }
             other => return Err(format!("unknown argument: {}", other).into()),
         }
         idx += 1;
@@ -213,6 +274,12 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
 
     if config.timeout_ms == 0 {
         return Err("--timeout-ms must be >= 1".into());
+    }
+    if config.led_mask == 0 {
+        return Err("--led-mask must be non-zero".into());
+    }
+    if config.led_blink_count > 0 && (config.led_on_ms == 0 || config.led_off_ms == 0) {
+        return Err("--led-on-ms and --led-off-ms must be >= 1 when --led-blink is used".into());
     }
 
     Ok(config)
@@ -370,6 +437,71 @@ fn decode_interrupt_packet(buf: &[u8]) -> Option<u32> {
     Some(u32::from_le_bytes(buf[0..4].try_into().ok()?))
 }
 
+fn run_led_blink(
+    handle: &rusb::DeviceHandle<Context>,
+    offset: u32,
+    mask: u32,
+    blink_count: usize,
+    on_ms: u64,
+    off_ms: u64,
+    timeout: Duration,
+) -> Result<(), Box<dyn Error>> {
+    if blink_count == 0 {
+        return Ok(());
+    }
+
+    let reg = format_reg(offset);
+    println!(
+        "LED blink experiment: reg={} mask=0x{mask:08x} count={} on={}ms off={}ms",
+        reg, blink_count, on_ms, off_ms
+    );
+
+    let original = vendor_read32(handle, offset, timeout)
+        .map_err(|err| format!("failed to read {} before blink: {}", reg, err))?;
+    let toggled = original ^ mask;
+    println!(
+        "LED blink baseline: {} = 0x{original:08x}, toggled=0x{toggled:08x}",
+        reg
+    );
+
+    for idx in 0..blink_count {
+        vendor_write32(handle, offset, toggled, timeout).map_err(|err| {
+            format!(
+                "LED blink write (toggle) failed at step {} on {}: {}",
+                idx + 1,
+                reg,
+                err
+            )
+        })?;
+        println!(
+            "LED_BLINK[{idx}] toggle  {} <= 0x{toggled:08x}",
+            reg
+        );
+        std::thread::sleep(Duration::from_millis(on_ms));
+
+        vendor_write32(handle, offset, original, timeout).map_err(|err| {
+            format!(
+                "LED blink write (restore) failed at step {} on {}: {}",
+                idx + 1,
+                reg,
+                err
+            )
+        })?;
+        println!(
+            "LED_BLINK[{idx}] restore {} <= 0x{original:08x}",
+            reg
+        );
+        if idx + 1 < blink_count {
+            std::thread::sleep(Duration::from_millis(off_ms));
+        }
+    }
+
+    let final_val = vendor_read32(handle, offset, timeout)
+        .map_err(|err| format!("failed to read {} after blink: {}", reg, err))?;
+    println!("LED blink final readback: {} = 0x{final_val:08x}", reg);
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let config = parse_args()?;
     let context = Context::new()?;
@@ -407,8 +539,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         || !config.vendor_read64.is_empty()
         || !config.vendor_write32.is_empty()
         || !config.vendor_write64.is_empty();
+    let has_led_ops = config.led_blink_count > 0;
     let needs_endpoint_io = config.read_event_count > 0 || config.read_interrupt_count > 0;
-    let needs_io = has_vendor_ops || needs_endpoint_io;
+    let needs_io = has_vendor_ops || has_led_ops || needs_endpoint_io;
     let need_open = config.claim_interface || config.reset_device || config.get_status || needs_io;
 
     if need_open {
@@ -534,6 +667,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                     );
                 }
             }
+        }
+
+        if config.led_blink_count > 0 {
+            run_led_blink(
+                &handle,
+                config.led_reg,
+                config.led_mask,
+                config.led_blink_count,
+                config.led_on_ms,
+                config.led_off_ms,
+                timeout,
+            )?;
         }
 
         if config.read_event_count > 0 {
