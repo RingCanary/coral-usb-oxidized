@@ -29,7 +29,7 @@ Add a pure-Rust USB path that can:
    - end-to-end replay attempt from compiled `.tflite`
    - supports bootstrap flow for `EXECUTION_ONLY + PARAMETER_CACHING`
 
-## Pi5 test status (2026-02-24)
+## Pi5 test status (2026-02-25)
 
 Host: `rpilm3.local`
 
@@ -39,7 +39,7 @@ Host: `rpilm3.local`
 - `cargo test --lib` ✅ (`15 passed` including new `control_plane` and
   `usb_driver` unit tests)
 
-### Runtime replay
+### Runtime replay (clean-start matrix)
 
 Model used:
 - `templates/dense_2048x2048_quant_edgetpu.tflite`
@@ -48,24 +48,54 @@ Observed extracted executables:
 - `exec0`: type `EXECUTION_ONLY`, payload `16384` bytes
 - `exec1`: type `PARAMETER_CACHING`, payload `4202496` bytes
 
-Current blockers:
+Clean-start procedure:
+1. Power cycle Pi5 USB host ports with `uhubctl`:
+   - `-l 2 off`, `-l 4 off`, wait 5s, then both on.
+2. Confirm Coral is in boot state (`1a6e:089a`).
+3. Run replay with `--firmware apex_latest_single_ep.bin`.
 
-1. With setup enabled (write-only setup sequence), first SCU write fails:
-   - `step 0 write failed at 0x0001a30c: Operation timed out`
-2. With setup skipped, first descriptor bulk write fails:
-   - `bulk write failed on endpoint 0x01: Input/Output Error`
+Observed baseline behavior:
+1. Firmware upload and runtime transition succeed.
+2. Setup sequence (write-only, 38 steps) succeeds from clean start.
+3. Bootstrap instruction descriptors are accepted.
+4. Parameter stream (`~4 MiB`) currently fails with bulk timeout when sent on
+   expected classes (`tag 2`, also `0` and `1`).
+
+Descriptor-tag sweep (`templates/dense_2048x2048_quant_edgetpu.tflite`,
+`chunk-size=4096`):
+
+- `--parameters-tag 2` (Parameters):
+  - timeout at offset `49152`
+- `--parameters-tag 0` (Instructions):
+  - timeout at offset `28672`
+- `--parameters-tag 1` (InputActivations):
+  - timeout at offset `32768`
+- `--parameters-tag 3` (OutputActivations):
+  - no bulk timeout, run completes
+- `--parameters-tag 4` (Interrupt0):
+  - no bulk timeout, run completes
+
+Control run:
+- `--skip-param-preload` completes with event+output from clean start.
 
 Interpretation:
-- transport framing and extraction are in place,
-- but runtime state preconditions for this direct path are still unmet on this
-  host/device state.
+- Transport and control plane are functioning.
+- Current failure is narrowed to descriptor queue/class semantics for parameter
+  admission, not a generic USB bulk path failure.
+- Nonstandard tags (`3/4`) avoid immediate timeout but do not yet imply valid
+  parameter loading.
 
 ## Practical next debug steps
 
-1. Run replay against clean `1a6e:089a` state before libedgetpu touches device.
-2. Compare interface/config state and claim ordering vs `edgetpuxray/connect.py`
-   (especially around reset/set_configuration/claim sequence).
-3. Capture usbmon while `connect.py` runs on the same hardware and diff control
-   and bulk ordering against this Rust path.
-4. Try request-recipient variants (`Device` vs `Interface`) for SCU writes in a
-   controlled probe matrix.
+1. Instrument runcontrol/doorbell CSR state immediately before and after each
+   descriptor class submission to correlate queue-pressure and timeout offset.
+2. Add endpoint drain checks (`0x82`, `0x83`) during large parameter streaming
+   to detect required host-ack behavior.
+3. Capture usbmon on Pi5 for:
+   - known-good `libedgetpu` invoke
+   - Rust replay (`tag 2` timeout case)
+   and diff packet ordering/size cadence.
+4. Probe descriptor scheduling permutations:
+   - interleave param chunks with event reads,
+   - split PARAMETER_CACHING into smaller phased submissions,
+   - vary setup read/write inclusion and strictness.

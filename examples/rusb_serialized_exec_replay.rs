@@ -23,6 +23,9 @@ struct Config {
     exec_index: Option<usize>,
     skip_param_preload: bool,
     read_interrupt: bool,
+    instructions_tag: u32,
+    parameters_tag: u32,
+    input_activations_tag: u32,
 }
 
 fn usage(program: &str) {
@@ -42,6 +45,18 @@ fn usage(program: &str) {
     println!("  --firmware PATH           apex_latest_single_ep.bin for boot-mode devices");
     println!("  --skip-param-preload      Do not send PARAMETER_CACHING executables");
     println!("  --read-interrupt          Read one interrupt packet after run");
+    println!(
+        "  --instructions-tag N      Descriptor tag for instructions (default: {})",
+        DescriptorTag::Instructions.as_u32()
+    );
+    println!(
+        "  --parameters-tag N        Descriptor tag for parameters (default: {})",
+        DescriptorTag::Parameters.as_u32()
+    );
+    println!(
+        "  --input-tag N             Descriptor tag for input activations (default: {})",
+        DescriptorTag::InputActivations.as_u32()
+    );
     println!("Examples:");
     println!(
         "  {program} --model models/mobilenet_v1_1.0_224_quant_edgetpu.tflite --input-bytes 150528 --output-bytes 1001"
@@ -60,6 +75,34 @@ fn parse_u64_auto(value: &str) -> Result<u64, Box<dyn Error>> {
 
 fn parse_usize_auto(value: &str) -> Result<usize, Box<dyn Error>> {
     Ok(parse_u64_auto(value)? as usize)
+}
+
+fn parse_tag_u32(value: &str, flag_name: &str) -> Result<u32, Box<dyn Error>> {
+    let parsed = parse_u64_auto(value)?;
+    if parsed > u32::MAX as u64 {
+        return Err(format!(
+            "{} value {} exceeds u32 max {}",
+            flag_name,
+            parsed,
+            u32::MAX
+        )
+        .into());
+    }
+    Ok(parsed as u32)
+}
+
+fn descriptor_tag_name(tag: u32) -> &'static str {
+    match tag {
+        0 => "Instructions",
+        1 => "InputActivations",
+        2 => "Parameters",
+        3 => "OutputActivations",
+        4 => "Interrupt0",
+        5 => "Interrupt1",
+        6 => "Interrupt2",
+        7 => "Interrupt3",
+        _ => "Custom",
+    }
 }
 
 fn parse_args() -> Result<Config, Box<dyn Error>> {
@@ -89,6 +132,9 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         exec_index: None,
         skip_param_preload: false,
         read_interrupt: false,
+        instructions_tag: DescriptorTag::Instructions.as_u32(),
+        parameters_tag: DescriptorTag::Parameters.as_u32(),
+        input_activations_tag: DescriptorTag::InputActivations.as_u32(),
     };
 
     let mut i = 1usize;
@@ -146,6 +192,25 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
             }
             "--skip-param-preload" => config.skip_param_preload = true,
             "--read-interrupt" => config.read_interrupt = true,
+            "--instructions-tag" => {
+                i += 1;
+                config.instructions_tag = parse_tag_u32(
+                    args.get(i).ok_or("--instructions-tag requires value")?,
+                    "--instructions-tag",
+                )?;
+            }
+            "--parameters-tag" => {
+                i += 1;
+                config.parameters_tag = parse_tag_u32(
+                    args.get(i).ok_or("--parameters-tag requires value")?,
+                    "--parameters-tag",
+                )?;
+            }
+            "--input-tag" => {
+                i += 1;
+                config.input_activations_tag =
+                    parse_tag_u32(args.get(i).ok_or("--input-tag requires value")?, "--input-tag")?;
+            }
             other => return Err(format!("unknown argument: {}", other).into()),
         }
         i += 1;
@@ -212,6 +277,15 @@ fn load_input(config: &Config) -> Result<Vec<u8>, Box<dyn Error>> {
     Ok(data)
 }
 
+fn fnv1a64(bytes: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for &b in bytes {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
 fn describe_executable(exe: &SerializedExecutableBlob) -> String {
     let param = match exe.parameter_region {
         Some((start, end)) => format!("param_region={}..{} ({} bytes)", start, end, end - start),
@@ -236,6 +310,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let executables = extract_serialized_executables_from_tflite(&model_bytes)?;
 
     println!("Model: {}", config.model_path);
+    println!(
+        "Descriptor tags: instr={}({}), params={}({}), input={}({})",
+        config.instructions_tag,
+        descriptor_tag_name(config.instructions_tag),
+        config.parameters_tag,
+        descriptor_tag_name(config.parameters_tag),
+        config.input_activations_tag,
+        descriptor_tag_name(config.input_activations_tag)
+    );
     println!("Extracted executables: {}", executables.len());
     for exe in &executables {
         println!("  {}", describe_executable(exe));
@@ -323,7 +406,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             );
             for (idx, chunk) in run_exe.instruction_bitstreams.iter().enumerate() {
                 println!("  EXECUTION_ONLY chunk {} ({} bytes)", idx, chunk.len());
-                driver.send_descriptor_payload(DescriptorTag::Instructions, chunk)?;
+                driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
             }
             for exe in &param_executables {
                 println!(
@@ -334,11 +417,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                 );
                 for (idx, chunk) in exe.instruction_bitstreams.iter().enumerate() {
                     println!("    instr chunk {} ({} bytes)", idx, chunk.len());
-                    driver.send_descriptor_payload(DescriptorTag::Instructions, chunk)?;
+                    driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
                 }
                 if !exe.parameters_stream.is_empty() {
-                    driver.send_descriptor_payload(
-                        DescriptorTag::Parameters,
+                    driver.send_descriptor_payload_raw(
+                        config.parameters_tag,
                         &exe.parameters_stream,
                     )?;
                 }
@@ -359,11 +442,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                     exe.parameters_stream.len()
                 );
                 for chunk in &exe.instruction_bitstreams {
-                    driver.send_descriptor_payload(DescriptorTag::Instructions, chunk)?;
+                    driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
                 }
                 if !exe.parameters_stream.is_empty() {
-                    driver.send_descriptor_payload(
-                        DescriptorTag::Parameters,
+                    driver.send_descriptor_payload_raw(
+                        config.parameters_tag,
                         &exe.parameters_stream,
                     )?;
                 }
@@ -385,13 +468,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("RUN {}", run + 1);
         for (idx, chunk) in run_exe.instruction_bitstreams.iter().enumerate() {
             println!("  run instr chunk {} ({} bytes)", idx, chunk.len());
-            driver.send_descriptor_payload(DescriptorTag::Instructions, chunk)?;
+            driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
         }
         if !run_exe.parameters_stream.is_empty() {
-            driver
-                .send_descriptor_payload(DescriptorTag::Parameters, &run_exe.parameters_stream)?;
+            driver.send_descriptor_payload_raw(config.parameters_tag, &run_exe.parameters_stream)?;
         }
-        driver.send_descriptor_payload(DescriptorTag::InputActivations, &input_bytes)?;
+        driver.send_descriptor_payload_raw(config.input_activations_tag, &input_bytes)?;
 
         match driver.read_event_packet() {
             Ok(event) => println!(
@@ -403,9 +485,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let output = driver.read_output_bytes(config.output_bytes)?;
         let head_len = output.len().min(16);
+        let output_hash = fnv1a64(&output);
         println!(
-            "  Output: bytes={} head={:02x?}",
+            "  Output: bytes={} fnv1a64=0x{:016x} head={:02x?}",
             output.len(),
+            output_hash,
             &output[..head_len]
         );
 

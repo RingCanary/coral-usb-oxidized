@@ -409,6 +409,21 @@ impl EdgeTpuUsbDriver {
         tag: DescriptorTag,
         payload: &[u8],
     ) -> Result<(), CoralError> {
+        self.send_descriptor_payload_raw(tag.as_u32(), payload)
+            .map_err(|err| {
+                CoralError::ProtocolError(format!(
+                    "descriptor {} write failed: {}",
+                    tag.name(),
+                    err
+                ))
+            })
+    }
+
+    pub fn send_descriptor_payload_raw(
+        &self,
+        descriptor_tag: u32,
+        payload: &[u8],
+    ) -> Result<(), CoralError> {
         if payload.len() > u32::MAX as usize {
             return Err(CoralError::ProtocolError(format!(
                 "descriptor payload too large: {} bytes",
@@ -416,7 +431,11 @@ impl EdgeTpuUsbDriver {
             )));
         }
 
-        let header = DescriptorHeader::new(payload.len() as u32, tag).to_le_bytes();
+        let header = DescriptorHeader {
+            payload_len: payload.len() as u32,
+            descriptor_tag,
+        }
+        .to_le_bytes();
         self.write_bulk_all(EP_BULK_OUT, &header)?;
 
         let mut offset = 0usize;
@@ -425,8 +444,8 @@ impl EdgeTpuUsbDriver {
             if let Err(err) = self.write_bulk_all(EP_BULK_OUT, &payload[offset..offset + chunk_len])
             {
                 return Err(CoralError::ProtocolError(format!(
-                    "descriptor {} payload write failed at offset {} of {} bytes: {}",
-                    tag.name(),
+                    "descriptor tag={} payload write failed at offset {} of {} bytes: {}",
+                    descriptor_tag,
                     offset,
                     payload.len(),
                     err

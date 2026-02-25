@@ -2092,3 +2092,44 @@ Runtime replay attempt on Pi5 (`templates/dense_2048x2048_quant_edgetpu.tflite`)
 Protocol plumbing is now in-tree and tested; pure-`rusb` end-to-end invoke is
 partially implemented but still blocked on runtime-state preconditions for
 control/bulk acceptance.
+
+### 2026-02-25 - Pi5 VBUS reset validation + descriptor tag matrix
+
+#### Objective
+
+1. Validate software power-cycle equivalence to physical reattach on Pi5.
+2. Re-run pure-`rusb` replay from clean state.
+3. Isolate whether parameter-stream failure is tied to descriptor tag semantics.
+
+#### Actions
+
+1. Installed/used `uhubctl` on Pi5 and applied full host-port cycle:
+   - `uhubctl -l 2 -a off`, `uhubctl -l 4 -a off`, wait 5s, then `-a on`.
+2. Verified Coral returns to boot ID after cycle:
+   - `18d1:9302 -> 1a6e:089a`.
+3. Re-ran `examples/rusb_serialized_exec_replay` with firmware upload and setup.
+4. Added replay instrumentation:
+   - raw descriptor-tag override flags:
+     `--instructions-tag`, `--parameters-tag`, `--input-tag`
+   - output `fnv1a64` digest for deterministic run comparison.
+5. Ran parameter-tag sweep (`chunk-size=4096`) on
+   `templates/dense_2048x2048_quant_edgetpu.tflite`.
+
+#### Results
+
+1. Control path + EXECUTION_ONLY path are stable after clean VBUS cycle.
+2. `--skip-param-preload` succeeds (`event + output`) from clean start.
+3. Parameter-stream outcome depends on descriptor tag:
+   - `param_tag=2` (Parameters): timeout at offset `49152`
+   - `param_tag=0` (Instructions): timeout at offset `28672`
+   - `param_tag=1` (InputActivations): timeout at offset `32768`
+   - `param_tag=3` (OutputActivations): no bulk timeout; run completes
+   - `param_tag=4` (Interrupt0): no bulk timeout; run completes
+4. Successful `tag=3/4` runs show different output digests vs `--skip-param-preload`,
+   indicating queue/routing side effects rather than a valid parameter load.
+
+#### Conclusion
+
+The blocker is now narrowed from generic transport failure to
+descriptor-queue semantics for parameter admission. Large payload rejection is
+specific to queue classes `0/1/2` under current runcontrol/runtime state.

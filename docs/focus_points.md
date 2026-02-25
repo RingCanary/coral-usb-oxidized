@@ -35,9 +35,15 @@ change should map to one (or more) of these points.
   Mid. New `EdgeTpuUsbDriver` now implements descriptor framing (`len+tag`),
   chunked bulk sends, event/interrupt decode, and serialized executable replay
   scaffolding in pure `rusb`.
-  Remaining blocker:
-  runtime-state preconditions are not yet satisfied reliably on Pi5
-  (`0x1a30c` setup write timeout, or first bulk-out `EIO` when setup is skipped).
+  Pi5 clean-start runs now validate:
+  - full VBUS software power-cycle (`uhubctl`) reliably returns device to
+    `1a6e:089a`,
+  - firmware upload + setup + EXECUTION_ONLY submission succeeds,
+  - `--skip-param-preload` path completes with event+output.
+  Remaining blocker is narrowed:
+  large PARAMETER_CACHING payload admission stalls on descriptor classes
+  `0/1/2` (offset-dependent timeout), while alternate classes (`3/4`) do not
+  stall but are not yet confirmed as semantically correct parameter loads.
 - Success signal:
   A Rust example that runs one known template end-to-end and returns valid output
   without `libedgetpu`.
