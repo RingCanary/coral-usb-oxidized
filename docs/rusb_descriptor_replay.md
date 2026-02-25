@@ -557,6 +557,81 @@ Implication:
 2. remaining blocker is temporal/ordering state progression (queue/ack timing),
    not static control write content.
 
+### Admission-wait timing gate (event/interrupt token probe)
+
+Replay now supports timing-aware admission waits during parameter stream:
+1. `--param-admission-wait-mode event|interrupt|either|both`
+2. `--param-admission-wait-timeout-ms`
+3. `--param-admission-wait-poll-ms`
+4. `--param-admission-wait-start-bytes`
+5. `--param-admission-wait-end-bytes`
+6. `--param-admission-wait-every-chunks`
+7. `--param-admission-wait-strict`
+
+Semantics:
+1. in the configured byte window, pause after selected chunks,
+2. poll `0x82`/`0x83` until condition is satisfied or timeout.
+
+Pi5 reboot-isolated outcomes (`mode=either`, `timeout=50ms`, window
+`32768..49152`, every chunk):
+1. non-strict:
+   - all admission waits timed out (`event_ok=false`, `interrupt_ok=false`),
+   - stream still stalled at `49152`.
+2. strict:
+   - first wait at `32768` timed out,
+   - run failed immediately (`admission wait unsatisfied`).
+
+Capture:
+1. `traces/usbmon-admission-wait-20260225T134715Z-bus4/usbmon-bus4-20260225T134715Z.log`
+
+Interpretation:
+1. no event/interrupt admission token was observed in near-wall window.
+2. timing waits on read endpoints alone do not advance class-2 admission.
+
+### Early cadence refinement (`33024` cliff) + gate placement sweep
+
+New deterministic Pi5 matrix (`tag=2`, `chunk=1024`, `max=65536`, submit lanes
+`1/1/1`, clean USB power-cycle each run):
+
+Artifacts:
+1. `traces/replay-keepalive-cadence2-20260225T135856Z/`
+2. `traces/replay-gate-placement-20260225T140440Z/`
+
+Cadence outcomes:
+1. baseline (no gates):
+   - stream write fails at `49152`.
+2. gate window `28672..49152 step 4096`:
+   - first gate failure observed at `36864` (`a0d4` read timeout).
+3. gate window `28672..49152 step 1024`:
+   - first gate failure at `33792`.
+4. gate window `32768..34816 step 256`:
+   - first gate failure at `33024`.
+5. gate window `28672..34816 step 256`:
+   - first gate failure also at `33024`.
+
+Probe-derived payload totals (`usbmon_param_handshake_probe`):
+1. baseline bad phase payload: `50176`.
+2. 4KiB cadence: `36864`.
+3. 1KiB cadence: `33792`.
+4. 256B cadence variants: `33792`.
+
+Replay now exposes gate timing mode:
+1. `--param-gate-placement before|after|both` (default `before`).
+
+Placement sweep (window `28672..34816 step 256`) on Pi5:
+1. `before`: first failing gate `33024`.
+2. `after`: first failing gate `33024`.
+3. `both`: first failing gate `33024`.
+
+Interpretation:
+1. refined control-plane cliff is at `33024` for gate CSR reads, with
+   practical payload ceiling at `33792` under dense gate probing.
+2. sparse cadence can delay when failure is *observed* (e.g. next gate at
+   `36864`) but does not remove collapse.
+3. gate execution timing relative to bulk writes does not change the boundary,
+   reinforcing that missing state progression is deeper than tuple presence or
+   simple gate ordering.
+
 ## Practical next debug steps
 
 1. Instrument runcontrol/doorbell CSR state immediately before and after each

@@ -61,6 +61,16 @@ change should map to one (or more) of these points.
   byte window, and this closes tuple-level near-anchor diff; however, failure
   remains pinned at `33792` (`a0d4` read timeout). This narrows the blocker to
   timing/state progression semantics, not missing tuple content.
+  Admission-wait timing probe:
+  replay can pause in `32768..49152` and poll `0x82/0x83` for explicit
+  admission tokens; no tokens were observed (`event_ok=false`,
+  `interrupt_ok=false`), and class-2 still stalls.
+  Refined cadence boundary:
+  dense gate windows (`step=256`) expose first gate read timeout at `33024`
+  (`a0d4`), with practical stream ceiling `33792`; sparse cadence can defer
+  observed failure to next gate point (e.g. `36864` at `step=4096`).
+  Gate placement invariance:
+  `--param-gate-placement before|after|both` does not move the `33024` cliff.
   Parity reset probe (`--reset-before-claim`) did not move the wall and is
   unstable across consecutive Pi5 runs (can trigger xHCI enumerate `error -62`);
   keep diagnostic-only.

@@ -14,6 +14,63 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ParamAdmissionWaitMode {
+    Event,
+    Interrupt,
+    Either,
+    Both,
+}
+
+impl ParamAdmissionWaitMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            ParamAdmissionWaitMode::Event => "event",
+            ParamAdmissionWaitMode::Interrupt => "interrupt",
+            ParamAdmissionWaitMode::Either => "either",
+            ParamAdmissionWaitMode::Both => "both",
+        }
+    }
+
+    fn needs_event(self) -> bool {
+        matches!(self, ParamAdmissionWaitMode::Event | ParamAdmissionWaitMode::Either | ParamAdmissionWaitMode::Both)
+    }
+
+    fn needs_interrupt(self) -> bool {
+        matches!(
+            self,
+            ParamAdmissionWaitMode::Interrupt
+                | ParamAdmissionWaitMode::Either
+                | ParamAdmissionWaitMode::Both
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ParamGatePlacement {
+    Before,
+    After,
+    Both,
+}
+
+impl ParamGatePlacement {
+    fn as_str(self) -> &'static str {
+        match self {
+            ParamGatePlacement::Before => "before",
+            ParamGatePlacement::After => "after",
+            ParamGatePlacement::Both => "both",
+        }
+    }
+
+    fn run_before(self) -> bool {
+        matches!(self, ParamGatePlacement::Before | ParamGatePlacement::Both)
+    }
+
+    fn run_after(self) -> bool {
+        matches!(self, ParamGatePlacement::After | ParamGatePlacement::Both)
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Config {
     model_path: String,
@@ -61,6 +118,14 @@ struct Config {
     param_gate_window_start_bytes: Option<usize>,
     param_gate_window_end_bytes: Option<usize>,
     param_gate_window_step_bytes: Option<usize>,
+    param_gate_placement: ParamGatePlacement,
+    param_admission_wait_mode: Option<ParamAdmissionWaitMode>,
+    param_admission_wait_timeout_ms: u64,
+    param_admission_wait_poll_ms: u64,
+    param_admission_wait_start_bytes: Option<usize>,
+    param_admission_wait_end_bytes: Option<usize>,
+    param_admission_wait_every_chunks: usize,
+    param_admission_wait_strict: bool,
     param_submit_bulk_in_lanes: usize,
     param_submit_event_lanes: usize,
     param_submit_interrupt_lanes: usize,
@@ -173,6 +238,30 @@ fn usage(program: &str) {
         "  --param-gate-window-step-bytes N   Step bytes between repeated known-good gate injections"
     );
     println!(
+        "  --param-gate-placement MODE   Run known-good gates before|after|both around each chunk (default: before)"
+    );
+    println!(
+        "  --param-admission-wait-mode MODE   Wait mode for stream admission checks: event|interrupt|either|both"
+    );
+    println!(
+        "  --param-admission-wait-timeout-ms N  Max wait per admission check (default: 0/off)"
+    );
+    println!(
+        "  --param-admission-wait-poll-ms N   Poll timeout per event/interrupt read during admission wait (default: 1)"
+    );
+    println!(
+        "  --param-admission-wait-start-bytes N  Start byte offset (inclusive) for admission waits"
+    );
+    println!(
+        "  --param-admission-wait-end-bytes N    End byte offset (exclusive) for admission waits"
+    );
+    println!(
+        "  --param-admission-wait-every-chunks N  Trigger admission wait every N chunks in window (default: 1)"
+    );
+    println!(
+        "  --param-admission-wait-strict     Fail immediately if admission wait is not satisfied"
+    );
+    println!(
         "  --param-submit-bulk-in-lanes N  libusb_submit_transfer lanes on EP 0x81 (default: 0)"
     );
     println!(
@@ -267,6 +356,30 @@ fn descriptor_tag_name(tag: u32) -> &'static str {
     }
 }
 
+fn parse_param_admission_wait_mode(value: &str) -> Result<ParamAdmissionWaitMode, Box<dyn Error>> {
+    match value {
+        "event" => Ok(ParamAdmissionWaitMode::Event),
+        "interrupt" => Ok(ParamAdmissionWaitMode::Interrupt),
+        "either" => Ok(ParamAdmissionWaitMode::Either),
+        "both" => Ok(ParamAdmissionWaitMode::Both),
+        _ => Err(format!(
+            "invalid --param-admission-wait-mode: {value} (expected event|interrupt|either|both)"
+        )
+        .into()),
+    }
+}
+
+fn parse_param_gate_placement(value: &str) -> Result<ParamGatePlacement, Box<dyn Error>> {
+    match value {
+        "before" => Ok(ParamGatePlacement::Before),
+        "after" => Ok(ParamGatePlacement::After),
+        "both" => Ok(ParamGatePlacement::Both),
+        _ => Err(
+            format!("invalid --param-gate-placement: {value} (expected before|after|both)").into(),
+        ),
+    }
+}
+
 fn parse_args() -> Result<Config, Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     let program = args
@@ -325,6 +438,14 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         param_gate_window_start_bytes: None,
         param_gate_window_end_bytes: None,
         param_gate_window_step_bytes: None,
+        param_gate_placement: ParamGatePlacement::Before,
+        param_admission_wait_mode: None,
+        param_admission_wait_timeout_ms: 0,
+        param_admission_wait_poll_ms: 1,
+        param_admission_wait_start_bytes: None,
+        param_admission_wait_end_bytes: None,
+        param_admission_wait_every_chunks: 1,
+        param_admission_wait_strict: false,
         param_submit_bulk_in_lanes: 0,
         param_submit_event_lanes: 0,
         param_submit_interrupt_lanes: 0,
@@ -583,6 +704,57 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                         .ok_or("--param-gate-window-step-bytes requires value")?,
                 )?);
             }
+            "--param-gate-placement" => {
+                i += 1;
+                config.param_gate_placement = parse_param_gate_placement(
+                    args.get(i).ok_or("--param-gate-placement requires value")?,
+                )?;
+            }
+            "--param-admission-wait-mode" => {
+                i += 1;
+                config.param_admission_wait_mode = Some(parse_param_admission_wait_mode(
+                    args.get(i)
+                        .ok_or("--param-admission-wait-mode requires value")?,
+                )?);
+            }
+            "--param-admission-wait-timeout-ms" => {
+                i += 1;
+                config.param_admission_wait_timeout_ms = parse_u64_auto(
+                    args.get(i)
+                        .ok_or("--param-admission-wait-timeout-ms requires value")?,
+                )?;
+            }
+            "--param-admission-wait-poll-ms" => {
+                i += 1;
+                config.param_admission_wait_poll_ms = parse_u64_auto(
+                    args.get(i)
+                        .ok_or("--param-admission-wait-poll-ms requires value")?,
+                )?;
+            }
+            "--param-admission-wait-start-bytes" => {
+                i += 1;
+                config.param_admission_wait_start_bytes = Some(parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-admission-wait-start-bytes requires value")?,
+                )?);
+            }
+            "--param-admission-wait-end-bytes" => {
+                i += 1;
+                config.param_admission_wait_end_bytes = Some(parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-admission-wait-end-bytes requires value")?,
+                )?);
+            }
+            "--param-admission-wait-every-chunks" => {
+                i += 1;
+                config.param_admission_wait_every_chunks = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-admission-wait-every-chunks requires value")?,
+                )?;
+            }
+            "--param-admission-wait-strict" => {
+                config.param_admission_wait_strict = true;
+            }
             "--param-submit-bulk-in-lanes" => {
                 i += 1;
                 config.param_submit_bulk_in_lanes = parse_usize_auto(
@@ -723,6 +895,44 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         if step == 0 {
             return Err("--param-gate-window-step-bytes must be >= 1".into());
         }
+    }
+    if config.param_admission_wait_poll_ms == 0 {
+        return Err("--param-admission-wait-poll-ms must be >= 1".into());
+    }
+    let has_admission_window_config = config.param_admission_wait_start_bytes.is_some()
+        || config.param_admission_wait_end_bytes.is_some();
+    if config.param_admission_wait_mode.is_some() {
+        if config.param_admission_wait_timeout_ms == 0 {
+            return Err(
+                "--param-admission-wait-timeout-ms must be >= 1 when --param-admission-wait-mode is set"
+                    .into(),
+            );
+        }
+        if config.param_admission_wait_every_chunks == 0 {
+            return Err("--param-admission-wait-every-chunks must be >= 1".into());
+        }
+        if has_admission_window_config {
+            let start = config.param_admission_wait_start_bytes.ok_or(
+                "--param-admission-wait-start-bytes is required when using admission wait window",
+            )?;
+            let end = config.param_admission_wait_end_bytes.ok_or(
+                "--param-admission-wait-end-bytes is required when using admission wait window",
+            )?;
+            if start >= end {
+                return Err(format!(
+                    "--param-admission-wait-start-bytes ({start}) must be < --param-admission-wait-end-bytes ({end})"
+                )
+                .into());
+            }
+        }
+    } else if config.param_admission_wait_timeout_ms > 0
+        || has_admission_window_config
+        || config.param_admission_wait_every_chunks != 1
+        || config.param_admission_wait_strict
+    {
+        return Err(
+            "set --param-admission-wait-mode when using --param-admission-wait-* controls".into(),
+        );
     }
     if has_param_async_lanes(&config) && has_param_submit_lanes(&config) {
         return Err(
@@ -1005,6 +1215,53 @@ fn run_known_good_param_gate(
     Ok(())
 }
 
+fn run_pending_known_good_gates(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    phase_label: &str,
+    param_bytes_written: usize,
+    gate_offsets: &[usize],
+    gate_cursor: &mut usize,
+    window_gate: Option<(usize, usize, usize)>,
+    next_window_gate_offset: &mut Option<usize>,
+    window_gate_count: &mut usize,
+) -> Result<(), Box<dyn Error>> {
+    while *gate_cursor < gate_offsets.len() && param_bytes_written >= gate_offsets[*gate_cursor] {
+        run_known_good_param_gate(
+            driver,
+            config,
+            phase_label,
+            *gate_cursor + 1,
+            gate_offsets[*gate_cursor],
+        )?;
+        *gate_cursor += 1;
+    }
+
+    while let (Some((_, window_end, window_step)), Some(gate_offset)) =
+        (window_gate, *next_window_gate_offset)
+    {
+        if param_bytes_written < gate_offset {
+            break;
+        }
+        run_known_good_param_gate(
+            driver,
+            config,
+            phase_label,
+            gate_offsets.len() + *window_gate_count + 1,
+            gate_offset,
+        )?;
+        *window_gate_count += 1;
+        let next = gate_offset.saturating_add(window_step);
+        if next >= window_end {
+            *next_window_gate_offset = None;
+        } else {
+            *next_window_gate_offset = Some(next);
+        }
+    }
+
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy)]
 enum ParamAsyncLaneKind {
     BulkIn,
@@ -1056,6 +1313,10 @@ fn has_param_known_good_gates(config: &Config) -> bool {
         || (config.param_gate_window_start_bytes.is_some()
             && config.param_gate_window_end_bytes.is_some()
             && config.param_gate_window_step_bytes.is_some())
+}
+
+fn has_param_admission_wait(config: &Config) -> bool {
+    config.param_admission_wait_mode.is_some()
 }
 
 fn has_param_submit_lanes(config: &Config) -> bool {
@@ -1518,6 +1779,100 @@ fn run_param_async_lane_loop(
     stats
 }
 
+fn wait_for_param_admission(
+    driver: &EdgeTpuUsbDriver,
+    phase_label: &str,
+    mode: ParamAdmissionWaitMode,
+    chunk_idx: usize,
+    param_bytes_written: usize,
+    timeout: Duration,
+    poll_timeout: Duration,
+) -> Result<bool, Box<dyn Error>> {
+    let start = Instant::now();
+    let mut event_ok = false;
+    let mut interrupt_ok = false;
+    let mut polls = 0usize;
+
+    loop {
+        if mode.needs_event() && !event_ok {
+            polls += 1;
+            match driver.read_event_packet_with_timeout(poll_timeout) {
+                Ok(event) => {
+                    event_ok = true;
+                    println!(
+                        "      {}: admission event ok chunk={} offset={} tag={} event_offset=0x{:016x} length={}",
+                        phase_label, chunk_idx, param_bytes_written, event.tag, event.offset, event.length
+                    );
+                }
+                Err(CoralError::UsbError(rusb::Error::Timeout)) => {}
+                Err(err) => println!(
+                    "      {}: admission event read error chunk={} offset={}: {}",
+                    phase_label, chunk_idx, param_bytes_written, err
+                ),
+            }
+        }
+
+        if mode.needs_interrupt() && !interrupt_ok {
+            polls += 1;
+            match driver.read_interrupt_packet_with_timeout(poll_timeout) {
+                Ok(pkt) => {
+                    interrupt_ok = true;
+                    println!(
+                        "      {}: admission interrupt ok chunk={} offset={} raw=0x{:08x} fatal={} top_level_mask=0x{:08x}",
+                        phase_label,
+                        chunk_idx,
+                        param_bytes_written,
+                        pkt.raw,
+                        pkt.fatal,
+                        pkt.top_level_mask
+                    );
+                }
+                Err(CoralError::UsbError(rusb::Error::Timeout)) => {}
+                Err(err) => println!(
+                    "      {}: admission interrupt read error chunk={} offset={}: {}",
+                    phase_label, chunk_idx, param_bytes_written, err
+                ),
+            }
+        }
+
+        let satisfied = match mode {
+            ParamAdmissionWaitMode::Event => event_ok,
+            ParamAdmissionWaitMode::Interrupt => interrupt_ok,
+            ParamAdmissionWaitMode::Either => event_ok || interrupt_ok,
+            ParamAdmissionWaitMode::Both => event_ok && interrupt_ok,
+        };
+        if satisfied {
+            let elapsed_ms = start.elapsed().as_millis();
+            println!(
+                "      {}: admission wait satisfied mode={} chunk={} offset={} polls={} elapsed_ms={}",
+                phase_label,
+                mode.as_str(),
+                chunk_idx,
+                param_bytes_written,
+                polls,
+                elapsed_ms
+            );
+            return Ok(true);
+        }
+
+        if start.elapsed() >= timeout {
+            let elapsed_ms = start.elapsed().as_millis();
+            println!(
+                "      {}: admission wait timeout mode={} chunk={} offset={} polls={} elapsed_ms={} event_ok={} interrupt_ok={}",
+                phase_label,
+                mode.as_str(),
+                chunk_idx,
+                param_bytes_written,
+                polls,
+                elapsed_ms,
+                event_ok,
+                interrupt_ok
+            );
+            return Ok(false);
+        }
+    }
+}
+
 fn stream_parameter_chunks(
     driver: &EdgeTpuUsbDriver,
     config: &Config,
@@ -1546,6 +1901,12 @@ fn stream_parameter_chunks(
     };
     let mut next_window_gate_offset = window_gate.map(|(start, _, _)| start);
     let mut window_gate_count = 0usize;
+    let admission_mode = config.param_admission_wait_mode;
+    let admission_wait_timeout = Duration::from_millis(config.param_admission_wait_timeout_ms);
+    let admission_wait_poll = Duration::from_millis(config.param_admission_wait_poll_ms);
+    let admission_wait_every_chunks = config.param_admission_wait_every_chunks;
+    let admission_wait_start = config.param_admission_wait_start_bytes.unwrap_or(0);
+    let admission_wait_end = config.param_admission_wait_end_bytes.unwrap_or(usize::MAX);
     while global_offset < stream_len {
         let descriptor_end = (global_offset + descriptor_split_size).min(stream_len);
         let descriptor_len = if descriptor_idx == 0 {
@@ -1558,36 +1919,18 @@ fn stream_parameter_chunks(
 
         let mut descriptor_offset = global_offset;
         while descriptor_offset < descriptor_end {
-            while gate_cursor < gate_offsets.len() && param_bytes_written >= gate_offsets[gate_cursor] {
-                run_known_good_param_gate(
+            if config.param_gate_placement.run_before() {
+                run_pending_known_good_gates(
                     driver,
                     config,
                     phase_label,
-                    gate_cursor + 1,
-                    gate_offsets[gate_cursor],
+                    param_bytes_written,
+                    gate_offsets,
+                    &mut gate_cursor,
+                    window_gate,
+                    &mut next_window_gate_offset,
+                    &mut window_gate_count,
                 )?;
-                gate_cursor += 1;
-            }
-            while let (Some((_, window_end, window_step)), Some(gate_offset)) =
-                (window_gate, next_window_gate_offset)
-            {
-                if param_bytes_written < gate_offset {
-                    break;
-                }
-                run_known_good_param_gate(
-                    driver,
-                    config,
-                    phase_label,
-                    gate_offsets.len() + window_gate_count + 1,
-                    gate_offset,
-                )?;
-                window_gate_count += 1;
-                let next = gate_offset.saturating_add(window_step);
-                if next >= window_end {
-                    next_window_gate_offset = None;
-                } else {
-                    next_window_gate_offset = Some(next);
-                }
             }
             let end = (descriptor_offset + stream_chunk_size).min(descriptor_end);
             let chunk = &payload[descriptor_offset..end];
@@ -1601,6 +1944,49 @@ fn stream_parameter_chunks(
             param_bytes_written += chunk.len();
             descriptor_offset = end;
             global_chunk_idx += 1;
+
+            if config.param_gate_placement.run_after() {
+                run_pending_known_good_gates(
+                    driver,
+                    config,
+                    phase_label,
+                    param_bytes_written,
+                    gate_offsets,
+                    &mut gate_cursor,
+                    window_gate,
+                    &mut next_window_gate_offset,
+                    &mut window_gate_count,
+                )?;
+            }
+
+            if let Some(mode) = admission_mode {
+                let in_admission_window =
+                    param_bytes_written >= admission_wait_start && param_bytes_written < admission_wait_end;
+                if in_admission_window && (global_chunk_idx % admission_wait_every_chunks == 0) {
+                    let admission_ok = wait_for_param_admission(
+                        driver,
+                        phase_label,
+                        mode,
+                        global_chunk_idx,
+                        param_bytes_written,
+                        admission_wait_timeout,
+                        admission_wait_poll,
+                    )?;
+                    if !admission_ok {
+                        if config.param_admission_wait_strict {
+                            return Err(format!(
+                                "{}: admission wait unsatisfied at offset {} (chunk {})",
+                                phase_label, param_bytes_written, global_chunk_idx
+                            )
+                            .into());
+                        }
+                        println!(
+                            "      {}: admission wait unsatisfied at offset {} (chunk {}), continuing (strict=false)",
+                            phase_label, param_bytes_written, global_chunk_idx
+                        );
+                    }
+                }
+            }
 
             if config.param_read_event_every > 0
                 && (global_chunk_idx % config.param_read_event_every == 0)
@@ -1807,7 +2193,8 @@ fn send_parameter_payload(
         || config.param_prepost_interrupt_reads > 0
         || has_param_async_lanes(config)
         || has_param_submit_lanes(config)
-        || has_param_known_good_gates(config);
+        || has_param_known_good_gates(config)
+        || has_param_admission_wait(config);
     if !use_custom_stream {
         driver.send_descriptor_payload_raw(config.parameters_tag, payload)?;
         return Ok(());
@@ -1828,7 +2215,7 @@ fn send_parameter_payload(
     let interrupt_poll_timeout = Duration::from_millis(config.param_interrupt_timeout_ms);
 
     println!(
-        "    {}: streaming parameters len={} header_len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
+        "    {}: streaming parameters len={} header_len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
         phase_label,
         stream_len,
         header_total_len,
@@ -1845,6 +2232,17 @@ fn send_parameter_payload(
         config.param_gate_window_start_bytes,
         config.param_gate_window_end_bytes,
         config.param_gate_window_step_bytes,
+        config.param_gate_placement.as_str(),
+        config
+            .param_admission_wait_mode
+            .map(|mode| mode.as_str())
+            .unwrap_or("off"),
+        config.param_admission_wait_timeout_ms,
+        config.param_admission_wait_poll_ms,
+        config.param_admission_wait_start_bytes,
+        config.param_admission_wait_end_bytes,
+        config.param_admission_wait_every_chunks,
+        config.param_admission_wait_strict,
         config.param_prepost_bulk_in_reads,
         config.param_prepost_bulk_in_size,
         config.param_prepost_event_reads,
@@ -1925,9 +2323,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         || has_param_async_lanes(&config)
         || has_param_submit_lanes(&config)
         || has_param_known_good_gates(&config)
+        || has_param_admission_wait(&config)
     {
         println!(
-            "Parameter stream controls: chunk={:?} max_bytes={:?} force_full_header_len={} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} require_post_instr_event={} post_instr_event_timeout_ms={}",
+            "Parameter stream controls: chunk={:?} max_bytes={:?} force_full_header_len={} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} require_post_instr_event={} post_instr_event_timeout_ms={}",
             config.param_stream_chunk_size,
             config.param_stream_max_bytes,
             config.param_force_full_header_len,
@@ -1944,6 +2343,17 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.param_gate_window_start_bytes,
             config.param_gate_window_end_bytes,
             config.param_gate_window_step_bytes,
+            config.param_gate_placement.as_str(),
+            config
+                .param_admission_wait_mode
+                .map(|mode| mode.as_str())
+                .unwrap_or("off"),
+            config.param_admission_wait_timeout_ms,
+            config.param_admission_wait_poll_ms,
+            config.param_admission_wait_start_bytes,
+            config.param_admission_wait_end_bytes,
+            config.param_admission_wait_every_chunks,
+            config.param_admission_wait_strict,
             config.param_prepost_bulk_in_reads,
             config.param_prepost_bulk_in_size,
             config.param_prepost_event_reads,

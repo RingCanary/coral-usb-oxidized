@@ -2856,3 +2856,113 @@ Observed:
 Implication:
 1. tuple-level parity is necessary but not sufficient,
 2. remaining gap is temporal/ordering semantics tied to queue progress.
+
+### 2026-02-25 - Admission-wait timing gate (event/interrupt token test)
+
+#### Implementation
+
+Added timing-aware admission controls in
+`examples/rusb_serialized_exec_replay.rs`:
+1. `--param-admission-wait-mode event|interrupt|either|both`
+2. `--param-admission-wait-timeout-ms`
+3. `--param-admission-wait-poll-ms`
+4. `--param-admission-wait-start-bytes`
+5. `--param-admission-wait-end-bytes`
+6. `--param-admission-wait-every-chunks`
+7. `--param-admission-wait-strict`
+
+Behavior:
+1. while streaming class-2 payload, in configured byte window and cadence:
+   - poll EP `0x82` and/or `0x83` for an admission token,
+   - if satisfied, continue immediately,
+   - if timeout:
+     - continue (default),
+     - or fail fast (`--param-admission-wait-strict`).
+
+#### Pi5 reboot-isolated results
+
+Non-strict case:
+1. mode=`either`, timeout=`50ms`, poll=`1ms`,
+2. window `32768..49152`, every chunk.
+3. per chunk in window (`32..47`):
+   - admission wait timed out,
+   - `event_ok=false`, `interrupt_ok=false`.
+4. stream still failed at `offset=49152` (`chunk 48`).
+
+Strict case:
+1. same config + `--param-admission-wait-strict`.
+2. first admission check (chunk `32`, offset `32768`) timed out,
+3. run failed immediately:
+   - `admission wait unsatisfied at offset 32768 (chunk 32)`.
+
+#### New artifact
+
+Non-strict admission capture:
+1. `traces/usbmon-admission-wait-20260225T134715Z-bus4/usbmon-bus4-20260225T134715Z.log`
+2. `traces/usbmon-admission-wait-20260225T134715Z-bus4/usbmon-bus4-20260225T134715Z.summary.txt`
+
+Probe vs known-good (`--threshold 33792`):
+1. heavy `Bi/Ii` poll traffic appears in bad trace by design,
+2. near-anchor control tuples (`a0d8/a33c/a500/a558/a600/a658`) remain only in
+   good for this admission-only mode.
+
+Interpretation:
+1. no observable admission token is produced on `0x82/0x83` in the near-wall
+   window under this replay state.
+2. wait-and-poll timing alone does not unlock class-2 queue progression.
+
+### 2026-02-25 - Early gate cadence + gate placement sweep (Pi5)
+
+#### Implementation
+
+Added gate timing placement control in
+`examples/rusb_serialized_exec_replay.rs`:
+1. `--param-gate-placement before|after|both` (default: `before`).
+
+Also ran a deterministic cadence matrix around the `32KiB..34KiB` boundary with
+`tag=2`, `chunk=1024`, `max=65536`, submit lanes `1/1/1`, and clean USB
+power-cycle per run.
+
+#### Cadence matrix outcomes
+
+1. baseline (no gates):
+   - stream write failure at `offset=49152` (`chunk 48`).
+2. window `start=28672,end=49152,step=4096`:
+   - first gate failure moved later to gate at `offset=36864`
+     (`a0d4` read timeout).
+3. window `start=28672,end=49152,step=1024`:
+   - first gate failure at `offset=33792` (`a0d4` read timeout).
+4. window `start=32768,end=34816,step=256`:
+   - first gate failure at `offset=33024` (`a0d4` read timeout).
+5. window `start=28672,end=34816,step=256`:
+   - same first failing gate at `offset=33024`.
+
+`usbmon_param_handshake_probe` summary for these captures:
+1. baseline `phase_payload_total` (bad): `50176`.
+2. 4KiB cadence: `36864`.
+3. 1KiB cadence: `33792`.
+4. 256-byte cadence (both variants): `33792`.
+
+#### Gate placement sweep (new flag)
+
+Using window `start=28672,end=34816,step=256`:
+1. `--param-gate-placement before`: first failing gate `33024`.
+2. `--param-gate-placement after`: first failing gate `33024`.
+3. `--param-gate-placement both`: first failing gate `33024`.
+
+No placement mode moved the first failing gate.
+
+#### Interpretation
+
+1. There is a sharper control-plane cliff at `33024` for CSR gate reads
+   (`a0d4`), with `33792` as the practical payload ceiling in dense-gated runs.
+2. Sparse cadence can delay *when* a gate is attempted (thus observed failure at
+   `36864`), but does not remove collapse.
+3. Gate timing relative to chunk write (`before|after|both`) does not change the
+   cliff, reinforcing that the blocker is deeper queue/runtime state progression,
+   not just gate ordering.
+
+#### New artifacts
+
+1. `traces/replay-keepalive-cadence2-20260225T135856Z/`
+2. `traces/replay-gate-placement-20260225T140440Z/`
