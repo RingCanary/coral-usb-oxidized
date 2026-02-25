@@ -2035,3 +2035,60 @@ In this run, no-replug recovery was not possible once poisoned:
 - the control plane itself became non-responsive to runcontrol writes.
 - practical recovery remains physical reattach (or lower-level host/port power
   recovery) after deep poison.
+
+### 2026-02-24 - edgetpuxray integration pass (pure `rusb` foundation)
+
+#### Objective
+
+Integrate protocol-level findings from `geohot/edgetpuxray` into the Rust crate:
+control-plane map, descriptor framing, serialized executable extraction, and a
+pure-USB replay example.
+
+#### Implemented
+
+1. New `src/control_plane.rs`:
+   - `VendorControlStep`, register helpers, and named CSR map.
+   - `EDGETPUXRAY_RUNTIME_SETUP_SEQUENCE` (52-step control sequence encoded in
+     Rust).
+2. New `src/usb_driver.rs`:
+   - `EdgeTpuUsbDriver` pure-`rusb` path for:
+     - device open/claim
+     - vendor read/write32/64
+     - setup sequence replay
+     - descriptor header framing (`len + tag`)
+     - chunked bulk-out sends
+     - event/interrupt decode helpers
+3. `src/flatbuffer.rs` extension:
+   - `extract_serialized_executables_from_tflite()`
+   - executable type naming helper.
+4. New `examples/rusb_serialized_exec_replay.rs`:
+   - parses serialized executables from compiled model,
+   - supports bootstrap flow for `EXECUTION_ONLY + PARAMETER_CACHING`,
+   - sends descriptors through pure `rusb` and reads event/output endpoints.
+5. `src/lib.rs` re-exports for the new modules/APIs.
+6. New doc:
+   - `docs/rusb_descriptor_replay.md`
+
+#### Validation
+
+Local host:
+1. `cargo check` ✅
+2. `cargo check --example rusb_serialized_exec_replay` ✅
+
+Pi5 (`rpilm3.local`):
+1. `cargo check --example rusb_serialized_exec_replay --example rusb_control_plane_probe --example gemm_csr_perturb_probe` ✅
+2. `cargo test --lib` ✅ (`15 passed`, including new unit tests)
+
+Runtime replay attempt on Pi5 (`templates/dense_2048x2048_quant_edgetpu.tflite`):
+1. Extracted executables correctly:
+   - `EXECUTION_ONLY` payload `16384` bytes
+   - `PARAMETER_CACHING` payload `4202496` bytes
+2. Current runtime blockers:
+   - setup mode: first SCU write (`0x0001a30c`) times out
+   - skip-setup mode: first bulk-out descriptor write returns `Input/Output Error`
+
+#### Result
+
+Protocol plumbing is now in-tree and tested; pure-`rusb` end-to-end invoke is
+partially implemented but still blocked on runtime-state preconditions for
+control/bulk acceptance.

@@ -11,6 +11,7 @@ pub enum CoralError {
     UsbError(rusb::Error),
     DelegateCreationFailed,
     LibraryNotFound,
+    ProtocolError(String),
 }
 
 impl fmt::Display for CoralError {
@@ -29,6 +30,7 @@ impl fmt::Display for CoralError {
             CoralError::UsbError(e) => write!(f, "USB error: {}", e),
             CoralError::DelegateCreationFailed => write!(f, "Failed to create EdgeTPU delegate"),
             CoralError::LibraryNotFound => write!(f, "EdgeTPU library not found or incompatible"),
+            CoralError::ProtocolError(msg) => write!(f, "Protocol error: {}", msg),
         }
     }
 }

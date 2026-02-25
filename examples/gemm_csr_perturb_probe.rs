@@ -35,9 +35,7 @@ fn usage(program: &str) {
     );
     println!("  mode: identity|shift_plus1|shift_minus1 (default: identity)");
     println!("  restore: 1|0 (default: 1)");
-    println!(
-        "Example: {program} 0x00048788 64 0x0000000000000000 2048 identity 1 1"
-    );
+    println!("Example: {program} 0x00048788 64 0x0000000000000000 2048 identity 1 1");
     println!("Example: {program} none");
 }
 
@@ -404,7 +402,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         restore_ok = true;
     }
 
-    let status = if exec_err.is_none() { "ok" } else { "exec_failed" };
+    let status = if exec_err.is_none() {
+        "ok"
+    } else {
+        "exec_failed"
+    };
     println!(
         "RESULT status={} elapsed_ms={:.3} output_head={}",
         status,

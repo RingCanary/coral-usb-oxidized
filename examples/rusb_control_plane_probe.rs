@@ -239,10 +239,8 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
             }
             "--led-blink" => {
                 idx += 1;
-                config.led_blink_count = args
-                    .get(idx)
-                    .ok_or("--led-blink requires value")?
-                    .parse()?;
+                config.led_blink_count =
+                    args.get(idx).ok_or("--led-blink requires value")?.parse()?;
             }
             "--led-reg" => {
                 idx += 1;
@@ -255,10 +253,7 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
             }
             "--led-on-ms" => {
                 idx += 1;
-                config.led_on_ms = args
-                    .get(idx)
-                    .ok_or("--led-on-ms requires value")?
-                    .parse()?;
+                config.led_on_ms = args.get(idx).ok_or("--led-on-ms requires value")?.parse()?;
             }
             "--led-off-ms" => {
                 idx += 1;
@@ -473,10 +468,7 @@ fn run_led_blink(
                 err
             )
         })?;
-        println!(
-            "LED_BLINK[{idx}] toggle  {} <= 0x{toggled:08x}",
-            reg
-        );
+        println!("LED_BLINK[{idx}] toggle  {} <= 0x{toggled:08x}", reg);
         std::thread::sleep(Duration::from_millis(on_ms));
 
         vendor_write32(handle, offset, original, timeout).map_err(|err| {
@@ -487,10 +479,7 @@ fn run_led_blink(
                 err
             )
         })?;
-        println!(
-            "LED_BLINK[{idx}] restore {} <= 0x{original:08x}",
-            reg
-        );
+        println!("LED_BLINK[{idx}] restore {} <= 0x{original:08x}", reg);
         if idx + 1 < blink_count {
             std::thread::sleep(Duration::from_millis(off_ms));
         }

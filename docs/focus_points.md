@@ -32,9 +32,12 @@ change should map to one (or more) of these points.
   Execute model invoke lifecycle through `rusb` only:
   device transition, control sequence, bulk submit/reap, completion polling.
 - Current status:
-  Early-mid. Probe now supports vendor CSR read/write plus event (`0x82`) and
-  interrupt (`0x83`) decoding, but full invoke replay still depends on
-  `libedgetpu`.
+  Mid. New `EdgeTpuUsbDriver` now implements descriptor framing (`len+tag`),
+  chunked bulk sends, event/interrupt decode, and serialized executable replay
+  scaffolding in pure `rusb`.
+  Remaining blocker:
+  runtime-state preconditions are not yet satisfied reliably on Pi5
+  (`0x1a30c` setup write timeout, or first bulk-out `EIO` when setup is skipped).
 - Success signal:
   A Rust example that runs one known template end-to-end and returns valid output
   without `libedgetpu`.

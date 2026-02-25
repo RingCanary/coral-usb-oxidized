@@ -1,7 +1,9 @@
 use crate::error::DenseGemmError;
 
 const DWN1_IDENTIFIER: &[u8; 4] = b"DWN1";
+const EXECUTABLE_TYPE_STAND_ALONE: i16 = 0;
 const EXECUTABLE_TYPE_PARAMETER_CACHING: i16 = 1;
+const EXECUTABLE_TYPE_EXECUTION_ONLY: i16 = 2;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Region {
@@ -56,6 +58,18 @@ impl FlatTable<'_> {
 struct ExecutableView {
     type_value: i16,
     parameter_region: Option<Region>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SerializedExecutableBlob {
+    pub package_index: usize,
+    pub executable_index: usize,
+    pub executable_type: i16,
+    pub payload: Vec<u8>,
+    pub instruction_bitstreams: Vec<Vec<u8>>,
+    pub parameters_stream: Vec<u8>,
+    // Parameter region offset range relative to payload bytes.
+    pub parameter_region: Option<(usize, usize)>,
 }
 
 #[derive(Debug)]
@@ -189,6 +203,83 @@ fn read_offset_object(
         .ok_or_else(|| invalid_template("offset-object overflow"))?;
     checked_slice(table.data, target, 4, "offset-object target")?;
     Ok(Some(target))
+}
+
+fn parse_table_at(data: &[u8], table_offset: usize) -> Result<FlatTable<'_>, DenseGemmError> {
+    checked_slice(data, table_offset, 4, "nested table header")?;
+
+    let vtable_rel = read_i32(data, table_offset)?;
+    if vtable_rel == 0 {
+        return Err(invalid_template("invalid nested vtable relative offset 0"));
+    }
+
+    let vtable_offset = if vtable_rel > 0 {
+        table_offset
+            .checked_sub(vtable_rel as usize)
+            .ok_or_else(|| invalid_template("nested vtable underflow"))?
+    } else {
+        table_offset
+            .checked_add((-vtable_rel) as usize)
+            .ok_or_else(|| invalid_template("nested vtable overflow"))?
+    };
+
+    let vtable_len = read_u16(data, vtable_offset)? as usize;
+    let object_len = read_u16(data, vtable_offset + 2)? as usize;
+    if vtable_len < 4 || vtable_len % 2 != 0 {
+        return Err(invalid_template(format!(
+            "invalid nested vtable length {}",
+            vtable_len
+        )));
+    }
+    if object_len < 4 {
+        return Err(invalid_template(format!(
+            "invalid nested object length {}",
+            object_len
+        )));
+    }
+    checked_slice(data, vtable_offset, vtable_len, "nested vtable bounds")?;
+    checked_slice(data, table_offset, object_len, "nested table bounds")?;
+
+    Ok(FlatTable {
+        data,
+        table_offset,
+        vtable_offset,
+        vtable_len,
+    })
+}
+
+fn read_vector_table_offsets(
+    table: &FlatTable<'_>,
+    field_id: usize,
+) -> Result<Vec<usize>, DenseGemmError> {
+    let Some(target) = read_offset_object(table, field_id)? else {
+        return Ok(Vec::new());
+    };
+
+    let length = read_u32(table.data, target)? as usize;
+    let vec_start = target
+        .checked_add(4)
+        .ok_or_else(|| invalid_template("table vector start overflow"))?;
+    let vec_bytes = length
+        .checked_mul(4)
+        .ok_or_else(|| invalid_template("table vector length overflow"))?;
+    checked_slice(table.data, vec_start, vec_bytes, "table vector bounds")?;
+
+    let mut out = Vec::with_capacity(length);
+    for i in 0..length {
+        let slot = vec_start + i * 4;
+        let rel = read_u32(table.data, slot)? as usize;
+        if rel == 0 {
+            continue;
+        }
+        let obj = slot
+            .checked_add(rel)
+            .ok_or_else(|| invalid_template("table vector object overflow"))?;
+        checked_slice(table.data, obj, 4, "table vector object bounds")?;
+        out.push(obj);
+    }
+
+    Ok(out)
 }
 
 fn read_vector_region(
@@ -336,6 +427,90 @@ pub(crate) fn inspect_packages(blob: &[u8]) -> Vec<PackageView> {
     }
 
     packages
+}
+
+pub fn executable_type_name(type_value: i16) -> &'static str {
+    match type_value {
+        EXECUTABLE_TYPE_STAND_ALONE => "STAND_ALONE",
+        EXECUTABLE_TYPE_PARAMETER_CACHING => "PARAMETER_CACHING",
+        EXECUTABLE_TYPE_EXECUTION_ONLY => "EXECUTION_ONLY",
+        _ => "UNKNOWN",
+    }
+}
+
+pub fn extract_serialized_executables_from_tflite(
+    blob: &[u8],
+) -> Result<Vec<SerializedExecutableBlob>, DenseGemmError> {
+    let mut executables = Vec::new();
+
+    for (package_index, root_offset) in scan_dwn1_candidates(blob).into_iter().enumerate() {
+        let package_table = match parse_root_table(blob, root_offset, Some(DWN1_IDENTIFIER)) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let Some(multi_region) = read_vector_region(&package_table, 1)? else {
+            continue;
+        };
+
+        let multi_bytes = &blob[multi_region.start..multi_region.end];
+        let regions = parse_multi_executable_layout(multi_bytes)?;
+
+        for (executable_index, region) in regions.iter().enumerate() {
+            let abs_start = multi_region
+                .start
+                .checked_add(region.start)
+                .ok_or_else(|| invalid_template("serialized executable start overflow"))?;
+            let abs_end = multi_region
+                .start
+                .checked_add(region.end)
+                .ok_or_else(|| invalid_template("serialized executable end overflow"))?;
+            if abs_end > blob.len() || abs_start >= abs_end {
+                return Err(invalid_template("serialized executable out of bounds"));
+            }
+
+            let payload = &blob[abs_start..abs_end];
+            let executable_table = parse_root_table(payload, 0, None)?;
+            let executable_type = read_i16_field(&executable_table, 13, 0)?;
+            let parameter_region =
+                read_vector_region(&executable_table, 6)?.map(|r| (r.start, r.end));
+
+            let mut instruction_bitstreams = Vec::new();
+            for bitstream_table_offset in read_vector_table_offsets(&executable_table, 5)? {
+                let bitstream_table = parse_table_at(payload, bitstream_table_offset)?;
+                if let Some(bitstream_region) = read_vector_region(&bitstream_table, 0)? {
+                    let bitstream = payload[bitstream_region.start..bitstream_region.end].to_vec();
+                    if !bitstream.is_empty() {
+                        instruction_bitstreams.push(bitstream);
+                    }
+                }
+            }
+
+            let parameters_stream = match parameter_region {
+                Some((start, end)) if end > start && end <= payload.len() => {
+                    payload[start..end].to_vec()
+                }
+                _ => Vec::new(),
+            };
+
+            executables.push(SerializedExecutableBlob {
+                package_index,
+                executable_index,
+                executable_type,
+                payload: payload.to_vec(),
+                instruction_bitstreams,
+                parameters_stream,
+                parameter_region,
+            });
+        }
+    }
+
+    if executables.is_empty() {
+        return Err(invalid_template(
+            "no serialized executables found in any DWN1 package",
+        ));
+    }
+
+    Ok(executables)
 }
 
 pub(crate) fn select_dense_parameter_region(
