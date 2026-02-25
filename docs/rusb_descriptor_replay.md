@@ -125,6 +125,25 @@ Interpretation update:
 - Next focus should be CSR/runcontrol transitions and doorbell semantics around
   class-2 descriptor consumption.
 
+### Glitch/fuzz findings
+
+A dedicated fuzz harness (`examples/rusb_param_glitch_fuzz.rs`) was used to
+perturb class-2 streaming with controlled glitch actions.
+
+Key observations:
+1. Baseline no-glitch stall remains at `49152` bytes.
+2. Deterministic one-shot runcontrol injections (`rc0`/`rc1`) at fixed chunk
+   indices do not move the baseline stall.
+3. High-frequency perturbation traffic does move the stall earlier:
+   - `readonly` glitch mode (poll/read/sleep) reached ~`34816`,
+   - `runctl` glitch mode (repeated runcontrol writes) reached ~`33792`.
+
+Interpretation:
+1. The system is sensitive to sustained control-plane activity during parameter
+   ingress.
+2. The class-2 wall is dynamic under control traffic, consistent with shared
+   scheduler/queue pressure rather than a fixed protocol field limit.
+
 ### edgetpuxray parity note
 
 Code inspection of `edgetpuxray/connect.py` indicates it submits multi-MB

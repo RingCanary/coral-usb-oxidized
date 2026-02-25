@@ -52,6 +52,10 @@ change should map to one (or more) of these points.
   Additional confirmation:
   after class-2 stall, control-plane CSR read/write probes time out (poisoned
   runtime), while the same probes succeed after healthy skip-param invokes.
+  Fuzz addendum:
+  sustained control-plane perturbation during class-2 streaming moves the stall
+  boundary earlier (~33-40 KB vs 49 KB baseline), while one-shot deterministic
+  runcontrol injections do not. This indicates dynamic queue/scheduler coupling.
 - Success signal:
   A Rust example that runs one known template end-to-end and returns valid output
   without `libedgetpu`.

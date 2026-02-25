@@ -2230,3 +2230,55 @@ Observed in healthy runtime:
 Implication:
 - class-2 stall transitions device into a deep non-responsive runtime state,
   not just a transient bulk queue backpressure condition.
+
+### 2026-02-25 - Glitch/fuzz characterization around class-2 stream
+
+#### Objective
+
+Stress the class-2 parameter stream path with controlled perturbations
+(poll/read/write/sleep glitches) and quantify how stall offset moves.
+
+#### Implementation
+
+Added `examples/rusb_param_glitch_fuzz.rs`:
+1. Boot/runtime bring-up + setup sequence + bootstrap instruction submission.
+2. Parameter stream to descriptor class 2 with configurable:
+   - stream chunk size / max bytes,
+   - random glitch cadence and budget,
+   - aggressive mode (includes `runcontrol=0` writes),
+   - deterministic `runcontrol` injection chunk indices.
+3. Emits normalized result line:
+   - `FUZZ_RESULT stall offset=... chunk_idx=... glitches=...`.
+4. Added glitch-mode selector:
+   - `mixed` (default),
+   - `readonly` (poll/read/sleep only),
+   - `runctl` (runcontrol writes only).
+
+#### Pi5 results
+
+Baseline:
+1. No glitches (`glitch_budget=0`) -> stall at `49152` (`chunk 48`).
+
+Random mixed fuzz (`glitch_every=4`, seeds 1/2/3 and aggressive 11/12/13):
+1. Stall offsets shifted earlier into `36864` or `40960`.
+2. First failing control op typically appears just before stall
+   (`runcontrol` read/write timeout).
+
+Deterministic injections with no random glitches:
+1. `inject rc1 @ chunk 16/32` -> still `49152`.
+2. `inject rc0 @ chunk 16/32` -> still `49152`.
+3. `inject rc0 @ chunk 8,16,24` -> still `49152`.
+
+High-frequency mode isolation (`glitch_every=1`, `seed=777`):
+1. `readonly` mode -> stall at `34816` (`chunk 34`).
+2. `runctl` mode -> stall at `33792` (`chunk 33`).
+3. Both modes degrade admissible bytes vs baseline, with `runctl` slightly
+   worse in this run.
+
+#### Conclusion
+
+1. Single discrete `runcontrol` injections are not sufficient to shift the wall.
+2. Sustained control-plane traffic during class-2 streaming significantly
+   lowers the effective admission threshold (~33-40 KB vs 49 KB baseline).
+3. This supports a shared control/data-path pressure or scheduler interaction,
+   not a pure static payload-length limit.
