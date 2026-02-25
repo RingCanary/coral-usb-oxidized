@@ -2697,3 +2697,38 @@ Interpretation:
 1. queue-tail advancement may still be real in some runtime paths, but this
    specific known-good trace does not provide direct evidence of it via endpoint
    0 CSR traffic.
+
+### 2026-02-25 - Falsification tests: post-instr event gate + full-header probe
+
+#### Implementation
+
+Extended `rusb_serialized_exec_replay` with:
+1. `--param-require-post-instr-event`
+2. `--param-post-instr-event-timeout-ms`
+3. `--param-force-full-header-len`
+
+Semantics:
+1. if enabled, require an EP `0x82` event immediately after `PARAMETER_CACHING`
+   instruction chunk(s) and before any parameter payload write.
+2. if enabled, keep descriptor header length equal to full parameter payload
+   (`~4 MiB`) even when stream is capped by `--param-stream-max-bytes`.
+
+#### Pi5 results
+
+Common run config:
+1. `tag=2`, `chunk=1024`, `max=65536`, `setup-include-reads`.
+
+Case A (`--param-require-post-instr-event --param-post-instr-event-timeout-ms 250`):
+1. `exec1` instruction chunk sent (`2608` bytes),
+2. required post-instr event times out,
+3. run aborts before parameter stream.
+
+Case B (`--param-force-full-header-len`):
+1. stream log confirms `len=65536` but `header_len=4194304`,
+2. stall remains unchanged at `offset=49152` (`chunk 48`).
+
+Interpretation:
+1. no immediate event token is produced after `exec1` instruction chunk in this
+   replay path.
+2. descriptor header logical length mismatch is not the cause of the `49KiB`
+   wall in this probe mode.

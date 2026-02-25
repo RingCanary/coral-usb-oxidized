@@ -35,6 +35,7 @@ struct Config {
     input_activations_tag: u32,
     param_stream_chunk_size: Option<usize>,
     param_stream_max_bytes: Option<usize>,
+    param_force_full_header_len: bool,
     param_read_event_every: usize,
     param_event_timeout_ms: u64,
     param_write_sleep_us: u64,
@@ -62,6 +63,8 @@ struct Config {
     param_submit_timeout_ms: u64,
     param_submit_event_poll_ms: u64,
     param_submit_log_every: usize,
+    param_require_post_instr_event: bool,
+    param_post_instr_event_timeout_ms: u64,
 }
 
 fn usage(program: &str) {
@@ -95,6 +98,9 @@ fn usage(program: &str) {
     );
     println!("  --param-stream-chunk-size N  Override parameter stream chunk size");
     println!("  --param-stream-max-bytes N   Limit parameter stream bytes for probing");
+    println!(
+        "  --param-force-full-header-len  Keep descriptor header length at full parameter payload even when stream is capped"
+    );
     println!("  --param-descriptor-split-bytes N  Split parameter stream across descriptor headers");
     println!(
         "  --param-read-event-every N  Poll EP 0x82 every N parameter chunks (0=off)"
@@ -170,6 +176,12 @@ fn usage(program: &str) {
     );
     println!(
         "  --param-submit-log-every N      Callback log cadence per lane (0=off, default: 0)"
+    );
+    println!(
+        "  --param-require-post-instr-event  Require EP 0x82 event after PARAMETER_CACHING instr chunks before param stream"
+    );
+    println!(
+        "  --param-post-instr-event-timeout-ms N  Timeout for required post-instr event (default: 100)"
     );
     println!(
         "  --param-write-sleep-us N    Sleep between parameter chunks to pace stream (default: 0)"
@@ -271,6 +283,7 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         input_activations_tag: DescriptorTag::InputActivations.as_u32(),
         param_stream_chunk_size: None,
         param_stream_max_bytes: None,
+        param_force_full_header_len: false,
         param_read_event_every: 0,
         param_event_timeout_ms: 1,
         param_write_sleep_us: 0,
@@ -298,6 +311,8 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         param_submit_timeout_ms: 100,
         param_submit_event_poll_ms: 1,
         param_submit_log_every: 0,
+        param_require_post_instr_event: false,
+        param_post_instr_event_timeout_ms: 100,
     };
 
     let mut i = 1usize;
@@ -387,6 +402,9 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                     args.get(i)
                         .ok_or("--param-stream-max-bytes requires value")?,
                 )?);
+            }
+            "--param-force-full-header-len" => {
+                config.param_force_full_header_len = true;
             }
             "--param-descriptor-split-bytes" => {
                 i += 1;
@@ -565,6 +583,16 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                         .ok_or("--param-submit-log-every requires value")?,
                 )?;
             }
+            "--param-require-post-instr-event" => {
+                config.param_require_post_instr_event = true;
+            }
+            "--param-post-instr-event-timeout-ms" => {
+                i += 1;
+                config.param_post_instr_event_timeout_ms = parse_u64_auto(
+                    args.get(i)
+                        .ok_or("--param-post-instr-event-timeout-ms requires value")?,
+                )?;
+            }
             "--param-write-sleep-us" => {
                 i += 1;
                 config.param_write_sleep_us = parse_u64_auto(
@@ -597,6 +625,12 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
     }
     if matches!(config.param_descriptor_split_bytes, Some(0)) {
         return Err("--param-descriptor-split-bytes must be >= 1".into());
+    }
+    if config.param_force_full_header_len && config.param_descriptor_split_bytes.is_some() {
+        return Err(
+            "--param-force-full-header-len currently requires no --param-descriptor-split-bytes"
+                .into(),
+        );
     }
     if config.param_prepost_bulk_in_size == 0 {
         return Err("--param-prepost-bulk-in-size must be >= 1".into());
@@ -1263,6 +1297,7 @@ fn stream_parameter_chunks_with_submit_lanes(
     config: &Config,
     payload: &[u8],
     phase_label: &str,
+    header_total_len: usize,
     stream_len: usize,
     stream_chunk_size: usize,
     descriptor_split_size: usize,
@@ -1337,6 +1372,7 @@ fn stream_parameter_chunks_with_submit_lanes(
             config,
             payload,
             phase_label,
+            header_total_len,
             stream_len,
             stream_chunk_size,
             descriptor_split_size,
@@ -1412,6 +1448,7 @@ fn stream_parameter_chunks(
     config: &Config,
     payload: &[u8],
     phase_label: &str,
+    header_total_len: usize,
     stream_len: usize,
     stream_chunk_size: usize,
     descriptor_split_size: usize,
@@ -1426,7 +1463,11 @@ fn stream_parameter_chunks(
     let gate_offsets = &config.param_gate_known_good_offsets;
     while global_offset < stream_len {
         let descriptor_end = (global_offset + descriptor_split_size).min(stream_len);
-        let descriptor_len = descriptor_end - global_offset;
+        let descriptor_len = if descriptor_idx == 0 {
+            header_total_len
+        } else {
+            descriptor_end - global_offset
+        };
         run_param_pre_ingress_handshake(driver, config, phase_label, descriptor_idx + 1);
         driver.send_descriptor_header_raw(config.parameters_tag, descriptor_len)?;
 
@@ -1509,6 +1550,7 @@ fn stream_parameter_chunks_with_optional_async_lanes(
     config: &Config,
     payload: &[u8],
     phase_label: &str,
+    header_total_len: usize,
     stream_len: usize,
     stream_chunk_size: usize,
     descriptor_split_size: usize,
@@ -1521,6 +1563,7 @@ fn stream_parameter_chunks_with_optional_async_lanes(
             config,
             payload,
             phase_label,
+            header_total_len,
             stream_len,
             stream_chunk_size,
             descriptor_split_size,
@@ -1535,6 +1578,7 @@ fn stream_parameter_chunks_with_optional_async_lanes(
             config,
             payload,
             phase_label,
+            header_total_len,
             stream_len,
             stream_chunk_size,
             descriptor_split_size,
@@ -1599,6 +1643,7 @@ fn stream_parameter_chunks_with_optional_async_lanes(
             config,
             payload,
             phase_label,
+            header_total_len,
             stream_len,
             stream_chunk_size,
             descriptor_split_size,
@@ -1666,15 +1711,21 @@ fn send_parameter_payload(
         .param_stream_max_bytes
         .map(|max| max.min(payload.len()))
         .unwrap_or(payload.len());
+    let header_total_len = if config.param_force_full_header_len {
+        payload.len()
+    } else {
+        stream_len
+    };
     let stream_chunk_size = config.param_stream_chunk_size.unwrap_or(config.chunk_size);
     let descriptor_split_size = config.param_descriptor_split_bytes.unwrap_or(stream_len.max(1));
     let poll_timeout = Duration::from_millis(config.param_event_timeout_ms);
     let interrupt_poll_timeout = Duration::from_millis(config.param_interrupt_timeout_ms);
 
     println!(
-        "    {}: streaming parameters len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
+        "    {}: streaming parameters len={} header_len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
         phase_label,
         stream_len,
+        header_total_len,
         stream_chunk_size,
         descriptor_split_size,
         config.param_read_event_every,
@@ -1709,6 +1760,7 @@ fn send_parameter_payload(
         config,
         payload,
         phase_label,
+        header_total_len,
         stream_len,
         stream_chunk_size,
         descriptor_split_size,
@@ -1766,9 +1818,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         || has_param_known_good_gates(&config)
     {
         println!(
-            "Parameter stream controls: chunk={:?} max_bytes={:?} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
+            "Parameter stream controls: chunk={:?} max_bytes={:?} force_full_header_len={} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} require_post_instr_event={} post_instr_event_timeout_ms={}",
             config.param_stream_chunk_size,
             config.param_stream_max_bytes,
+            config.param_force_full_header_len,
             config.param_descriptor_split_bytes,
             config.param_read_event_every,
             config.param_read_interrupt_every,
@@ -1795,7 +1848,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.param_submit_buffer_size,
             config.param_submit_timeout_ms,
             config.param_submit_event_poll_ms,
-            config.param_submit_log_every
+            config.param_submit_log_every,
+            config.param_require_post_instr_event,
+            config.param_post_instr_event_timeout_ms
         );
     }
     println!("Extracted executables: {}", executables.len());
@@ -1898,6 +1953,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                     println!("    instr chunk {} ({} bytes)", idx, chunk.len());
                     driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
                 }
+                if config.param_require_post_instr_event {
+                    let timeout =
+                        Duration::from_millis(config.param_post_instr_event_timeout_ms);
+                    match driver.read_event_packet_with_timeout(timeout) {
+                        Ok(event) => println!(
+                            "    post-instr event (required): tag={} offset=0x{:016x} length={}",
+                            event.tag, event.offset, event.length
+                        ),
+                        Err(err) => {
+                            return Err(format!(
+                                "required post-instr event failed before parameter stream (exe idx={}): {}",
+                                exe.executable_index, err
+                            )
+                            .into())
+                        }
+                    }
+                }
                 send_parameter_payload(&driver, &config, &exe.parameters_stream, "bootstrap param")?;
             }
             match driver.read_event_packet() {
@@ -1917,6 +1989,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                 );
                 for chunk in &exe.instruction_bitstreams {
                     driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
+                }
+                if config.param_require_post_instr_event {
+                    let timeout =
+                        Duration::from_millis(config.param_post_instr_event_timeout_ms);
+                    match driver.read_event_packet_with_timeout(timeout) {
+                        Ok(event) => println!(
+                            "  post-instr event (required): tag={} offset=0x{:016x} length={}",
+                            event.tag, event.offset, event.length
+                        ),
+                        Err(err) => {
+                            return Err(format!(
+                                "required post-instr event failed before parameter stream (exe idx={}): {}",
+                                exe.executable_index, err
+                            )
+                            .into())
+                        }
+                    }
                 }
                 send_parameter_payload(&driver, &config, &exe.parameters_stream, "preload param")?;
             }

@@ -137,6 +137,32 @@ Implication:
 2. but this specific known-good capture set does not directly confirm it via
    endpoint-0 CSR writes.
 
+## New falsification outcomes (2026-02-25)
+
+Two targeted tests were added to replay and run on Pi5:
+
+1. **Require post-instr event before params**
+   - flags:
+     - `--param-require-post-instr-event`
+     - `--param-post-instr-event-timeout-ms 250`
+   - result:
+     - after sending `PARAMETER_CACHING` instruction chunk (`2608` bytes),
+       required event on `0x82` times out.
+     - replay aborts before parameter stream.
+
+2. **Force full descriptor header length under capped stream**
+   - flag:
+     - `--param-force-full-header-len`
+   - behavior:
+     - parameter stream capped to `65536` bytes, but descriptor header advertises
+       full `4194304` length.
+   - result:
+     - stall unchanged at `49152`.
+
+Implication:
+1. no simple “post-instruction event token” appears in current replay state.
+2. header logical length mismatch is not sufficient to explain the `49KiB` wall.
+
 ## Artifacts to inspect
 
 1. replay submit-URB capture:

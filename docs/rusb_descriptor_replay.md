@@ -459,6 +459,19 @@ Interpretation:
    pre/post logs.
 2. `0x48678` writes are present in our explicit transition-injection runs.
 
+### Falsification add-ons
+
+Added controls:
+1. `--param-require-post-instr-event`
+2. `--param-post-instr-event-timeout-ms`
+3. `--param-force-full-header-len`
+
+Pi5 outcomes:
+1. requiring post-instr event after `exec1` instruction chunk fails (timeout on
+   required `0x82` event) before parameter stream starts.
+2. forcing full descriptor header length (`header_len=4194304`) under capped
+   stream (`65536`) does not change stall; wall remains at `49152`.
+
 ## Practical next debug steps
 
 1. Instrument runcontrol/doorbell CSR state immediately before and after each
