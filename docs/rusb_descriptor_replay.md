@@ -433,6 +433,32 @@ Interpretation:
 2. next gap is likely ordering/transition semantics around runcontrol/doorbell
    and class-2 queue admission, not just read-lane mechanics.
 
+### Readback-coupled gate injection (offset-triggered)
+
+Replay now supports:
+1. `--param-gate-known-good-offsets LIST`
+
+Semantics:
+1. pause parameter stream at listed cumulative byte offsets,
+2. inject known-good control sequence (`a0d4/a704/a33c` reads+writes,
+   `a500/a600/a558/a658` writes, `a0d8` read+write),
+3. resume stream.
+
+Pi5 findings:
+1. gate at `32768` succeeds fully but stall remains at `49152`.
+2. gate at `33792` fails immediately (`a0d4` read timeout).
+3. offsets `>= 33792` consistently fail gate read/write.
+
+Interpretation:
+1. control-plane poison starts around `32KiB..33KiB`,
+2. class-2 bulk wall at `49KiB` appears to be a later consequence.
+
+`param_queue_tail` check in known-good pre/post traces:
+1. `usbmon_register_map.py sequence` + raw grep did not show `0x00048678`
+   (`wValue=8678,wIndex=0004`) or `0x00048688` accesses in captured libedgetpu
+   pre/post logs.
+2. `0x48678` writes are present in our explicit transition-injection runs.
+
 ## Practical next debug steps
 
 1. Instrument runcontrol/doorbell CSR state immediately before and after each

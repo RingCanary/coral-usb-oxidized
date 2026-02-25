@@ -94,6 +94,49 @@ Candidate classes:
    - align by cumulative parameter bytes and diff control tuple sequence exactly in
      the `40KiB..52KiB` window.
 
+## New high-signal boundary finding (2026-02-25, second pass)
+
+Readback-coupled gate injections at fixed byte offsets were added and tested on
+Pi5 with clean power-cycle per run.
+
+Gate sequence replayed:
+1. `a0d4` read/write (`write=0x80000001`)
+2. `a704` read/write (`write=0x0000007f`)
+3. `a33c` read/write (`write=0x0000003f`)
+4. writes `a500=1`, `a600=1`, `a558=3`, `a658=3`
+5. `a0d8` read/write (`write=0x80000000`)
+
+Observed:
+1. gate at `32768` executes fully, but stream still stalls at `49152`.
+2. gate at `33792` fails immediately on first gate read (`a0d4` timeout).
+3. all later offsets (`36864+`) also fail immediately.
+
+Implication:
+1. control plane becomes non-responsive in `32KiB..33KiB` range,
+2. bulk-out path remains writable until `49KiB`,
+3. the causal failure likely begins earlier in scheduler/queue state than the
+   visible bulk timeout.
+
+This narrows the tough nut:
+1. identify what state advancement libedgetpu triggers between `32KiB` and
+   `49KiB` that keeps control plane alive (not just static control writes).
+
+## Direct check: `param_queue_tail` in known-good trace
+
+Using `tools/usbmon_register_map.py sequence` plus raw grep on:
+1. `.../libedgetpu_known_good/pre/*.log`
+2. `.../libedgetpu_known_good/post/*.log`
+
+Current evidence:
+1. no observed control transfers to `0x00048678` (`param_queue_tail`) or
+   `0x00048688` (`param_queue_completed_head`) in those known-good pre/post logs.
+2. `0x48678` control writes are visible in our own transition-injection runs.
+
+Implication:
+1. the queue-tail hypothesis is still plausible at architecture level,
+2. but this specific known-good capture set does not directly confirm it via
+   endpoint-0 CSR writes.
+
 ## Artifacts to inspect
 
 1. replay submit-URB capture:
@@ -105,4 +148,3 @@ Candidate classes:
    - `tools/usbmon_param_handshake_probe.py`
    - `tools/usbmon_bulk_signature.py`
    - `tools/usbmon_register_map.py`
-

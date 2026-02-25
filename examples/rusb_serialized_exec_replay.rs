@@ -54,6 +54,7 @@ struct Config {
     param_async_event_lanes: usize,
     param_async_interrupt_lanes: usize,
     param_async_timeout_ms: u64,
+    param_gate_known_good_offsets: Vec<usize>,
     param_submit_bulk_in_lanes: usize,
     param_submit_event_lanes: usize,
     param_submit_interrupt_lanes: usize,
@@ -147,6 +148,9 @@ fn usage(program: &str) {
         "  --param-async-timeout-ms N     Timeout per async lane read attempt (default: 100)"
     );
     println!(
+        "  --param-gate-known-good-offsets LIST  Pause stream at byte offsets and inject known-good control gate (comma-separated, e.g. 32768,40960)"
+    );
+    println!(
         "  --param-submit-bulk-in-lanes N  libusb_submit_transfer lanes on EP 0x81 (default: 0)"
     );
     println!(
@@ -188,6 +192,23 @@ fn parse_u64_auto(value: &str) -> Result<u64, Box<dyn Error>> {
 
 fn parse_usize_auto(value: &str) -> Result<usize, Box<dyn Error>> {
     Ok(parse_u64_auto(value)? as usize)
+}
+
+fn parse_usize_list_auto(value: &str) -> Result<Vec<usize>, Box<dyn Error>> {
+    let mut out = Vec::new();
+    for raw in value.split(',') {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        out.push(parse_usize_auto(trimmed)?);
+    }
+    if out.is_empty() {
+        return Err("expected at least one numeric offset".into());
+    }
+    out.sort_unstable();
+    out.dedup();
+    Ok(out)
 }
 
 fn parse_tag_u32(value: &str, flag_name: &str) -> Result<u32, Box<dyn Error>> {
@@ -269,6 +290,7 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         param_async_event_lanes: 0,
         param_async_interrupt_lanes: 0,
         param_async_timeout_ms: 100,
+        param_gate_known_good_offsets: Vec::new(),
         param_submit_bulk_in_lanes: 0,
         param_submit_event_lanes: 0,
         param_submit_interrupt_lanes: 0,
@@ -485,6 +507,13 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                 config.param_async_timeout_ms = parse_u64_auto(
                     args.get(i)
                         .ok_or("--param-async-timeout-ms requires value")?,
+                )?;
+            }
+            "--param-gate-known-good-offsets" => {
+                i += 1;
+                config.param_gate_known_good_offsets = parse_usize_list_auto(
+                    args.get(i)
+                        .ok_or("--param-gate-known-good-offsets requires value")?,
                 )?;
             }
             "--param-submit-bulk-in-lanes" => {
@@ -806,6 +835,70 @@ fn run_param_pre_ingress_handshake(
     run_param_prepost_reads(driver, config, timeout, phase_label, descriptor_idx, "post");
 }
 
+fn run_known_good_param_gate(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    phase_label: &str,
+    gate_idx: usize,
+    gate_offset: usize,
+) -> Result<(), Box<dyn Error>> {
+    println!(
+        "      {}: known-good gate #{} at offset={} bytes (a0d4/a704/a33c reads+writes + a500/a600/a558/a658 + a0d8 read/write)",
+        phase_label, gate_idx, gate_offset
+    );
+
+    let gate_read_write_pairs = [
+        (0x0001_a0d4_u32, 0x8000_0001_u32),
+        (0x0001_a704_u32, 0x0000_007f_u32),
+        (0x0001_a33c_u32, 0x0000_003f_u32),
+    ];
+
+    for (offset, value) in gate_read_write_pairs {
+        let readback = driver
+            .vendor_read32(offset)
+            .map_err(|err| format!("{}: gate read 0x{offset:08x} failed: {}", phase_label, err))?;
+        println!(
+            "      {}: known-good gate #{} read 0x{:08x} => 0x{:08x}",
+            phase_label, gate_idx, offset, readback
+        );
+
+        driver
+            .vendor_write32(offset, value)
+            .map_err(|err| format!("{}: gate write 0x{offset:08x}=0x{value:08x} failed: {}", phase_label, err))?;
+    }
+
+    let gate_writes = [
+        (0x0001_a500_u32, 0x0000_0001_u32),
+        (0x0001_a600_u32, 0x0000_0001_u32),
+        (0x0001_a558_u32, 0x0000_0003_u32),
+        (0x0001_a658_u32, 0x0000_0003_u32),
+    ];
+    for (offset, value) in gate_writes {
+        driver
+            .vendor_write32(offset, value)
+            .map_err(|err| format!("{}: gate write 0x{offset:08x}=0x{value:08x} failed: {}", phase_label, err))?;
+    }
+
+    let readback = driver
+        .vendor_read32(0x0001_a0d8)
+        .map_err(|err| format!("{}: gate read 0x0001a0d8 failed: {}", phase_label, err))?;
+    println!(
+        "      {}: known-good gate #{} read 0x0001a0d8 => 0x{:08x}",
+        phase_label, gate_idx, readback
+    );
+
+    driver
+        .vendor_write32(0x0001_a0d8, config.param_a0d8_write_value)
+        .map_err(|err| format!("{}: gate write 0x0001a0d8=0x{:08x} failed: {}", phase_label, config.param_a0d8_write_value, err))?;
+
+    println!(
+        "      {}: known-good gate #{} wrote 0x0001a0d8 <= 0x{:08x}",
+        phase_label, gate_idx, config.param_a0d8_write_value
+    );
+
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy)]
 enum ParamAsyncLaneKind {
     BulkIn,
@@ -850,6 +943,10 @@ fn has_param_async_lanes(config: &Config) -> bool {
     config.param_async_bulk_in_lanes > 0
         || config.param_async_event_lanes > 0
         || config.param_async_interrupt_lanes > 0
+}
+
+fn has_param_known_good_gates(config: &Config) -> bool {
+    !config.param_gate_known_good_offsets.is_empty()
 }
 
 fn has_param_submit_lanes(config: &Config) -> bool {
@@ -1324,6 +1421,9 @@ fn stream_parameter_chunks(
     let mut global_offset = 0usize;
     let mut global_chunk_idx = 0usize;
     let mut descriptor_idx = 0usize;
+    let mut param_bytes_written = 0usize;
+    let mut gate_cursor = 0usize;
+    let gate_offsets = &config.param_gate_known_good_offsets;
     while global_offset < stream_len {
         let descriptor_end = (global_offset + descriptor_split_size).min(stream_len);
         let descriptor_len = descriptor_end - global_offset;
@@ -1332,6 +1432,16 @@ fn stream_parameter_chunks(
 
         let mut descriptor_offset = global_offset;
         while descriptor_offset < descriptor_end {
+            while gate_cursor < gate_offsets.len() && param_bytes_written >= gate_offsets[gate_cursor] {
+                run_known_good_param_gate(
+                    driver,
+                    config,
+                    phase_label,
+                    gate_cursor + 1,
+                    gate_offsets[gate_cursor],
+                )?;
+                gate_cursor += 1;
+            }
             let end = (descriptor_offset + stream_chunk_size).min(descriptor_end);
             let chunk = &payload[descriptor_offset..end];
             if let Err(err) = driver.write_bulk_out_chunk(chunk) {
@@ -1341,6 +1451,7 @@ fn stream_parameter_chunks(
                 )
                 .into());
             }
+            param_bytes_written += chunk.len();
             descriptor_offset = end;
             global_chunk_idx += 1;
 
@@ -1544,7 +1655,8 @@ fn send_parameter_payload(
         || config.param_prepost_event_reads > 0
         || config.param_prepost_interrupt_reads > 0
         || has_param_async_lanes(config)
-        || has_param_submit_lanes(config);
+        || has_param_submit_lanes(config)
+        || has_param_known_good_gates(config);
     if !use_custom_stream {
         driver.send_descriptor_payload_raw(config.parameters_tag, payload)?;
         return Ok(());
@@ -1560,7 +1672,7 @@ fn send_parameter_payload(
     let interrupt_poll_timeout = Duration::from_millis(config.param_interrupt_timeout_ms);
 
     println!(
-        "    {}: streaming parameters len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
+        "    {}: streaming parameters len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
         phase_label,
         stream_len,
         stream_chunk_size,
@@ -1572,6 +1684,7 @@ fn send_parameter_payload(
         config.parameters_tag,
         config.param_a0d8_handshake,
         config.param_a0d8_write_value,
+        config.param_gate_known_good_offsets,
         config.param_prepost_bulk_in_reads,
         config.param_prepost_bulk_in_size,
         config.param_prepost_event_reads,
@@ -1650,9 +1763,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         || config.param_prepost_interrupt_reads > 0
         || has_param_async_lanes(&config)
         || has_param_submit_lanes(&config)
+        || has_param_known_good_gates(&config)
     {
         println!(
-            "Parameter stream controls: chunk={:?} max_bytes={:?} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
+            "Parameter stream controls: chunk={:?} max_bytes={:?} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
             config.param_stream_chunk_size,
             config.param_stream_max_bytes,
             config.param_descriptor_split_bytes,
@@ -1664,6 +1778,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.param_write_sleep_us,
             config.param_a0d8_handshake,
             config.param_a0d8_write_value,
+            config.param_gate_known_good_offsets,
             config.param_prepost_bulk_in_reads,
             config.param_prepost_bulk_in_size,
             config.param_prepost_event_reads,

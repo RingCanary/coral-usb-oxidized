@@ -2613,3 +2613,87 @@ Interpretation:
 Pi5 usbmon capture for submit-URB replay:
 - `traces/usbmon-20260225T121056Z-bus4/usbmon-bus4-20260225T121056Z.log`
 - `traces/usbmon-20260225T121056Z-bus4/usbmon-bus4-20260225T121056Z.summary.txt`
+
+### 2026-02-25 - Readback-coupled gating at fixed byte offsets
+
+#### Probe-first validation (good vs submit-URB bad)
+
+Ran:
+1. `tools/usbmon_param_handshake_probe.py` with:
+   - good: `traces/usbmon-transition-fixed-20260225T082936Z-bus4/libedgetpu_known_good/post/usbmon-bus4-20260225T083453Z.log`
+   - bad: `traces/usbmon-20260225T121056Z-bus4/usbmon-bus4-20260225T121056Z.log`
+   - `--threshold 49152 --context 30`
+
+Key tuples only in good near anchor:
+1. `Ci:c0:01:a0d8:0001:0004`
+2. `Co:40:01:a0d8:0001:0004`
+3. `Co:40:01:a33c:0001:0004`
+4. `Co:40:01:a500:0001:0004`
+5. `Co:40:01:a558:0001:0004`
+6. `Co:40:01:a600:0001:0004`
+7. `Co:40:01:a658:0001:0004`
+
+#### Implementation
+
+Added gate injection to `rusb_serialized_exec_replay`:
+1. new CLI:
+   - `--param-gate-known-good-offsets LIST`
+2. behavior:
+   - pause stream when cumulative parameter bytes reach each listed offset,
+   - inject known-good control sequence,
+   - resume streaming.
+
+Sequence (final):
+1. read/write `a0d4` (`write=0x80000001`)
+2. read/write `a704` (`write=0x0000007f`)
+3. read/write `a33c` (`write=0x0000003f`)
+4. write `a500=1`, `a600=1`, `a558=3`, `a658=3`
+5. read/write `a0d8` (`write=0x80000000`)
+
+#### Pi5 results (clean power-cycle each run)
+
+Model: `templates/dense_2048x2048_quant_edgetpu.tflite`
+(`tag=2`, `chunk=1024`, `max=65536`, `setup-include-reads`)
+
+1. gate at `32768`:
+   - gate sequence executes (all reads/writes succeed),
+   - stream still stalls at `49152` (`chunk 48`).
+2. gate at `33792`:
+   - first gate read (`a0d4`) times out immediately.
+3. gate at `36864`, `38912`, `39936`, `40960`:
+   - gate read/write times out immediately.
+
+Boundary finding:
+1. control-plane gate is alive at exactly `32768`,
+2. dead one chunk later at `33792`,
+3. while bulk-out stream itself can continue until `49152`.
+
+Interpretation:
+1. "poison" begins in control plane around the `32KiB..33KiB` window,
+2. bulk-out timeout at `49KiB` is a later symptom,
+3. missing mechanism is likely queue/doorbell state advancement not captured by
+   static control tuple replay alone.
+
+#### New usbmon artifact
+
+Gated capture (`offset=32768`):
+1. `traces/usbmon-20260225T123708Z-bus4/usbmon-bus4-20260225T123708Z.log`
+2. `traces/usbmon-20260225T123708Z-bus4/usbmon-bus4-20260225T123708Z.summary.txt`
+
+#### Check of `param_queue_tail` hypothesis against known-good capture
+
+Ran on Pi5:
+1. `tools/usbmon_register_map.py sequence ...libedgetpu_known_good/post... --known-only`
+2. `tools/usbmon_register_map.py sequence ...libedgetpu_known_good/post...` (full vendor sequence)
+3. raw grep for `8678 0004` / `8688 0004` across known-good `pre` and `post` logs.
+
+Result in this capture set:
+1. no observed writes/reads to `0x00048678` (`param_queue_tail`) or
+   `0x00048688` (`param_queue_completed_head`) in known-good pre/post logs.
+2. observed `0x48678` activity appears in our explicit transition-injection runs
+   (doorbell tests), not in captured libedgetpu pre/post invoke traces.
+
+Interpretation:
+1. queue-tail advancement may still be real in some runtime paths, but this
+   specific known-good trace does not provide direct evidence of it via endpoint
+   0 CSR traffic.
