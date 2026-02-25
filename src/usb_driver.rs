@@ -424,25 +424,12 @@ impl EdgeTpuUsbDriver {
         descriptor_tag: u32,
         payload: &[u8],
     ) -> Result<(), CoralError> {
-        if payload.len() > u32::MAX as usize {
-            return Err(CoralError::ProtocolError(format!(
-                "descriptor payload too large: {} bytes",
-                payload.len()
-            )));
-        }
-
-        let header = DescriptorHeader {
-            payload_len: payload.len() as u32,
-            descriptor_tag,
-        }
-        .to_le_bytes();
-        self.write_bulk_all(EP_BULK_OUT, &header)?;
+        self.send_descriptor_header_raw(descriptor_tag, payload.len())?;
 
         let mut offset = 0usize;
         while offset < payload.len() {
             let chunk_len = min(self.descriptor_chunk_size, payload.len() - offset);
-            if let Err(err) = self.write_bulk_all(EP_BULK_OUT, &payload[offset..offset + chunk_len])
-            {
+            if let Err(err) = self.write_bulk_out_chunk(&payload[offset..offset + chunk_len]) {
                 return Err(CoralError::ProtocolError(format!(
                     "descriptor tag={} payload write failed at offset {} of {} bytes: {}",
                     descriptor_tag,
@@ -457,22 +444,49 @@ impl EdgeTpuUsbDriver {
         Ok(())
     }
 
-    pub fn read_event_packet(&self) -> Result<EventPacket, CoralError> {
+    pub fn send_descriptor_header_raw(
+        &self,
+        descriptor_tag: u32,
+        payload_len: usize,
+    ) -> Result<(), CoralError> {
+        if payload_len > u32::MAX as usize {
+            return Err(CoralError::ProtocolError(format!(
+                "descriptor payload too large: {} bytes",
+                payload_len
+            )));
+        }
+
+        let header = DescriptorHeader {
+            payload_len: payload_len as u32,
+            descriptor_tag,
+        }
+        .to_le_bytes();
+        self.write_bulk_all(EP_BULK_OUT, &header)
+    }
+
+    pub fn write_bulk_out_chunk(&self, payload: &[u8]) -> Result<(), CoralError> {
+        self.write_bulk_all(EP_BULK_OUT, payload)
+    }
+
+    pub fn read_event_packet_with_timeout(&self, timeout: Duration) -> Result<EventPacket, CoralError> {
         let mut buf = [0u8; 16];
         let read = self
             .handle
-            .read_bulk(EP_EVENT_IN, &mut buf, self.timeout)
+            .read_bulk(EP_EVENT_IN, &mut buf, timeout)
             .map_err(CoralError::from)?;
         EventPacket::decode(&buf[..read]).ok_or_else(|| {
             CoralError::ProtocolError(format!("failed to decode event packet from {} bytes", read))
         })
     }
 
-    pub fn read_interrupt_packet(&self) -> Result<InterruptPacket, CoralError> {
+    pub fn read_interrupt_packet_with_timeout(
+        &self,
+        timeout: Duration,
+    ) -> Result<InterruptPacket, CoralError> {
         let mut buf = [0u8; 4];
         let read = self
             .handle
-            .read_interrupt(EP_INTERRUPT_IN, &mut buf, self.timeout)
+            .read_interrupt(EP_INTERRUPT_IN, &mut buf, timeout)
             .map_err(CoralError::from)?;
         InterruptPacket::decode(&buf[..read]).ok_or_else(|| {
             CoralError::ProtocolError(format!(
@@ -482,14 +496,30 @@ impl EdgeTpuUsbDriver {
         })
     }
 
-    pub fn read_output_bytes(&self, size: usize) -> Result<Vec<u8>, CoralError> {
+    pub fn read_output_bytes_with_timeout(
+        &self,
+        size: usize,
+        timeout: Duration,
+    ) -> Result<Vec<u8>, CoralError> {
         let mut out = vec![0u8; size];
         let read = self
             .handle
-            .read_bulk(EP_BULK_IN, &mut out, self.timeout)
+            .read_bulk(EP_BULK_IN, &mut out, timeout)
             .map_err(CoralError::from)?;
         out.truncate(read);
         Ok(out)
+    }
+
+    pub fn read_event_packet(&self) -> Result<EventPacket, CoralError> {
+        self.read_event_packet_with_timeout(self.timeout)
+    }
+
+    pub fn read_interrupt_packet(&self) -> Result<InterruptPacket, CoralError> {
+        self.read_interrupt_packet_with_timeout(self.timeout)
+    }
+
+    pub fn read_output_bytes(&self, size: usize) -> Result<Vec<u8>, CoralError> {
+        self.read_output_bytes_with_timeout(size, self.timeout)
     }
 
     pub fn reset_device(&self) -> Result<(), CoralError> {

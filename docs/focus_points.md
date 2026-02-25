@@ -44,6 +44,11 @@ change should map to one (or more) of these points.
   large PARAMETER_CACHING payload admission stalls on descriptor classes
   `0/1/2` (offset-dependent timeout), while alternate classes (`3/4`) do not
   stall but are not yet confirmed as semantically correct parameter loads.
+  Latest probe status:
+  stream chunking, pacing, event/interrupt polling, and multi-descriptor
+  segmentation do not remove the `~0xC000` cumulative ingress wall for class-2.
+  This now strongly suggests missing runcontrol/doorbell queue-state transitions
+  rather than transport framing bugs.
 - Success signal:
   A Rust example that runs one known template end-to-end and returns valid output
   without `libedgetpu`.

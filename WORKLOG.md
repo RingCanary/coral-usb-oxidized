@@ -2133,3 +2133,75 @@ control/bulk acceptance.
 The blocker is now narrowed from generic transport failure to
 descriptor-queue semantics for parameter admission. Large payload rejection is
 specific to queue classes `0/1/2` under current runcontrol/runtime state.
+
+### 2026-02-25 - Parameter admission deep probe (queue wall characterization)
+
+#### Objective
+
+Determine whether the class-2 (`Parameters`) timeout is due to:
+1. chunk sizing,
+2. missing event/interrupt drains,
+3. single-descriptor size vs cumulative queue pressure.
+
+#### Implementation
+
+Added probing controls to `examples/rusb_serialized_exec_replay.rs`:
+
+1. Raw streaming controls:
+   - `--param-stream-chunk-size`
+   - `--param-stream-max-bytes`
+   - `--param-write-sleep-us`
+2. Polling controls during stream:
+   - `--param-read-event-every`
+   - `--param-event-timeout-ms`
+   - `--param-read-interrupt-every`
+   - `--param-interrupt-timeout-ms`
+3. Descriptor segmentation controls:
+   - `--param-descriptor-split-bytes`
+   - `--param-drain-event-every-descriptors`
+4. Added output hash (`fnv1a64`) for result comparison.
+5. Added low-level USB driver helpers:
+   - `send_descriptor_header_raw`
+   - `write_bulk_out_chunk`
+   - timeout-specific reads for event/interrupt/output.
+
+#### Pi5 Matrix (clean power-cycle start each run)
+
+Model: `templates/dense_2048x2048_quant_edgetpu.tflite`
+
+1. Baseline (`tag=2`, chunk 4096):
+   - fail at offset `49152`.
+2. Chunk 1024:
+   - fail at offset `49152` (`chunk 48`).
+3. Chunk 1024 + event poll every chunk:
+   - fail at offset `49152`.
+4. Chunk 1024 + event poll + 100us pacing:
+   - fail at offset `49152`.
+5. Byte cap `49152`:
+   - preload send completes, then bootstrap event times out and next write
+     times out.
+6. Byte cap `53248`:
+   - fail at offset `49152`.
+7. Descriptor split (`32768`) + per-descriptor drain:
+   - fail at offset `49152`.
+8. Descriptor split (`16384`) + per-descriptor drain:
+   - timeout (same regime).
+9. Descriptor split (`8192`) + per-descriptor drain:
+   - fail at offset `48128` (header overhead shifts the cliff slightly).
+10. Added interrupt polling (`0x83`) every chunk (with event polling):
+   - still fails at `48128`/`49152` regime; no useful drains observed.
+
+#### External RE cross-check
+
+Explorer pass over `edgetpuxray/connect.py` found:
+1. It sends descriptor subranges (needle-based slices), not arbitrary full-file
+   dumps.
+2. It still submits multi-MB Parameters descriptors in one logical transfer
+   (not a 49KB-limited protocol by design).
+
+#### Conclusion
+
+The observed wall is a runtime admission/backpressure condition in our current
+state machine, not a simple host chunking issue. The dominant hypothesis is now
+missing runcontrol/doorbell/queue state transitions required before class-2
+payload consumption.

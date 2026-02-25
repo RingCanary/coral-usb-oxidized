@@ -85,6 +85,42 @@ Interpretation:
 - Nonstandard tags (`3/4`) avoid immediate timeout but do not yet imply valid
   parameter loading.
 
+### Extended parameter-admission probe
+
+New replay controls now support:
+- parameter stream chunk override,
+- max-byte caps,
+- per-chunk event/interrupt polling,
+- inter-chunk pacing,
+- multi-descriptor parameter segmentation.
+
+Observed on Pi5 (clean power-cycled start each run):
+
+1. `tag=2` fails at a stable boundary near `0xC000` bytes:
+   - typically `49152`,
+   - `48128` in split modes where descriptor headers consume queue budget.
+2. Changing stream chunk size (`4096` vs `1024`) does not move the wall.
+3. Event polling (`0x82`) and interrupt polling (`0x83`) during stream did not
+   produce drains that unblock class-2 streaming.
+4. Splitting parameter payload into multiple class-2 descriptors (`32K/16K/8K`)
+   still fails in the same cumulative-byte regime.
+5. Capping at exactly `49152` allows the write phase to end, but no bootstrap
+   completion event is observed and subsequent writes time out.
+
+Interpretation update:
+- The failure behaves like a queue-admission/backpressure stall in current
+  runcontrol/runtime state.
+- It is not explained by host-side chunking strategy alone.
+- Next focus should be CSR/runcontrol transitions and doorbell semantics around
+  class-2 descriptor consumption.
+
+### edgetpuxray parity note
+
+Code inspection of `edgetpuxray/connect.py` indicates it submits multi-MB
+parameter slices (descriptor class 2) as part of known-good flows. This argues
+against a hard protocol limit at `0xC000` and supports the view that our replay
+state machine is missing a required control transition.
+
 ## Practical next debug steps
 
 1. Instrument runcontrol/doorbell CSR state immediately before and after each
