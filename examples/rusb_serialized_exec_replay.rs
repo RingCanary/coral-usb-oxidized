@@ -119,6 +119,10 @@ struct Config {
     param_gate_window_end_bytes: Option<usize>,
     param_gate_window_step_bytes: Option<usize>,
     param_gate_placement: ParamGatePlacement,
+    param_csr_snapshot_start_bytes: Option<usize>,
+    param_csr_snapshot_end_bytes: Option<usize>,
+    param_csr_snapshot_every_chunks: usize,
+    param_csr_snapshot_on_error: bool,
     param_admission_wait_mode: Option<ParamAdmissionWaitMode>,
     param_admission_wait_timeout_ms: u64,
     param_admission_wait_poll_ms: u64,
@@ -239,6 +243,18 @@ fn usage(program: &str) {
     );
     println!(
         "  --param-gate-placement MODE   Run known-good gates before|after|both around each chunk (default: before)"
+    );
+    println!(
+        "  --param-csr-snapshot-start-bytes N  Start byte offset (inclusive) for queue/runcontrol CSR snapshots"
+    );
+    println!(
+        "  --param-csr-snapshot-end-bytes N    End byte offset (exclusive) for queue/runcontrol CSR snapshots"
+    );
+    println!(
+        "  --param-csr-snapshot-every-chunks N  Snapshot cadence in chunks while in snapshot window (default: 1)"
+    );
+    println!(
+        "  --param-csr-snapshot-on-error    Snapshot queue/runcontrol CSRs immediately before returning stream/gate errors"
     );
     println!(
         "  --param-admission-wait-mode MODE   Wait mode for stream admission checks: event|interrupt|either|both"
@@ -439,6 +455,10 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         param_gate_window_end_bytes: None,
         param_gate_window_step_bytes: None,
         param_gate_placement: ParamGatePlacement::Before,
+        param_csr_snapshot_start_bytes: None,
+        param_csr_snapshot_end_bytes: None,
+        param_csr_snapshot_every_chunks: 1,
+        param_csr_snapshot_on_error: false,
         param_admission_wait_mode: None,
         param_admission_wait_timeout_ms: 0,
         param_admission_wait_poll_ms: 1,
@@ -710,6 +730,30 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                     args.get(i).ok_or("--param-gate-placement requires value")?,
                 )?;
             }
+            "--param-csr-snapshot-start-bytes" => {
+                i += 1;
+                config.param_csr_snapshot_start_bytes = Some(parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-csr-snapshot-start-bytes requires value")?,
+                )?);
+            }
+            "--param-csr-snapshot-end-bytes" => {
+                i += 1;
+                config.param_csr_snapshot_end_bytes = Some(parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-csr-snapshot-end-bytes requires value")?,
+                )?);
+            }
+            "--param-csr-snapshot-every-chunks" => {
+                i += 1;
+                config.param_csr_snapshot_every_chunks = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-csr-snapshot-every-chunks requires value")?,
+                )?;
+            }
+            "--param-csr-snapshot-on-error" => {
+                config.param_csr_snapshot_on_error = true;
+            }
             "--param-admission-wait-mode" => {
                 i += 1;
                 config.param_admission_wait_mode = Some(parse_param_admission_wait_mode(
@@ -894,6 +938,27 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         }
         if step == 0 {
             return Err("--param-gate-window-step-bytes must be >= 1".into());
+        }
+    }
+    let has_csr_snapshot_config = config.param_csr_snapshot_start_bytes.is_some()
+        || config.param_csr_snapshot_end_bytes.is_some()
+        || config.param_csr_snapshot_every_chunks != 1
+        || config.param_csr_snapshot_on_error;
+    if has_csr_snapshot_config {
+        let start = config.param_csr_snapshot_start_bytes.ok_or(
+            "--param-csr-snapshot-start-bytes is required when using CSR snapshot controls",
+        )?;
+        let end = config.param_csr_snapshot_end_bytes.ok_or(
+            "--param-csr-snapshot-end-bytes is required when using CSR snapshot controls",
+        )?;
+        if start >= end {
+            return Err(format!(
+                "--param-csr-snapshot-start-bytes ({start}) must be < --param-csr-snapshot-end-bytes ({end})"
+            )
+            .into());
+        }
+        if config.param_csr_snapshot_every_chunks == 0 {
+            return Err("--param-csr-snapshot-every-chunks must be >= 1".into());
         }
     }
     if config.param_admission_wait_poll_ms == 0 {
@@ -1215,6 +1280,74 @@ fn run_known_good_param_gate(
     Ok(())
 }
 
+const PARAM_SNAPSHOT_CSRS: [(&str, u32); 9] = [
+    ("scalarCoreRunControl", 0x0004_4018),
+    ("instruction_queue_base", 0x0004_8590),
+    ("instruction_queue_tail", 0x0004_85a8),
+    ("instruction_queue_completed_head", 0x0004_85b8),
+    ("instruction_queue_int_status", 0x0004_85c8),
+    ("param_queue_base", 0x0004_8660),
+    ("param_queue_tail", 0x0004_8678),
+    ("param_queue_completed_head", 0x0004_8688),
+    ("param_queue_int_status", 0x0004_8698),
+];
+
+fn has_param_csr_snapshot(config: &Config) -> bool {
+    config.param_csr_snapshot_start_bytes.is_some()
+        && config.param_csr_snapshot_end_bytes.is_some()
+}
+
+fn capture_param_csr_snapshot(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    phase_label: &str,
+    reason: &str,
+    chunk_idx: usize,
+    param_bytes_written: usize,
+) {
+    if !has_param_csr_snapshot(config) {
+        return;
+    }
+    println!(
+        "      {}: csr snapshot reason={} chunk={} offset={}",
+        phase_label, reason, chunk_idx, param_bytes_written
+    );
+    for (name, offset) in PARAM_SNAPSHOT_CSRS {
+        match driver.vendor_read64(offset) {
+            Ok(value) => println!(
+                "      {}: csr {:<32} 0x{:08x} => 0x{:016x} (read64)",
+                phase_label, name, offset, value
+            ),
+            Err(err64) => match driver.vendor_read32(offset) {
+                Ok(value32) => println!(
+                    "      {}: csr {:<32} 0x{:08x} => 0x{:08x} (read32 fallback)",
+                    phase_label, name, offset, value32
+                ),
+                Err(err32) => println!(
+                    "      {}: csr {:<32} 0x{:08x} read64_err='{}' read32_err='{}'",
+                    phase_label, name, offset, err64, err32
+                ),
+            },
+        }
+    }
+}
+
+fn should_capture_param_csr_snapshot(
+    config: &Config,
+    chunk_idx: usize,
+    param_bytes_written: usize,
+) -> bool {
+    if !has_param_csr_snapshot(config) {
+        return false;
+    }
+    let start = config.param_csr_snapshot_start_bytes.unwrap_or(0);
+    let end = config.param_csr_snapshot_end_bytes.unwrap_or(0);
+    if param_bytes_written < start || param_bytes_written >= end {
+        return false;
+    }
+    chunk_idx % config.param_csr_snapshot_every_chunks == 0
+}
+
 fn run_pending_known_good_gates(
     driver: &EdgeTpuUsbDriver,
     config: &Config,
@@ -1227,13 +1360,25 @@ fn run_pending_known_good_gates(
     window_gate_count: &mut usize,
 ) -> Result<(), Box<dyn Error>> {
     while *gate_cursor < gate_offsets.len() && param_bytes_written >= gate_offsets[*gate_cursor] {
-        run_known_good_param_gate(
+        if let Err(err) = run_known_good_param_gate(
             driver,
             config,
             phase_label,
             *gate_cursor + 1,
             gate_offsets[*gate_cursor],
-        )?;
+        ) {
+            if config.param_csr_snapshot_on_error {
+                capture_param_csr_snapshot(
+                    driver,
+                    config,
+                    phase_label,
+                    "gate_error",
+                    *gate_cursor,
+                    param_bytes_written,
+                );
+            }
+            return Err(err);
+        }
         *gate_cursor += 1;
     }
 
@@ -1243,13 +1388,25 @@ fn run_pending_known_good_gates(
         if param_bytes_written < gate_offset {
             break;
         }
-        run_known_good_param_gate(
+        if let Err(err) = run_known_good_param_gate(
             driver,
             config,
             phase_label,
             gate_offsets.len() + *window_gate_count + 1,
             gate_offset,
-        )?;
+        ) {
+            if config.param_csr_snapshot_on_error {
+                capture_param_csr_snapshot(
+                    driver,
+                    config,
+                    phase_label,
+                    "gate_error",
+                    gate_offsets.len() + *window_gate_count,
+                    param_bytes_written,
+                );
+            }
+            return Err(err);
+        }
         *window_gate_count += 1;
         let next = gate_offset.saturating_add(window_step);
         if next >= window_end {
@@ -1919,6 +2076,16 @@ fn stream_parameter_chunks(
 
         let mut descriptor_offset = global_offset;
         while descriptor_offset < descriptor_end {
+            if should_capture_param_csr_snapshot(config, global_chunk_idx, param_bytes_written) {
+                capture_param_csr_snapshot(
+                    driver,
+                    config,
+                    phase_label,
+                    "pre_chunk",
+                    global_chunk_idx,
+                    param_bytes_written,
+                );
+            }
             if config.param_gate_placement.run_before() {
                 run_pending_known_good_gates(
                     driver,
@@ -1935,6 +2102,16 @@ fn stream_parameter_chunks(
             let end = (descriptor_offset + stream_chunk_size).min(descriptor_end);
             let chunk = &payload[descriptor_offset..end];
             if let Err(err) = driver.write_bulk_out_chunk(chunk) {
+                if config.param_csr_snapshot_on_error {
+                    capture_param_csr_snapshot(
+                        driver,
+                        config,
+                        phase_label,
+                        "stream_write_error",
+                        global_chunk_idx,
+                        param_bytes_written,
+                    );
+                }
                 return Err(format!(
                     "{}: parameter stream write failed at offset {} of {} bytes (chunk {}): {}",
                     phase_label, descriptor_offset, stream_len, global_chunk_idx, err
@@ -2194,6 +2371,7 @@ fn send_parameter_payload(
         || has_param_async_lanes(config)
         || has_param_submit_lanes(config)
         || has_param_known_good_gates(config)
+        || has_param_csr_snapshot(config)
         || has_param_admission_wait(config);
     if !use_custom_stream {
         driver.send_descriptor_payload_raw(config.parameters_tag, payload)?;
@@ -2215,7 +2393,7 @@ fn send_parameter_payload(
     let interrupt_poll_timeout = Duration::from_millis(config.param_interrupt_timeout_ms);
 
     println!(
-        "    {}: streaming parameters len={} header_len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
+        "    {}: streaming parameters len={} header_len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} csr_snapshot_start={:?} csr_snapshot_end={:?} csr_snapshot_every_chunks={} csr_snapshot_on_error={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
         phase_label,
         stream_len,
         header_total_len,
@@ -2233,6 +2411,10 @@ fn send_parameter_payload(
         config.param_gate_window_end_bytes,
         config.param_gate_window_step_bytes,
         config.param_gate_placement.as_str(),
+        config.param_csr_snapshot_start_bytes,
+        config.param_csr_snapshot_end_bytes,
+        config.param_csr_snapshot_every_chunks,
+        config.param_csr_snapshot_on_error,
         config
             .param_admission_wait_mode
             .map(|mode| mode.as_str())
@@ -2323,10 +2505,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         || has_param_async_lanes(&config)
         || has_param_submit_lanes(&config)
         || has_param_known_good_gates(&config)
+        || has_param_csr_snapshot(&config)
         || has_param_admission_wait(&config)
     {
         println!(
-            "Parameter stream controls: chunk={:?} max_bytes={:?} force_full_header_len={} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} require_post_instr_event={} post_instr_event_timeout_ms={}",
+            "Parameter stream controls: chunk={:?} max_bytes={:?} force_full_header_len={} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} csr_snapshot_start={:?} csr_snapshot_end={:?} csr_snapshot_every_chunks={} csr_snapshot_on_error={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} require_post_instr_event={} post_instr_event_timeout_ms={}",
             config.param_stream_chunk_size,
             config.param_stream_max_bytes,
             config.param_force_full_header_len,
@@ -2344,6 +2527,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.param_gate_window_end_bytes,
             config.param_gate_window_step_bytes,
             config.param_gate_placement.as_str(),
+            config.param_csr_snapshot_start_bytes,
+            config.param_csr_snapshot_end_bytes,
+            config.param_csr_snapshot_every_chunks,
+            config.param_csr_snapshot_on_error,
             config
                 .param_admission_wait_mode
                 .map(|mode| mode.as_str())

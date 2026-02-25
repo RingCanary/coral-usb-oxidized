@@ -632,6 +632,43 @@ Interpretation:
    reinforcing that missing state progression is deeper than tuple presence or
    simple gate ordering.
 
+### Per-chunk CSR snapshot telemetry (queue/runcontrol set)
+
+Replay now supports explicit near-wall CSR snapshots:
+1. `--param-csr-snapshot-start-bytes`
+2. `--param-csr-snapshot-end-bytes`
+3. `--param-csr-snapshot-every-chunks`
+4. `--param-csr-snapshot-on-error`
+
+Captured register set:
+1. `scalarCoreRunControl` (`0x44018`)
+2. instruction queue:
+   - `base` (`0x48590`)
+   - `tail` (`0x485A8`)
+   - `completed_head` (`0x485B8`)
+   - `int_status` (`0x485C8`)
+3. parameter queue:
+   - `base` (`0x48660`)
+   - `tail` (`0x48678`)
+   - `completed_head` (`0x48688`)
+   - `int_status` (`0x48698`)
+
+Pi5 artifact:
+1. `traces/replay-csr-snapshot-20260225T141800Z/`
+
+Observed in both baseline and dense-gated runs:
+1. at offsets `30720`, `31744`, `32768`:
+   - all tracked CSRs read back `0x0`.
+2. at `33792`:
+   - all tracked CSR reads time out (`read64` and fallback `read32`).
+3. no non-zero queue interrupt status was observed before CSR liveness loss.
+
+Implication:
+1. the wall is an abrupt control-plane non-responsiveness transition rather than
+   an observed queue status bit transition in readable CSRs.
+2. this further supports a deeper firmware/runtime state progression failure
+   (host-visible control plane dies) rather than missing static tuple content.
+
 ## Practical next debug steps
 
 1. Instrument runcontrol/doorbell CSR state immediately before and after each

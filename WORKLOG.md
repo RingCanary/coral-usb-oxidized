@@ -2966,3 +2966,67 @@ No placement mode moved the first failing gate.
 
 1. `traces/replay-keepalive-cadence2-20260225T135856Z/`
 2. `traces/replay-gate-placement-20260225T140440Z/`
+
+### 2026-02-25 - Per-chunk CSR snapshot telemetry at near-wall boundary
+
+#### Implementation
+
+Added per-chunk control-plane snapshot telemetry in
+`examples/rusb_serialized_exec_replay.rs`:
+1. `--param-csr-snapshot-start-bytes`
+2. `--param-csr-snapshot-end-bytes`
+3. `--param-csr-snapshot-every-chunks`
+4. `--param-csr-snapshot-on-error`
+
+Snapshot register set (requested queue + runcontrol set):
+1. `scalarCoreRunControl` (`0x00044018`)
+2. `instruction_queue_base` (`0x00048590`)
+3. `instruction_queue_tail` (`0x000485a8`)
+4. `instruction_queue_completed_head` (`0x000485b8`)
+5. `instruction_queue_int_status` (`0x000485c8`)
+6. `param_queue_base` (`0x00048660`)
+7. `param_queue_tail` (`0x00048678`)
+8. `param_queue_completed_head` (`0x00048688`)
+9. `param_queue_int_status` (`0x00048698`)
+
+Read strategy:
+1. `vendor_read64` first,
+2. fallback `vendor_read32` on read64 error,
+3. snapshot emitted pre-chunk in window and optionally on stream/gate errors.
+
+#### Pi5 runs
+
+Capture root:
+1. `traces/replay-csr-snapshot-20260225T141800Z/`
+
+Cases:
+1. `baseline_snapshot` (no gate window)
+2. `dense_gate_snapshot` (`28672..34816 step 256`, gate placement `before`)
+
+#### Observed telemetry
+
+At offsets `30720`, `31744`, `32768`:
+1. all queue/runcontrol reads return `0x0` (read64).
+
+At offset `33792` (first failing chunk in both telemetry runs):
+1. all tracked CSR reads time out (read64 and fallback read32):
+   - `scalarCoreRunControl`
+   - instruction queue (`base/tail/completed_head/int_status`)
+   - param queue (`base/tail/completed_head/int_status`)
+2. no non-zero interrupt status was observed before collapse.
+3. dense-gated case still fails on gate `#18` (`offset=33024`) with
+   `a0d4` timeout, with CSR snapshot-on-error also showing full timeout state.
+
+Fast confirmation (`--timeout-ms 200`) reproduced identical transition:
+1. healthy zero reads through `32768`,
+2. full CSR timeout state at `33792`,
+3. gate error at `33024`.
+
+#### Interpretation
+
+1. queue/runcontrol CSRs remain readable and quiescent (`0`) until just before
+   the boundary.
+2. failure presents as abrupt control-plane liveness loss at `33792`, not as an
+   observed queue int-status bit transition.
+3. this strengthens the state-progression/firmware-liveness hypothesis over a
+   simple missing register write.

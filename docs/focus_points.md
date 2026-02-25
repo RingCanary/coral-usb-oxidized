@@ -71,6 +71,10 @@ change should map to one (or more) of these points.
   observed failure to next gate point (e.g. `36864` at `step=4096`).
   Gate placement invariance:
   `--param-gate-placement before|after|both` does not move the `33024` cliff.
+  CSR snapshot telemetry:
+  per-chunk queue/runcontrol snapshots (`0x44018`, `0x48590/85a8/85b8/85c8`,
+  `0x48660/8678/8688/8698`) read `0x0` through `32768`, then all reads time out
+  at `33792`; no non-zero queue int-status was observed before collapse.
   Parity reset probe (`--reset-before-claim`) did not move the wall and is
   unstable across consecutive Pi5 runs (can trigger xHCI enumerate `error -62`);
   keep diagnostic-only.
