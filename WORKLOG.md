@@ -2732,3 +2732,59 @@ Interpretation:
    replay path.
 2. descriptor header logical length mismatch is not the cause of the `49KiB`
    wall in this probe mode.
+
+### 2026-02-25 - Ordered clean captures (known-good first, then replay)
+
+Capture root:
+1. `traces/usbmon-goodfirst-20260225T132821Z`
+
+Runs:
+1. known-good first (`libedgetpu`, `inference_benchmark`, template `2048x2048`):
+   - capture: `good_libedgetpu/usbmon-bus4-20260225T132821Z.log`
+   - status: success (`Delegate + interpreter ready`)
+   - latency: `avg=0.457 ms` (`runs=5`, `warmup=1`)
+2. replay second (`rusb_serialized_exec_replay`, `tag=2`, submit lanes active):
+   - capture: `replay_tag2_submit/usbmon-bus4-20260225T132835Z.log`
+   - status: fail at `offset=49152` (`chunk 48`)
+   - lane callbacks: active but `completed=0` on `0x81/0x82/0x83`
+
+Handshake probe refresh on this ordered pair:
+1. `python3 tools/usbmon_param_handshake_probe.py good bad --threshold 49152`
+2. `python3 tools/usbmon_param_handshake_probe.py good bad --threshold 33792`
+
+Near-anchor control tuples only in good (same signal as prior datasets):
+1. `Ci:c0:01:a0d8:0001:0004`
+2. `Co:40:01:a0d8:0001:0004`
+3. `Co:40:01:a33c:0001:0004`
+4. `Co:40:01:a500:0001:0004`
+5. `Co:40:01:a558:0001:0004`
+6. `Co:40:01:a600:0001:0004`
+7. `Co:40:01:a658:0001:0004`
+
+Interpretation:
+1. This re-confirms the ordered near-wall control exchange gap using a clean
+   good-vs-bad capture pair under the same bus/device context.
+2. The replay path still lacks the near-anchor control cadence while streaming
+   class-2 payload at the point where good traces show re-arming behavior.
+
+### 2026-02-25 - `connect.py` parity probe (`reset-before-claim`) outcome
+
+Implementation:
+1. Added replay CLI flags in `examples/rusb_serialized_exec_replay.rs`:
+   - `--reset-before-claim`
+   - `--post-reset-sleep-ms`
+2. Behavior:
+   - after runtime open (and optional firmware transition), issue USB reset,
+   - sleep, reopen runtime handle, then continue setup/stream path.
+
+Pi5 results:
+1. clean boot-mode run with `--reset-before-claim --post-reset-sleep-ms 600`:
+   - still fails at `offset=49152` (`chunk 48`), unchanged.
+2. immediate second run from runtime with same flag:
+   - fails during reopen with `Error: DeviceNotFound`,
+   - host enters repeated xHCI enumerate faults (`error -62`) until reboot.
+
+Interpretation:
+1. this parity reset is not sufficient to break class-2 admission wall.
+2. on Pi5, aggressive runtime reset/reopen is unstable across consecutive runs
+   and can poison host USB state; keep this flag diagnostic-only.

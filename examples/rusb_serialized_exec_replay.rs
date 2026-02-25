@@ -25,6 +25,8 @@ struct Config {
     setup: bool,
     verify_setup_reads: bool,
     setup_include_reads: bool,
+    reset_before_claim: bool,
+    post_reset_sleep_ms: u64,
     firmware_path: Option<String>,
     input_file: Option<String>,
     exec_index: Option<usize>,
@@ -81,6 +83,8 @@ fn usage(program: &str) {
     println!("  --skip-setup              Skip edgetpuxray runtime setup sequence");
     println!("  --setup-include-reads     Include setup read steps (default: write-only)");
     println!("  --verify-setup-reads      Enforce exact readback match for setup sequence");
+    println!("  --reset-before-claim      Reset USB device, reopen, then claim/setup (pyusb parity probe)");
+    println!("  --post-reset-sleep-ms N   Sleep after reset-before-claim before reopen (default: 600)");
     println!("  --firmware PATH           apex_latest_single_ep.bin for boot-mode devices");
     println!("  --skip-param-preload      Do not send PARAMETER_CACHING executables");
     println!("  --read-interrupt          Read one interrupt packet after run");
@@ -273,6 +277,8 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         setup: true,
         verify_setup_reads: false,
         setup_include_reads: false,
+        reset_before_claim: false,
+        post_reset_sleep_ms: 600,
         firmware_path: None,
         input_file: None,
         exec_index: None,
@@ -363,6 +369,13 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
             "--skip-setup" => config.setup = false,
             "--setup-include-reads" => config.setup_include_reads = true,
             "--verify-setup-reads" => config.verify_setup_reads = true,
+            "--reset-before-claim" => config.reset_before_claim = true,
+            "--post-reset-sleep-ms" => {
+                i += 1;
+                config.post_reset_sleep_ms = parse_u64_auto(
+                    args.get(i).ok_or("--post-reset-sleep-ms requires value")?,
+                )?;
+            }
             "--firmware" => {
                 i += 1;
                 config.firmware_path =
@@ -1901,6 +1914,28 @@ fn main() -> Result<(), Box<dyn Error>> {
         info = driver.device_info();
         println!(
             "Post-firmware device: bus={} addr={} id={:04x}:{:04x} runtime={}",
+            info.bus,
+            info.address,
+            info.vendor_id,
+            info.product_id,
+            info.is_runtime()
+        );
+    }
+
+    if config.reset_before_claim {
+        println!(
+            "Reset-before-claim enabled; issuing reset, sleeping {} ms, and reopening",
+            config.post_reset_sleep_ms
+        );
+        let _ = driver.reset_device();
+        drop(driver);
+        std::thread::sleep(Duration::from_millis(config.post_reset_sleep_ms));
+        driver =
+            EdgeTpuUsbDriver::open_first_prefer_runtime(Duration::from_millis(config.timeout_ms))?;
+        driver.set_descriptor_chunk_size(config.chunk_size)?;
+        info = driver.device_info();
+        println!(
+            "Post-reset device: bus={} addr={} id={:04x}:{:04x} runtime={}",
             info.bus,
             info.address,
             info.vendor_id,

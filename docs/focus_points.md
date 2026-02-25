@@ -52,6 +52,13 @@ change should map to one (or more) of these points.
   Additional confirmation:
   after class-2 stall, control-plane CSR read/write probes time out (poisoned
   runtime), while the same probes succeed after healthy skip-param invokes.
+  Ordered clean capture confirmation:
+  known-good-first (`libedgetpu`) then replay (`tag=2`) reproduces the same
+  near-anchor tuple gap (`a0d8/a33c/a500/a558/a600/a658` only in good) while
+  replay still stalls at `49152`.
+  Parity reset probe (`--reset-before-claim`) did not move the wall and is
+  unstable across consecutive Pi5 runs (can trigger xHCI enumerate `error -62`);
+  keep diagnostic-only.
   Fuzz addendum:
   sustained control-plane perturbation during class-2 streaming moves the stall
   boundary earlier (~33-40 KB vs 49 KB baseline), while one-shot deterministic

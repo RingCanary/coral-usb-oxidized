@@ -472,6 +472,51 @@ Pi5 outcomes:
 2. forcing full descriptor header length (`header_len=4194304`) under capped
    stream (`65536`) does not change stall; wall remains at `49152`.
 
+### Ordered clean pair capture (known-good first, then replay)
+
+Capture root:
+1. `traces/usbmon-goodfirst-20260225T132821Z`
+
+Ordered runs:
+1. `good_libedgetpu` first:
+   - `inference_benchmark templates/dense_2048x2048_quant_edgetpu.tflite 5 1`
+   - success (`Delegate + interpreter ready`, `avg=0.457 ms`)
+2. `replay_tag2_submit` second:
+   - replay with `tag=2`, `chunk=1024`, `max=65536`, submit lanes `1/1/1`
+   - fails at `offset=49152` (`chunk 48`)
+
+Handshake probe on this exact good-vs-bad pair:
+1. `tools/usbmon_param_handshake_probe.py ... --threshold 49152`
+2. `tools/usbmon_param_handshake_probe.py ... --threshold 33792`
+
+Near-anchor control tuples only in good (same as previous datasets):
+1. `Ci:c0:01:a0d8:0001:0004`
+2. `Co:40:01:a0d8:0001:0004`
+3. `Co:40:01:a33c:0001:0004`
+4. `Co:40:01:a500:0001:0004`
+5. `Co:40:01:a558:0001:0004`
+6. `Co:40:01:a600:0001:0004`
+7. `Co:40:01:a658:0001:0004`
+
+Interpretation:
+1. clean ordering removes the earlier “poisoned known-good” ambiguity.
+2. the near-anchor control cadence gap is reproduced under matched bus/device.
+
+### `connect.py` parity probe: reset-before-claim
+
+Replay now includes opt-in flags:
+1. `--reset-before-claim`
+2. `--post-reset-sleep-ms`
+
+Pi5 outcome:
+1. clean run with reset-before-claim still fails at `offset=49152`.
+2. second consecutive run with this mode can fail with `DeviceNotFound` and
+   trigger host-side xHCI enumerate errors (`error -62`) until reboot.
+
+Interpretation:
+1. reset-before-claim is not sufficient to unlock class-2 admission.
+2. keep this mode diagnostic-only on Pi5.
+
 ## Practical next debug steps
 
 1. Instrument runcontrol/doorbell CSR state immediately before and after each
