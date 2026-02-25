@@ -56,6 +56,9 @@ change should map to one (or more) of these points.
   sustained control-plane perturbation during class-2 streaming moves the stall
   boundary earlier (~33-40 KB vs 49 KB baseline), while one-shot deterministic
   runcontrol injections do not. This indicates dynamic queue/scheduler coupling.
+  usbmon-parallel confirmation:
+  the shifted boundaries correlate directly with fewer accepted Bo(1024)
+  completions in runtime traces (baseline 48, readonly 34, runctl 33).
 - Success signal:
   A Rust example that runs one known template end-to-end and returns valid output
   without `libedgetpu`.

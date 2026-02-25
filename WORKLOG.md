@@ -2282,3 +2282,54 @@ High-frequency mode isolation (`glitch_every=1`, `seed=777`):
    lowers the effective admission threshold (~33-40 KB vs 49 KB baseline).
 3. This supports a shared control/data-path pressure or scheduler interaction,
    not a pure static payload-length limit.
+
+### 2026-02-25 - usbmon-parallel fuzz capture (tmux-runner on Pi5)
+
+#### Objective
+
+Capture usbmon traces in parallel with fuzz runs (baseline vs glitch modes) to
+correlate stall offset shifts with transport-level status patterns.
+
+#### Setup
+
+1. Installed `tmux` (and validated `screen`) on Pi5.
+2. Ran each case in detached `tmux` sessions, wrapped with:
+   - `sudo ./tools/usbmon_capture.sh -b 4 ...`
+   - pre-run full VBUS cycle (`uhubctl -l 2/-l 4 off 5s on`).
+3. Cases:
+   - baseline (`glitch_budget=0`)
+   - `glitch_mode=readonly`, `glitch_every=1`
+   - `glitch_mode=runctl`, `glitch_every=1`
+
+#### Artifacts
+
+Base trace directory:
+- `traces/usbmon-fuzz-20260225T073823Z/`
+
+Per-case logs:
+- `traces/usbmon-fuzz-20260225T073823Z/baseline/usbmon-bus4-20260225T073823Z.log`
+- `traces/usbmon-fuzz-20260225T073823Z/readonly/usbmon-bus4-20260225T073848Z.log`
+- `traces/usbmon-fuzz-20260225T073823Z/runctl/usbmon-bus4-20260225T073915Z.log`
+
+#### Results
+
+Fuzz stall offsets (from runner logs):
+1. baseline: `49152` (`chunk_idx=48`)
+2. readonly: `34816` (`chunk_idx=34`)
+3. runctl: `33792` (`chunk_idx=33`)
+
+Runtime-device usbmon (filtered) highlights:
+1. baseline runtime device (`043`):
+   - Bo completions `1024` bytes: `48`
+2. readonly runtime device (`045`):
+   - Bo completions `1024` bytes: `34`
+   - many additional `Bi` timeout completions (`-2`) observed
+3. runctl runtime device (`047`):
+   - Bo completions `1024` bytes: `33`
+   - elevated control OUT traffic (`Co`) vs baseline
+
+#### Conclusion
+
+usbmon confirms that higher glitch pressure reduces the number of accepted
+1024-byte parameter chunks before stall, matching the earlier software-observed
+offset shifts.

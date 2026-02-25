@@ -144,6 +144,26 @@ Interpretation:
 2. The class-2 wall is dynamic under control traffic, consistent with shared
    scheduler/queue pressure rather than a fixed protocol field limit.
 
+### usbmon-parallel confirmation (tmux sessions on Pi5)
+
+Captured with `tools/usbmon_capture.sh` while fuzz runner executed in parallel
+(`traces/usbmon-fuzz-20260225T073823Z`):
+
+1. baseline (`glitch_budget=0`):
+   - `FUZZ_RESULT stall offset=49152`
+   - runtime Bo complete size `1024`: `48`
+2. readonly high-frequency glitches:
+   - `FUZZ_RESULT stall offset=34816`
+   - runtime Bo complete size `1024`: `34`
+3. runctl high-frequency glitches:
+   - `FUZZ_RESULT stall offset=33792`
+   - runtime Bo complete size `1024`: `33`
+
+Observed transport shift:
+- as glitch traffic increases, accepted parameter Bo(1024) completions before
+  failure drop proportionally.
+- runctl-heavy mode also increases control transfer volume (`Co`) during stream.
+
 ### edgetpuxray parity note
 
 Code inspection of `edgetpuxray/connect.py` indicates it submits multi-MB
