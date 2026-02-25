@@ -23,6 +23,8 @@ struct Config {
     skip_setup: bool,
     inject_runcontrol0_chunks: Vec<usize>,
     inject_runcontrol1_chunks: Vec<usize>,
+    transition_chunks: Vec<usize>,
+    transition_sequence: Vec<TransitionOp>,
     glitch_mode: GlitchMode,
 }
 
@@ -43,6 +45,26 @@ enum GlitchMode {
     ReadOnly,
     RunControlOnly,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TransitionOp {
+    RunControlZero,
+    RunControlOne,
+    Doorbell,
+}
+
+impl TransitionOp {
+    fn as_str(self) -> &'static str {
+        match self {
+            TransitionOp::RunControlZero => "runctl0",
+            TransitionOp::RunControlOne => "runctl1",
+            TransitionOp::Doorbell => "doorbell",
+        }
+    }
+}
+
+const SCALAR_CORE_RUN_CONTROL_OFFSET: u32 = 0x0004_4018;
+const PARAM_QUEUE_TAIL_OFFSET: u32 = 0x0004_8678;
 
 #[derive(Debug, Clone, Copy)]
 struct Lcg {
@@ -82,10 +104,14 @@ fn usage(program: &str) {
     println!("  --firmware PATH              apex_latest_single_ep.bin for boot-mode devices");
     println!("  --timeout-ms N               USB timeout ms (default: 6000)");
     println!("  --descriptor-chunk-size N    Descriptor payload chunk size (default: 4096)");
-    println!("  --param-stream-chunk-size N  Chunk size for fuzzed parameter stream (default: 1024)");
+    println!(
+        "  --param-stream-chunk-size N  Chunk size for fuzzed parameter stream (default: 1024)"
+    );
     println!("  --param-max-bytes N          Max parameter bytes to stream (default: 65536)");
     println!("  --seed N                     RNG seed (default: current unix nanos)");
-    println!("  --glitch-every-chunks N      Inject one glitch every N parameter chunks (default: 4)");
+    println!(
+        "  --glitch-every-chunks N      Inject one glitch every N parameter chunks (default: 4)"
+    );
     println!("  --glitch-budget N            Max glitches in this run (default: 32)");
     println!("  --aggressive                 Include runcontrol=0 glitch action");
     println!("  --input-bytes N              Input bytes for final invoke (default: 2048)");
@@ -93,6 +119,10 @@ fn usage(program: &str) {
     println!("  --skip-setup                 Skip runtime setup sequence");
     println!("  --inject-runcontrol0-at LIST Comma-separated chunk indices for rc=0 writes");
     println!("  --inject-runcontrol1-at LIST Comma-separated chunk indices for rc=1 writes");
+    println!("  --transition-chunks LIST     Chunk indices for deterministic transition sweeps");
+    println!(
+        "  --transition-sequence SPEC   Ops/aliases: runctl0|runctl1|doorbell|pulse01|pulse10|kick|resetkick"
+    );
     println!("  --glitch-mode MODE           mixed|readonly|runctl (default: mixed)");
 }
 
@@ -126,9 +156,74 @@ fn parse_glitch_mode(value: &str) -> Result<GlitchMode, Box<dyn Error>> {
         "mixed" => Ok(GlitchMode::Mixed),
         "readonly" => Ok(GlitchMode::ReadOnly),
         "runctl" => Ok(GlitchMode::RunControlOnly),
-        other => Err(
-            format!("invalid --glitch-mode: {other} (expected mixed|readonly|runctl)").into(),
-        ),
+        other => {
+            Err(format!("invalid --glitch-mode: {other} (expected mixed|readonly|runctl)").into())
+        }
+    }
+}
+
+fn parse_transition_atom(value: &str) -> Result<Vec<TransitionOp>, Box<dyn Error>> {
+    let normalized = value.trim().to_ascii_lowercase();
+    let ops = match normalized.as_str() {
+        "runctl0" | "rc0" => vec![TransitionOp::RunControlZero],
+        "runctl1" | "rc1" => vec![TransitionOp::RunControlOne],
+        "doorbell" | "bell" => vec![TransitionOp::Doorbell],
+        "pulse01" | "toggle01" | "rc0rc1" => {
+            vec![TransitionOp::RunControlZero, TransitionOp::RunControlOne]
+        }
+        "pulse10" | "toggle10" | "rc1rc0" => {
+            vec![TransitionOp::RunControlOne, TransitionOp::RunControlZero]
+        }
+        "kick" => vec![TransitionOp::Doorbell, TransitionOp::RunControlOne],
+        "resetkick" => vec![
+            TransitionOp::RunControlZero,
+            TransitionOp::Doorbell,
+            TransitionOp::RunControlOne,
+        ],
+        "kickreset" => vec![
+            TransitionOp::RunControlOne,
+            TransitionOp::Doorbell,
+            TransitionOp::RunControlZero,
+        ],
+        _ => {
+            return Err(format!(
+                "invalid transition op/alias: {value} (expected runctl0|runctl1|doorbell|pulse01|pulse10|kick|resetkick)"
+            )
+            .into())
+        }
+    };
+    Ok(ops)
+}
+
+fn parse_transition_sequence(value: &str) -> Result<Vec<TransitionOp>, Box<dyn Error>> {
+    if value.trim().is_empty() {
+        return Err("--transition-sequence cannot be empty".into());
+    }
+    let mut out = Vec::new();
+    for part in value.split(',') {
+        for atom in part.split('+') {
+            let atom = atom.trim();
+            if atom.is_empty() {
+                return Err("--transition-sequence has an empty token".into());
+            }
+            out.extend(parse_transition_atom(atom)?);
+        }
+    }
+    if out.is_empty() {
+        return Err("--transition-sequence cannot be empty".into());
+    }
+    Ok(out)
+}
+
+fn format_transition_sequence(sequence: &[TransitionOp]) -> String {
+    if sequence.is_empty() {
+        "none".to_string()
+    } else {
+        sequence
+            .iter()
+            .map(|op| op.as_str())
+            .collect::<Vec<_>>()
+            .join(">")
     }
 }
 
@@ -165,6 +260,8 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         skip_setup: false,
         inject_runcontrol0_chunks: Vec::new(),
         inject_runcontrol1_chunks: Vec::new(),
+        transition_chunks: Vec::new(),
+        transition_sequence: Vec::new(),
         glitch_mode: GlitchMode::Mixed,
     };
 
@@ -177,7 +274,8 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
             }
             "--firmware" => {
                 i += 1;
-                cfg.firmware_path = Some(args.get(i).ok_or("--firmware requires value")?.to_string());
+                cfg.firmware_path =
+                    Some(args.get(i).ok_or("--firmware requires value")?.to_string());
             }
             "--timeout-ms" => {
                 i += 1;
@@ -185,8 +283,10 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
             }
             "--descriptor-chunk-size" => {
                 i += 1;
-                cfg.descriptor_chunk_size =
-                    parse_usize_auto(args.get(i).ok_or("--descriptor-chunk-size requires value")?)?;
+                cfg.descriptor_chunk_size = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--descriptor-chunk-size requires value")?,
+                )?;
             }
             "--param-stream-chunk-size" => {
                 i += 1;
@@ -206,10 +306,8 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
             }
             "--glitch-every-chunks" => {
                 i += 1;
-                cfg.glitch_every_chunks = parse_usize_auto(
-                    args.get(i)
-                        .ok_or("--glitch-every-chunks requires value")?,
-                )?;
+                cfg.glitch_every_chunks =
+                    parse_usize_auto(args.get(i).ok_or("--glitch-every-chunks requires value")?)?;
             }
             "--glitch-budget" => {
                 i += 1;
@@ -219,22 +317,39 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
             "--aggressive" => cfg.aggressive = true,
             "--input-bytes" => {
                 i += 1;
-                cfg.input_bytes = parse_usize_auto(args.get(i).ok_or("--input-bytes requires value")?)?;
+                cfg.input_bytes =
+                    parse_usize_auto(args.get(i).ok_or("--input-bytes requires value")?)?;
             }
             "--output-bytes" => {
                 i += 1;
-                cfg.output_bytes = parse_usize_auto(args.get(i).ok_or("--output-bytes requires value")?)?;
+                cfg.output_bytes =
+                    parse_usize_auto(args.get(i).ok_or("--output-bytes requires value")?)?;
             }
             "--skip-setup" => cfg.skip_setup = true,
             "--inject-runcontrol0-at" => {
                 i += 1;
-                cfg.inject_runcontrol0_chunks =
-                    parse_usize_list(args.get(i).ok_or("--inject-runcontrol0-at requires value")?)?;
+                cfg.inject_runcontrol0_chunks = parse_usize_list(
+                    args.get(i)
+                        .ok_or("--inject-runcontrol0-at requires value")?,
+                )?;
             }
             "--inject-runcontrol1-at" => {
                 i += 1;
-                cfg.inject_runcontrol1_chunks =
-                    parse_usize_list(args.get(i).ok_or("--inject-runcontrol1-at requires value")?)?;
+                cfg.inject_runcontrol1_chunks = parse_usize_list(
+                    args.get(i)
+                        .ok_or("--inject-runcontrol1-at requires value")?,
+                )?;
+            }
+            "--transition-chunks" => {
+                i += 1;
+                cfg.transition_chunks =
+                    parse_usize_list(args.get(i).ok_or("--transition-chunks requires value")?)?;
+            }
+            "--transition-sequence" => {
+                i += 1;
+                cfg.transition_sequence = parse_transition_sequence(
+                    args.get(i).ok_or("--transition-sequence requires value")?,
+                )?;
             }
             "--glitch-mode" => {
                 i += 1;
@@ -255,6 +370,11 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         || cfg.glitch_every_chunks == 0
     {
         return Err("chunk/bytes/glitch values must be non-zero".into());
+    }
+    if cfg.transition_chunks.is_empty() != cfg.transition_sequence.is_empty() {
+        return Err(
+            "--transition-chunks and --transition-sequence must be provided together".into(),
+        );
     }
     Ok(cfg)
 }
@@ -346,10 +466,12 @@ fn apply_glitch(
             Ok(v) => println!("  glitch[{idx}] ReadRunControl => 0x{v:016x}"),
             Err(e) => println!("  glitch[{idx}] ReadRunControl => err: {e}"),
         },
-        GlitchAction::WriteRunControlOne => match driver.vendor_write64(0x00044018, 1) {
-            Ok(_) => println!("  glitch[{idx}] WriteRunControlOne => ok"),
-            Err(e) => println!("  glitch[{idx}] WriteRunControlOne => err: {e}"),
-        },
+        GlitchAction::WriteRunControlOne => {
+            match driver.vendor_write64(SCALAR_CORE_RUN_CONTROL_OFFSET, 1) {
+                Ok(_) => println!("  glitch[{idx}] WriteRunControlOne => ok"),
+                Err(e) => println!("  glitch[{idx}] WriteRunControlOne => err: {e}"),
+            }
+        }
         GlitchAction::ReadScuCtrl => match driver.vendor_read32(0x0001a30c) {
             Ok(v) => println!("  glitch[{idx}] ReadScuCtrl => 0x{v:08x}"),
             Err(e) => println!("  glitch[{idx}] ReadScuCtrl => err: {e}"),
@@ -359,27 +481,97 @@ fn apply_glitch(
             std::thread::sleep(Duration::from_micros(us));
             println!("  glitch[{idx}] SleepJitter => {us}us");
         }
-        GlitchAction::WriteRunControlZero => match driver.vendor_write64(0x00044018, 0) {
-            Ok(_) => println!("  glitch[{idx}] WriteRunControlZero => ok"),
-            Err(e) => println!("  glitch[{idx}] WriteRunControlZero => err: {e}"),
-        },
+        GlitchAction::WriteRunControlZero => {
+            match driver.vendor_write64(SCALAR_CORE_RUN_CONTROL_OFFSET, 0) {
+                Ok(_) => println!("  glitch[{idx}] WriteRunControlZero => ok"),
+                Err(e) => println!("  glitch[{idx}] WriteRunControlZero => err: {e}"),
+            }
+        }
+    }
+}
+
+fn apply_transition_sequence(
+    driver: &EdgeTpuUsbDriver,
+    sequence: &[TransitionOp],
+    chunk_idx: usize,
+    chunk_offset: usize,
+    chunk_end: usize,
+) {
+    println!(
+        "  transition chunk={chunk_idx} offset={} end={} ops={}",
+        chunk_offset,
+        chunk_end,
+        format_transition_sequence(sequence)
+    );
+    for (step_idx, op) in sequence.iter().copied().enumerate() {
+        match op {
+            TransitionOp::RunControlZero => {
+                match driver.vendor_write64(SCALAR_CORE_RUN_CONTROL_OFFSET, 0) {
+                    Ok(_) => println!(
+                        "  transition[{chunk_idx}:{step_idx}] runctl0 reg=0x{SCALAR_CORE_RUN_CONTROL_OFFSET:08x} val=0x0000000000000000 => ok"
+                    ),
+                    Err(e) => println!(
+                        "  transition[{chunk_idx}:{step_idx}] runctl0 reg=0x{SCALAR_CORE_RUN_CONTROL_OFFSET:08x} val=0x0000000000000000 => err: {e}"
+                    ),
+                }
+            }
+            TransitionOp::RunControlOne => {
+                match driver.vendor_write64(SCALAR_CORE_RUN_CONTROL_OFFSET, 1) {
+                    Ok(_) => println!(
+                        "  transition[{chunk_idx}:{step_idx}] runctl1 reg=0x{SCALAR_CORE_RUN_CONTROL_OFFSET:08x} val=0x0000000000000001 => ok"
+                    ),
+                    Err(e) => println!(
+                        "  transition[{chunk_idx}:{step_idx}] runctl1 reg=0x{SCALAR_CORE_RUN_CONTROL_OFFSET:08x} val=0x0000000000000001 => err: {e}"
+                    ),
+                }
+            }
+            TransitionOp::Doorbell => {
+                let doorbell_value = chunk_end as u64;
+                match driver.vendor_write64(PARAM_QUEUE_TAIL_OFFSET, doorbell_value) {
+                    Ok(_) => println!(
+                        "  transition[{chunk_idx}:{step_idx}] doorbell reg=0x{PARAM_QUEUE_TAIL_OFFSET:08x} val=0x{doorbell_value:016x} => ok"
+                    ),
+                    Err(e) => println!(
+                        "  transition[{chunk_idx}:{step_idx}] doorbell reg=0x{PARAM_QUEUE_TAIL_OFFSET:08x} val=0x{doorbell_value:016x} => err: {e}"
+                    ),
+                }
+            }
+        }
     }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let cfg = parse_args()?;
-    println!(
-        "Fuzz config: seed={} aggressive={} glitch_mode={:?} glitch_every_chunks={} glitch_budget={} param_max_bytes={} param_stream_chunk_size={} inject_rc0={:?} inject_rc1={:?}",
-        cfg.seed,
-        cfg.aggressive,
-        cfg.glitch_mode,
-        cfg.glitch_every_chunks,
-        cfg.glitch_budget,
-        cfg.param_max_bytes,
-        cfg.param_stream_chunk_size,
-        cfg.inject_runcontrol0_chunks,
-        cfg.inject_runcontrol1_chunks
-    );
+    if cfg.transition_chunks.is_empty() {
+        println!(
+            "Fuzz config: seed={} aggressive={} glitch_mode={:?} glitch_every_chunks={} glitch_budget={} param_max_bytes={} param_stream_chunk_size={} inject_rc0={:?} inject_rc1={:?}",
+            cfg.seed,
+            cfg.aggressive,
+            cfg.glitch_mode,
+            cfg.glitch_every_chunks,
+            cfg.glitch_budget,
+            cfg.param_max_bytes,
+            cfg.param_stream_chunk_size,
+            cfg.inject_runcontrol0_chunks,
+            cfg.inject_runcontrol1_chunks
+        );
+    } else {
+        let transition_sequence_text = format_transition_sequence(&cfg.transition_sequence);
+        println!(
+            "Fuzz config: seed={} aggressive={} glitch_mode={:?} glitch_every_chunks={} glitch_budget={} param_max_bytes={} param_stream_chunk_size={} inject_rc0={:?} inject_rc1={:?} transition_chunks={:?} transition_seq={}",
+            cfg.seed,
+            cfg.aggressive,
+            cfg.glitch_mode,
+            cfg.glitch_every_chunks,
+            cfg.glitch_budget,
+            cfg.param_max_bytes,
+            cfg.param_stream_chunk_size,
+            cfg.inject_runcontrol0_chunks,
+            cfg.inject_runcontrol1_chunks,
+            cfg.transition_chunks,
+            transition_sequence_text
+        );
+    }
 
     let model_bytes = std::fs::read(&cfg.model_path)?;
     let executables = extract_serialized_executables_from_tflite(&model_bytes)?;
@@ -464,32 +656,29 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut chunk_idx = 0usize;
     let mut glitches = 0usize;
     while offset < stream_len {
+        let end = (offset + cfg.param_stream_chunk_size).min(stream_len);
+        let chunk = &param_exe.parameters_stream[offset..end];
+
         if cfg.inject_runcontrol0_chunks.contains(&chunk_idx) {
-            match driver.vendor_write64(0x00044018, 0) {
+            match driver.vendor_write64(SCALAR_CORE_RUN_CONTROL_OFFSET, 0) {
                 Ok(_) => println!("  inject chunk={chunk_idx} rc0 => ok"),
                 Err(e) => println!("  inject chunk={chunk_idx} rc0 => err: {e}"),
             }
         }
         if cfg.inject_runcontrol1_chunks.contains(&chunk_idx) {
-            match driver.vendor_write64(0x00044018, 1) {
+            match driver.vendor_write64(SCALAR_CORE_RUN_CONTROL_OFFSET, 1) {
                 Ok(_) => println!("  inject chunk={chunk_idx} rc1 => ok"),
                 Err(e) => println!("  inject chunk={chunk_idx} rc1 => err: {e}"),
             }
         }
 
         if glitches < cfg.glitch_budget && chunk_idx % cfg.glitch_every_chunks == 0 {
-            apply_glitch(
-                &driver,
-                &mut rng,
-                cfg.aggressive,
-                cfg.glitch_mode,
-                glitches,
-            );
+            apply_glitch(&driver, &mut rng, cfg.aggressive, cfg.glitch_mode, glitches);
             glitches += 1;
         }
-
-        let end = (offset + cfg.param_stream_chunk_size).min(stream_len);
-        let chunk = &param_exe.parameters_stream[offset..end];
+        if cfg.transition_chunks.contains(&chunk_idx) {
+            apply_transition_sequence(&driver, &cfg.transition_sequence, chunk_idx, offset, end);
+        }
         if let Err(err) = driver.write_bulk_out_chunk(chunk) {
             println!(
                 "FUZZ_RESULT stall offset={} chunk_idx={} glitches={} err={}",
@@ -536,7 +725,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     match driver.read_output_bytes(cfg.output_bytes) {
         Ok(output) => {
             let head_len = output.len().min(16);
-            println!("Run output bytes={} head={:02x?}", output.len(), &output[..head_len]);
+            println!(
+                "Run output bytes={} head={:02x?}",
+                output.len(),
+                &output[..head_len]
+            );
         }
         Err(err) => println!("Run output read failed: {err}"),
     }

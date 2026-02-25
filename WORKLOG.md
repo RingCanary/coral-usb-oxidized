@@ -2333,3 +2333,61 @@ Runtime-device usbmon (filtered) highlights:
 usbmon confirms that higher glitch pressure reduces the number of accepted
 1024-byte parameter chunks before stall, matching the earlier software-observed
 offset shifts.
+
+### 2026-02-25 - Deterministic runcontrol/doorbell sweeps vs known-good invoke (Pi5)
+
+#### Objective
+
+Run deterministic transition sweeps at fixed class-2 chunk boundaries and compare
+usbmon behavior side-by-side against a known-good `libedgetpu` invoke.
+
+#### Capture root
+
+- `traces/usbmon-transition-fixed-20260225T082936Z-bus4`
+
+Manifest:
+- `traces/usbmon-transition-fixed-20260225T082936Z-bus4/manifest.tsv`
+
+#### Cases
+
+Known-good (`inference_benchmark`, template model):
+1. `libedgetpu_known_good/pre` -> `exit=0`
+2. `libedgetpu_known_good/post` -> `exit=0`
+
+Deterministic replay (`rusb_param_glitch_fuzz`, `--transition-sequence resetkick`):
+1. `resetkick_chunk32`
+2. `resetkick_chunk40`
+3. `resetkick_chunk47`
+
+#### Results
+
+From case runner logs:
+1. `resetkick_chunk32`:
+   - transition writes (`runctl0 -> doorbell -> runctl1`) all `ok`
+   - `FUZZ_RESULT stall offset=49152 chunk_idx=48`
+2. `resetkick_chunk40`:
+   - transition writes all timeout (`USB error: Operation timed out`)
+   - `FUZZ_RESULT stall offset=40960 chunk_idx=40`
+3. `resetkick_chunk47`:
+   - transition writes all timeout (`USB error: Operation timed out`)
+   - `FUZZ_RESULT stall offset=48128 chunk_idx=47`
+
+usbmon/phase summaries (`device=003` runtime lane):
+1. known-good post:
+   - `bulk_complete_sizes.Bo={"1048576":4,"9872":4,"2048":4,"8":10}`
+   - `bulk_complete_sizes.Bi={"1024":8,"16":5}`
+2. resetkick sweep runs:
+   - `chunk32`: `Bo 1024` completes = `48`
+   - `chunk40`: `Bo 1024` completes = `40`
+   - `chunk47`: `Bo 1024` completes = `47`
+   - no successful `Bi` output completions
+
+#### Interpretation
+
+1. Injecting `resetkick` early (`chunk32`) does not move the wall; behavior
+   matches baseline (`~49 KiB` class-2 admission).
+2. Injecting at/near the wall (`chunk40`, `chunk47`) causes transition CSR writes
+   themselves to time out and pulls effective admission earlier (`40 KiB`, `47 KiB`).
+3. Compared to known-good `libedgetpu`, replay remains trapped in a class-2 ingest
+   regime with no output path completion, reinforcing the missing-state-transition
+   hypothesis.

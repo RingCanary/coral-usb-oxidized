@@ -171,16 +171,117 @@ parameter slices (descriptor class 2) as part of known-good flows. This argues
 against a hard protocol limit at `0xC000` and supports the view that our replay
 state machine is missing a required control transition.
 
+## Side-by-side usbmon automation (2026-02-25)
+
+To capture both replay and known-good paths in one run root, use:
+
+```bash
+./tools/usbmon_side_by_side_capture.sh --bus <BUS>
+```
+
+This runs:
+1. pure-`rusb` deterministic sweep:
+   - `cargo run --example rusb_serialized_exec_replay -- ... --parameters-tag <tag>`
+   - default tags: `2,0,1,3,4`
+2. known-good `libedgetpu` invoke:
+   - `cargo run --example inference_benchmark -- <model> <runs> <warmup>`
+
+Useful overrides:
+
+```bash
+./tools/usbmon_side_by_side_capture.sh \
+  --bus <BUS> \
+  --rusb-model templates/dense_2048x2048_quant_edgetpu.tflite \
+  --libedgetpu-model templates/dense_2048x2048_quant_edgetpu.tflite \
+  --rusb-tags 2,0,1,3,4 \
+  --libedgetpu-runs 20 \
+  --libedgetpu-warmup 5
+```
+
+Expected outputs:
+1. root: `traces/usbmon-side-by-side-<timestamp>-bus<BUS>/`
+2. replay lane:
+   - `pure_rusb_deterministic_sweep/tag<descriptor_tag>/usbmon-bus<BUS>-*.log`
+3. known-good lane:
+   - `libedgetpu_known_good_invoke/inference/usbmon-bus<BUS>-*.log`
+4. summary artifacts:
+   - `capture_manifest.tsv` (exit codes + paths + commands)
+   - `README.txt` (config snapshot)
+
+Expected status pattern:
+1. `tag2` often reproduces class-2 stall behavior.
+2. `tag3`/`tag4` usually avoid immediate bulk timeout.
+3. `libedgetpu_known_good_invoke/inference` should be exit `0` when delegate
+   and invoke are healthy.
+
+## Deterministic transition sweep (runcontrol/doorbell) vs known-good
+
+Capture root:
+- `traces/usbmon-transition-fixed-20260225T082936Z-bus4`
+
+Matrix:
+1. known-good pre invoke (`libedgetpu` path, `inference_benchmark`)
+2. deterministic replay sweeps (`rusb_param_glitch_fuzz`) with:
+   - `--transition-sequence resetkick` (`runctl0 -> doorbell -> runctl1`)
+   - `--transition-chunks 32`, `40`, `47`
+3. known-good post invoke
+
+Command shape for deterministic cases:
+
+```bash
+sudo ./tools/usbmon_capture.sh -b 4 -o <case_dir> -- \
+  cargo run --example rusb_param_glitch_fuzz -- \
+    --model templates/dense_2048x2048_quant_edgetpu.tflite \
+    --firmware ./apex_latest_single_ep.bin \
+    --param-max-bytes 65536 \
+    --param-stream-chunk-size 1024 \
+    --glitch-budget 0 \
+    --glitch-every-chunks 999999 \
+    --glitch-mode readonly \
+    --transition-chunks <chunk_idx> \
+    --transition-sequence resetkick \
+    --input-bytes 2048 \
+    --output-bytes 2048
+```
+
+Observed deterministic outcomes:
+1. `resetkick_chunk32`:
+   - transition writes all `ok`
+   - `FUZZ_RESULT stall offset=49152 chunk_idx=48`
+2. `resetkick_chunk40`:
+   - transition writes timeout (`runctl0`, `doorbell`, `runctl1`)
+   - `FUZZ_RESULT stall offset=40960 chunk_idx=40`
+3. `resetkick_chunk47`:
+   - transition writes timeout
+   - `FUZZ_RESULT stall offset=48128 chunk_idx=47`
+
+usbmon comparison (`device=003` runtime lane):
+1. known-good post:
+   - `bulk_complete_sizes.Bo={"1048576":4,"9872":4,"2048":4,"8":10}`
+   - `bulk_complete_sizes.Bi={"1024":8,"16":5}`
+2. deterministic sweeps:
+   - `chunk32`: `Bo 1024` completions `48`
+   - `chunk40`: `Bo 1024` completions `40`
+   - `chunk47`: `Bo 1024` completions `47`
+   - no successful output-path `Bi` completions
+
+Interpretation:
+1. Early transition injection (`chunk32`) does not alter the baseline class-2 wall.
+2. Near-wall transitions (`chunk40`, `chunk47`) fail at CSR write time and shift
+   the admission cliff earlier.
+3. This is consistent with a runcontrol/queue-state coupling issue, not a fixed
+   static payload-size limit.
+
 ## Practical next debug steps
 
 1. Instrument runcontrol/doorbell CSR state immediately before and after each
    descriptor class submission to correlate queue-pressure and timeout offset.
 2. Add endpoint drain checks (`0x82`, `0x83`) during large parameter streaming
    to detect required host-ack behavior.
-3. Capture usbmon on Pi5 for:
+3. Use `tools/usbmon_side_by_side_capture.sh` on Pi5 to collect:
    - known-good `libedgetpu` invoke
-   - Rust replay (`tag 2` timeout case)
-   and diff packet ordering/size cadence.
+   - Rust replay sweep including `tag2` timeout case
+   then diff packet ordering/size cadence between lanes.
 4. Probe descriptor scheduling permutations:
    - interleave param chunks with event reads,
    - split PARAMETER_CACHING into smaller phased submissions,
