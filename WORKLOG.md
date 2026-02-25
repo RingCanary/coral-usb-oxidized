@@ -2205,3 +2205,28 @@ The observed wall is a runtime admission/backpressure condition in our current
 state machine, not a simple host chunking issue. The dominant hypothesis is now
 missing runcontrol/doorbell/queue state transitions required before class-2
 payload consumption.
+
+#### Poison-state validation
+
+Follow-up sequence on Pi5:
+1. Trigger class-2 failure (`descriptor tag=2 ... timeout at ~0xC000`).
+2. Immediately run `rusb_control_plane_probe` against runtime device.
+
+Observed after failure:
+- `VENDOR_READ32 0x0001a30c` => timeout
+- `VENDOR_READ64 0x00044018` => timeout
+- `VENDOR_WRITE64 0x00044018=1` => timeout
+- `EVENT[0]` and `INTERRUPT[0]` => timeout
+
+Control comparison:
+1. Clean power cycle.
+2. Run replay with `--skip-param-preload` (successful invoke).
+3. Probe same registers.
+
+Observed in healthy runtime:
+- `VENDOR_READ32 0x0001a30c => 0x000f0059`
+- `VENDOR_READ64 0x00044018 => 0x0`
+
+Implication:
+- class-2 stall transitions device into a deep non-responsive runtime state,
+  not just a transient bulk queue backpressure condition.

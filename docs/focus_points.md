@@ -49,6 +49,9 @@ change should map to one (or more) of these points.
   segmentation do not remove the `~0xC000` cumulative ingress wall for class-2.
   This now strongly suggests missing runcontrol/doorbell queue-state transitions
   rather than transport framing bugs.
+  Additional confirmation:
+  after class-2 stall, control-plane CSR read/write probes time out (poisoned
+  runtime), while the same probes succeed after healthy skip-param invokes.
 - Success signal:
   A Rust example that runs one known template end-to-end and returns valid output
   without `libedgetpu`.

@@ -107,6 +107,17 @@ Observed on Pi5 (clean power-cycled start each run):
 5. Capping at exactly `49152` allows the write phase to end, but no bootstrap
    completion event is observed and subsequent writes time out.
 
+### Runtime poison behavior after class-2 stall
+
+Immediately after a `tag=2` stall (~`0xC000` bytes), control plane becomes
+non-responsive:
+- CSR reads (`0x1a30c`, `0x44018`) timeout,
+- CSR writes (`0x44018`) timeout,
+- event (`0x82`) and interrupt (`0x83`) reads timeout.
+
+Control comparison after healthy invoke (`--skip-param-preload`) shows CSR reads
+working normally in runtime mode, so this is a stall-induced poison state.
+
 Interpretation update:
 - The failure behaves like a queue-admission/backpressure stall in current
   runcontrol/runtime state.
