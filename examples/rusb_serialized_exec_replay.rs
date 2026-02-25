@@ -58,6 +58,9 @@ struct Config {
     param_async_interrupt_lanes: usize,
     param_async_timeout_ms: u64,
     param_gate_known_good_offsets: Vec<usize>,
+    param_gate_window_start_bytes: Option<usize>,
+    param_gate_window_end_bytes: Option<usize>,
+    param_gate_window_step_bytes: Option<usize>,
     param_submit_bulk_in_lanes: usize,
     param_submit_event_lanes: usize,
     param_submit_interrupt_lanes: usize,
@@ -159,6 +162,15 @@ fn usage(program: &str) {
     );
     println!(
         "  --param-gate-known-good-offsets LIST  Pause stream at byte offsets and inject known-good control gate (comma-separated, e.g. 32768,40960)"
+    );
+    println!(
+        "  --param-gate-window-start-bytes N  Start byte offset for repeated known-good gate injection"
+    );
+    println!(
+        "  --param-gate-window-end-bytes N    End byte offset (exclusive) for repeated known-good gate injection"
+    );
+    println!(
+        "  --param-gate-window-step-bytes N   Step bytes between repeated known-good gate injections"
     );
     println!(
         "  --param-submit-bulk-in-lanes N  libusb_submit_transfer lanes on EP 0x81 (default: 0)"
@@ -310,6 +322,9 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         param_async_interrupt_lanes: 0,
         param_async_timeout_ms: 100,
         param_gate_known_good_offsets: Vec::new(),
+        param_gate_window_start_bytes: None,
+        param_gate_window_end_bytes: None,
+        param_gate_window_step_bytes: None,
         param_submit_bulk_in_lanes: 0,
         param_submit_event_lanes: 0,
         param_submit_interrupt_lanes: 0,
@@ -547,6 +562,27 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                         .ok_or("--param-gate-known-good-offsets requires value")?,
                 )?;
             }
+            "--param-gate-window-start-bytes" => {
+                i += 1;
+                config.param_gate_window_start_bytes = Some(parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-gate-window-start-bytes requires value")?,
+                )?);
+            }
+            "--param-gate-window-end-bytes" => {
+                i += 1;
+                config.param_gate_window_end_bytes = Some(parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-gate-window-end-bytes requires value")?,
+                )?);
+            }
+            "--param-gate-window-step-bytes" => {
+                i += 1;
+                config.param_gate_window_step_bytes = Some(parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-gate-window-step-bytes requires value")?,
+                )?);
+            }
             "--param-submit-bulk-in-lanes" => {
                 i += 1;
                 config.param_submit_bulk_in_lanes = parse_usize_auto(
@@ -664,6 +700,29 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
     }
     if config.param_submit_event_poll_ms == 0 {
         return Err("--param-submit-event-poll-ms must be >= 1".into());
+    }
+    let has_window_gate_config = config.param_gate_window_start_bytes.is_some()
+        || config.param_gate_window_end_bytes.is_some()
+        || config.param_gate_window_step_bytes.is_some();
+    if has_window_gate_config {
+        let start = config.param_gate_window_start_bytes.ok_or(
+            "--param-gate-window-start-bytes is required when using param-gate-window controls",
+        )?;
+        let end = config.param_gate_window_end_bytes.ok_or(
+            "--param-gate-window-end-bytes is required when using param-gate-window controls",
+        )?;
+        let step = config.param_gate_window_step_bytes.ok_or(
+            "--param-gate-window-step-bytes is required when using param-gate-window controls",
+        )?;
+        if start >= end {
+            return Err(format!(
+                "--param-gate-window-start-bytes ({start}) must be < --param-gate-window-end-bytes ({end})"
+            )
+            .into());
+        }
+        if step == 0 {
+            return Err("--param-gate-window-step-bytes must be >= 1".into());
+        }
     }
     if has_param_async_lanes(&config) && has_param_submit_lanes(&config) {
         return Err(
@@ -994,6 +1053,9 @@ fn has_param_async_lanes(config: &Config) -> bool {
 
 fn has_param_known_good_gates(config: &Config) -> bool {
     !config.param_gate_known_good_offsets.is_empty()
+        || (config.param_gate_window_start_bytes.is_some()
+            && config.param_gate_window_end_bytes.is_some()
+            && config.param_gate_window_step_bytes.is_some())
 }
 
 fn has_param_submit_lanes(config: &Config) -> bool {
@@ -1474,6 +1536,16 @@ fn stream_parameter_chunks(
     let mut param_bytes_written = 0usize;
     let mut gate_cursor = 0usize;
     let gate_offsets = &config.param_gate_known_good_offsets;
+    let window_gate = match (
+        config.param_gate_window_start_bytes,
+        config.param_gate_window_end_bytes,
+        config.param_gate_window_step_bytes,
+    ) {
+        (Some(start), Some(end), Some(step)) if start < end && step > 0 => Some((start, end, step)),
+        _ => None,
+    };
+    let mut next_window_gate_offset = window_gate.map(|(start, _, _)| start);
+    let mut window_gate_count = 0usize;
     while global_offset < stream_len {
         let descriptor_end = (global_offset + descriptor_split_size).min(stream_len);
         let descriptor_len = if descriptor_idx == 0 {
@@ -1495,6 +1567,27 @@ fn stream_parameter_chunks(
                     gate_offsets[gate_cursor],
                 )?;
                 gate_cursor += 1;
+            }
+            while let (Some((_, window_end, window_step)), Some(gate_offset)) =
+                (window_gate, next_window_gate_offset)
+            {
+                if param_bytes_written < gate_offset {
+                    break;
+                }
+                run_known_good_param_gate(
+                    driver,
+                    config,
+                    phase_label,
+                    gate_offsets.len() + window_gate_count + 1,
+                    gate_offset,
+                )?;
+                window_gate_count += 1;
+                let next = gate_offset.saturating_add(window_step);
+                if next >= window_end {
+                    next_window_gate_offset = None;
+                } else {
+                    next_window_gate_offset = Some(next);
+                }
             }
             let end = (descriptor_offset + stream_chunk_size).min(descriptor_end);
             let chunk = &payload[descriptor_offset..end];
@@ -1735,7 +1828,7 @@ fn send_parameter_payload(
     let interrupt_poll_timeout = Duration::from_millis(config.param_interrupt_timeout_ms);
 
     println!(
-        "    {}: streaming parameters len={} header_len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
+        "    {}: streaming parameters len={} header_len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={}",
         phase_label,
         stream_len,
         header_total_len,
@@ -1749,6 +1842,9 @@ fn send_parameter_payload(
         config.param_a0d8_handshake,
         config.param_a0d8_write_value,
         config.param_gate_known_good_offsets,
+        config.param_gate_window_start_bytes,
+        config.param_gate_window_end_bytes,
+        config.param_gate_window_step_bytes,
         config.param_prepost_bulk_in_reads,
         config.param_prepost_bulk_in_size,
         config.param_prepost_event_reads,
@@ -1831,7 +1927,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         || has_param_known_good_gates(&config)
     {
         println!(
-            "Parameter stream controls: chunk={:?} max_bytes={:?} force_full_header_len={} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} require_post_instr_event={} post_instr_event_timeout_ms={}",
+            "Parameter stream controls: chunk={:?} max_bytes={:?} force_full_header_len={} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} require_post_instr_event={} post_instr_event_timeout_ms={}",
             config.param_stream_chunk_size,
             config.param_stream_max_bytes,
             config.param_force_full_header_len,
@@ -1845,6 +1941,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.param_a0d8_handshake,
             config.param_a0d8_write_value,
             config.param_gate_known_good_offsets,
+            config.param_gate_window_start_bytes,
+            config.param_gate_window_end_bytes,
+            config.param_gate_window_step_bytes,
             config.param_prepost_bulk_in_reads,
             config.param_prepost_bulk_in_size,
             config.param_prepost_event_reads,

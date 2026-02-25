@@ -517,6 +517,46 @@ Interpretation:
 1. reset-before-claim is not sufficient to unlock class-2 admission.
 2. keep this mode diagnostic-only on Pi5.
 
+### Deterministic gate-window sweep (new)
+
+Replay now supports repeated near-wall control cadence:
+1. `--param-gate-window-start-bytes`
+2. `--param-gate-window-end-bytes`
+3. `--param-gate-window-step-bytes`
+
+Semantics:
+1. once cumulative parameter bytes reach `start`,
+2. inject the full known-good gate sequence every `step` bytes until `end`.
+
+Pi5 reboot-isolated outcomes:
+1. baseline (`no window`): stall at `49152`.
+2. window `32768..49152 step 1024`:
+   - gate `32768` succeeds,
+   - gate `33792` fails on `a0d4` read timeout.
+3. same window + `--param-write-sleep-us 100`:
+   - unchanged (`33792` gate read timeout).
+4. earlier window `24576..49152 step 1024`:
+   - gates `24576..32768` all succeed,
+   - first failure still at `33792`.
+
+Interpretation:
+1. control collapse is anchored to absolute byte offset (`33792`), not gate count.
+2. additional replayed control cadence does not shift the wall.
+
+### Window-gated usbmon parity check
+
+Capture:
+1. `traces/usbmon-window-gate-20260225T133858Z-bus4/usbmon-bus4-20260225T133858Z.log`
+
+Probe against known-good (`threshold=33792`):
+1. near-anchor control tuples are no longer missing in bad (none-only sets empty).
+2. replay still fails immediately at next `a0d4` read on `33792`.
+
+Implication:
+1. tuple presence parity is insufficient.
+2. remaining blocker is temporal/ordering state progression (queue/ack timing),
+   not static control write content.
+
 ## Practical next debug steps
 
 1. Instrument runcontrol/doorbell CSR state immediately before and after each

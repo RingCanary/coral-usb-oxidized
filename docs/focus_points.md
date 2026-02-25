@@ -56,6 +56,11 @@ change should map to one (or more) of these points.
   known-good-first (`libedgetpu`) then replay (`tag=2`) reproduces the same
   near-anchor tuple gap (`a0d8/a33c/a500/a558/a600/a658` only in good) while
   replay still stalls at `49152`.
+  New deterministic gate-window sweep:
+  replay can now inject repeated known-good control gates every `1 KiB` in a
+  byte window, and this closes tuple-level near-anchor diff; however, failure
+  remains pinned at `33792` (`a0d4` read timeout). This narrows the blocker to
+  timing/state progression semantics, not missing tuple content.
   Parity reset probe (`--reset-before-claim`) did not move the wall and is
   unstable across consecutive Pi5 runs (can trigger xHCI enumerate `error -62`);
   keep diagnostic-only.

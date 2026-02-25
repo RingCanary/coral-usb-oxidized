@@ -2788,3 +2788,71 @@ Interpretation:
 1. this parity reset is not sufficient to break class-2 admission wall.
 2. on Pi5, aggressive runtime reset/reopen is unstable across consecutive runs
    and can poison host USB state; keep this flag diagnostic-only.
+
+### 2026-02-25 - Deterministic near-wall gate window sweep (`33792` hard cliff)
+
+#### Implementation
+
+Added repeated known-good gate window controls in
+`examples/rusb_serialized_exec_replay.rs`:
+1. `--param-gate-window-start-bytes`
+2. `--param-gate-window-end-bytes`
+3. `--param-gate-window-step-bytes`
+
+Behavior:
+1. during parameter stream, once cumulative bytes reach `start`,
+2. inject known-good gate sequence every `step` bytes until `end`:
+   - `a0d4/a704/a33c` read/write
+   - `a500/a600/a558/a658` writes
+   - `a0d8` read/write
+
+#### Pi5 reboot-isolated runs
+
+Common settings:
+1. `tag=2`, `chunk=1024`, `max=65536`, submit lanes `1/1/1`,
+2. `setup-include-reads`, firmware path provided.
+
+Baseline:
+1. stalls at `offset=49152` (`chunk 48`).
+
+Window case A (`start=32768,end=49152,step=1024`):
+1. gate at `32768` succeeds fully,
+2. gate at `33792` fails immediately on `a0d4` read timeout.
+
+Window case B (same as A + `--param-write-sleep-us 100`):
+1. identical outcome:
+   - `32768` gate succeeds,
+   - `33792` gate fails on `a0d4` read timeout.
+
+Window case C (`start=24576,end=49152,step=1024`):
+1. gates at `24576..32768` all succeed (`#1..#9`),
+2. first failure remains exactly at `33792` (`gate #10`, `a0d4` read timeout).
+
+#### New high-signal interpretation
+
+1. Failure boundary is anchored to absolute cumulative parameter bytes
+   (`33792`), not to number of control injections.
+2. Replaying more control tuples does not move the boundary.
+3. This strengthens the hypothesis that the missing condition is not tuple
+   presence but state progression timing (host/device scheduling/ack semantics).
+
+#### New artifact
+
+Window-gated usbmon capture:
+1. `traces/usbmon-window-gate-20260225T133858Z-bus4/usbmon-bus4-20260225T133858Z.log`
+2. `traces/usbmon-window-gate-20260225T133858Z-bus4/usbmon-bus4-20260225T133858Z.summary.txt`
+
+#### Probe result against known-good
+
+Using:
+1. good: `traces/usbmon-goodfirst-20260225T132821Z/good_libedgetpu/usbmon-bus4-20260225T132821Z.log`
+2. bad: window-gated capture above
+3. `tools/usbmon_param_handshake_probe.py --threshold 33792 --context 40`
+
+Observed:
+1. near-anchor control tuples are no longer “missing in bad” (none-only sets),
+2. yet run still fails at the immediate next gate read (`a0d4`) on `33792`.
+
+Implication:
+1. tuple-level parity is necessary but not sufficient,
+2. remaining gap is temporal/ordering semantics tied to queue progress.
