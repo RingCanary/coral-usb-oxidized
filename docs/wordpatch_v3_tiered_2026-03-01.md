@@ -96,10 +96,30 @@ Results:
 - EO strict still contains known toxic non-linear bytes; it remains transfer-fatal.
 - Manual safe_core union is transfer-safe but semantically divergent (hash changed).
 
-## Immediate Next Step
-Generate EO strict-minus-toxic patchspec:
-- remove `{746, 975, 1103, 1231}` from `eo_strict.full.patchspec`
-- validate reboot-first with:
-  - `eo_strict_minus_toxic`
-  - `both = pc_strict14 + eo_strict_minus_toxic`
-and measure transfer stability + hash behavior.
+## Follow-up Matrix: EO Strict Minus Toxic4
+Run dir:
+- `traces/analysis/specv3-tiered-eo-minus-toxic-matrix-20260301T170557Z/`
+
+Constructed patchspecs:
+- `eo_strict.minus_toxic4.patchspec` (`4` bytes)
+  - kept: `615, 642, 866, 6726`
+  - removed toxic: `{746, 975, 1103, 1231}`
+- `both_pcstrict14_eostrictminus4.patchspec` (`18` bytes)
+  - `pc_strict14` + `eo_strict.minus_toxic4`
+
+Results:
+- baseline: **PASS**, hash `0x67709fedfd103a2d`
+- `eo_minus_toxic4`: **PASS transfer**, hash `0x27c68f0d32ba3e60`
+- `both_pc14_eo_minus4`: **PASS transfer**, hash `0x505440f4aab46c09`
+
+## Updated Interpretation
+- Removing EO toxic4 converts strict EO from transfer-fatal to transfer-safe.
+- `pc_strict14` remains transport-safe and baseline-equivalent when applied alone.
+- Combined `pc_strict14 + eo_minus_toxic4` is now transport-safe end-to-end.
+- Remaining work is now semantic convergence (hash matching), not transport stability.
+
+## Next Step
+Perform semantic delta-debugging on transfer-safe set (`pc_strict14 + eo_minus_toxic4`) to recover baseline hash while preserving stability:
+- ablate EO safe bytes first (`615, 642, 866, 6726`)
+- then test selective re-introduction of additional non-toxic EO/PC bytes
+- keep reboot-first acceptance criteria: admission/event/output stability + hash objective.
