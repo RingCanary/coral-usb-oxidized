@@ -1,0 +1,57 @@
+Instruction dimension field analysis
+generated_at_utc=2026-03-01T10:56:02+00:00
+chunk_index=0
+entry_count=10
+  dim=640 size=1840 reloc=2 path=/tmp/dense-640/extract/package_000/serialized_executable_001.bin
+  dim=768 size=2096 reloc=2 path=/tmp/dense-768/extract/package_000/serialized_executable_001.bin
+  dim=896 size=2352 reloc=2 path=/tmp/dense-896/extract/package_000/serialized_executable_001.bin
+  dim=1024 size=2608 reloc=2 path=traces/dense-template-1024x1024-20260222T062017Z/extract/package_000/serialized_executable_001.bin
+  dim=1280 size=1840 reloc=2 path=/tmp/dense-1280/extract/package_000/serialized_executable_001.bin
+  dim=1536 size=2096 reloc=2 path=/tmp/dense-1536/extract/package_000/serialized_executable_001.bin
+  dim=1792 size=2352 reloc=2 path=/tmp/dense-1792/extract/package_000/serialized_executable_001.bin
+  dim=2048 size=2608 reloc=2 path=traces/dense-template-2048x2048-20260222T062027Z/extract/package_000/serialized_executable_001.bin
+  dim=2304 size=2096 reloc=2 path=traces/dense-template-2304x2304-20260222T062229Z/extract/package_000/serialized_executable_001.bin
+  dim=2688 size=2352 reloc=2 path=traces/dense-template-2688x2688-20260222T062240Z/extract/package_000/serialized_executable_001.bin
+pair_count=4
+  pair=640:1280 size=1840 changed=164 runs=101 reloc_overlap=0
+  pair=768:2304 size=2096 changed=122 runs=73 reloc_overlap=0
+  pair=896:2688 size=2352 changed=150 runs=92 reloc_overlap=0
+  pair=1024:2048 size=2608 changed=154 runs=121 reloc_overlap=0
+intersection=89 union=233 intersection_reloc_overlap=0
+top_offsets=35 (|corr_dim| >= 0.9)
+  off=187 corr_dim=+0.988 corr_tiles=+0.988 uniq=10 mono=True vals=[640:1, 768:2, 896:3, 1024:4, 1280:6, 1536:9, 1792:12, 2048:16, 2304:20, 2688:27]
+  off=1500 corr_dim=+0.964 corr_tiles=+0.964 uniq=5 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:2, 1536:2, 1792:3, 2048:3, 2304:6, 2688:7]
+  off=1436 corr_dim=+0.964 corr_tiles=+0.964 uniq=5 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:2, 1536:2, 1792:3, 2048:3, 2304:6, 2688:7]
+  off=1372 corr_dim=+0.964 corr_tiles=+0.964 uniq=5 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:2, 1536:2, 1792:3, 2048:3, 2304:6, 2688:7]
+  off=1308 corr_dim=+0.964 corr_tiles=+0.964 uniq=5 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:2, 1536:2, 1792:3, 2048:3, 2304:6, 2688:7]
+  off=867 corr_dim=-0.964 corr_tiles=-0.964 uniq=5 mono=True vals=[640:255, 768:255, 896:255, 1024:255, 1280:253, 1536:253, 1792:252, 2048:252, 2304:249, 2688:248]
+  off=803 corr_dim=-0.964 corr_tiles=-0.964 uniq=5 mono=True vals=[640:255, 768:255, 896:255, 1024:255, 1280:253, 1536:253, 1792:252, 2048:252, 2304:249, 2688:248]
+  off=739 corr_dim=-0.964 corr_tiles=-0.964 uniq=5 mono=True vals=[640:255, 768:255, 896:255, 1024:255, 1280:253, 1536:253, 1792:252, 2048:252, 2304:249, 2688:248]
+  off=675 corr_dim=-0.964 corr_tiles=-0.964 uniq=5 mono=True vals=[640:255, 768:255, 896:255, 1024:255, 1280:253, 1536:253, 1792:252, 2048:252, 2304:249, 2688:248]
+  off=611 corr_dim=-0.964 corr_tiles=-0.964 uniq=5 mono=True vals=[640:255, 768:255, 896:255, 1024:255, 1280:253, 1536:253, 1792:252, 2048:252, 2304:249, 2688:248]
+  off=547 corr_dim=-0.964 corr_tiles=-0.964 uniq=5 mono=True vals=[640:255, 768:255, 896:255, 1024:255, 1280:253, 1536:253, 1792:252, 2048:252, 2304:249, 2688:248]
+  off=483 corr_dim=-0.964 corr_tiles=-0.964 uniq=5 mono=True vals=[640:255, 768:255, 896:255, 1024:255, 1280:253, 1536:253, 1792:252, 2048:252, 2304:249, 2688:248]
+  off=419 corr_dim=-0.964 corr_tiles=-0.964 uniq=5 mono=True vals=[640:255, 768:255, 896:255, 1024:255, 1280:253, 1536:253, 1792:252, 2048:252, 2304:249, 2688:248]
+  off=355 corr_dim=-0.964 corr_tiles=-0.964 uniq=5 mono=True vals=[640:255, 768:255, 896:255, 1024:255, 1280:253, 1536:253, 1792:252, 2048:252, 2304:249, 2688:248]
+  off=291 corr_dim=-0.964 corr_tiles=-0.964 uniq=5 mono=True vals=[640:255, 768:255, 896:255, 1024:255, 1280:253, 1536:253, 1792:252, 2048:252, 2304:249, 2688:248]
+  off=871 corr_dim=-0.962 corr_tiles=-0.962 uniq=7 mono=True vals=[640:254, 768:254, 896:254, 1024:254, 1280:251, 1536:250, 1792:249, 2048:248, 2304:242, 2688:240]
+  off=807 corr_dim=-0.962 corr_tiles=-0.962 uniq=7 mono=True vals=[640:254, 768:254, 896:254, 1024:254, 1280:251, 1536:250, 1792:249, 2048:248, 2304:242, 2688:240]
+  off=743 corr_dim=-0.962 corr_tiles=-0.962 uniq=7 mono=True vals=[640:254, 768:254, 896:254, 1024:254, 1280:251, 1536:250, 1792:249, 2048:248, 2304:242, 2688:240]
+  off=679 corr_dim=-0.962 corr_tiles=-0.962 uniq=7 mono=True vals=[640:254, 768:254, 896:254, 1024:254, 1280:251, 1536:250, 1792:249, 2048:248, 2304:242, 2688:240]
+  off=615 corr_dim=-0.962 corr_tiles=-0.962 uniq=7 mono=True vals=[640:254, 768:254, 896:254, 1024:254, 1280:251, 1536:250, 1792:249, 2048:248, 2304:242, 2688:240]
+  off=551 corr_dim=-0.962 corr_tiles=-0.962 uniq=7 mono=True vals=[640:254, 768:254, 896:254, 1024:254, 1280:251, 1536:250, 1792:249, 2048:248, 2304:242, 2688:240]
+  off=487 corr_dim=-0.962 corr_tiles=-0.962 uniq=7 mono=True vals=[640:254, 768:254, 896:254, 1024:254, 1280:251, 1536:250, 1792:249, 2048:248, 2304:242, 2688:240]
+  off=423 corr_dim=-0.962 corr_tiles=-0.962 uniq=7 mono=True vals=[640:254, 768:254, 896:254, 1024:254, 1280:251, 1536:250, 1792:249, 2048:248, 2304:242, 2688:240]
+  off=359 corr_dim=-0.962 corr_tiles=-0.962 uniq=7 mono=True vals=[640:254, 768:254, 896:254, 1024:254, 1280:251, 1536:250, 1792:249, 2048:248, 2304:242, 2688:240]
+  off=295 corr_dim=-0.962 corr_tiles=-0.962 uniq=7 mono=True vals=[640:254, 768:254, 896:254, 1024:254, 1280:251, 1536:250, 1792:249, 2048:248, 2304:242, 2688:240]
+  off=864 corr_dim=+0.943 corr_tiles=+0.943 uniq=3 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:1, 1536:1, 1792:1, 2048:1, 2304:2, 2688:2]
+  off=800 corr_dim=+0.943 corr_tiles=+0.943 uniq=3 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:1, 1536:1, 1792:1, 2048:1, 2304:2, 2688:2]
+  off=736 corr_dim=+0.943 corr_tiles=+0.943 uniq=3 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:1, 1536:1, 1792:1, 2048:1, 2304:2, 2688:2]
+  off=672 corr_dim=+0.943 corr_tiles=+0.943 uniq=3 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:1, 1536:1, 1792:1, 2048:1, 2304:2, 2688:2]
+  off=608 corr_dim=+0.943 corr_tiles=+0.943 uniq=3 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:1, 1536:1, 1792:1, 2048:1, 2304:2, 2688:2]
+  off=544 corr_dim=+0.943 corr_tiles=+0.943 uniq=3 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:1, 1536:1, 1792:1, 2048:1, 2304:2, 2688:2]
+  off=480 corr_dim=+0.943 corr_tiles=+0.943 uniq=3 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:1, 1536:1, 1792:1, 2048:1, 2304:2, 2688:2]
+  off=416 corr_dim=+0.943 corr_tiles=+0.943 uniq=3 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:1, 1536:1, 1792:1, 2048:1, 2304:2, 2688:2]
+  off=352 corr_dim=+0.943 corr_tiles=+0.943 uniq=3 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:1, 1536:1, 1792:1, 2048:1, 2304:2, 2688:2]
+  off=288 corr_dim=+0.943 corr_tiles=+0.943 uniq=3 mono=True vals=[640:0, 768:0, 896:0, 1024:0, 1280:1, 1536:1, 1792:1, 2048:1, 2304:2, 2688:2]
+json_out=docs/artifacts/instruction-dim-field-20260301/pc_crossfamily_report.json

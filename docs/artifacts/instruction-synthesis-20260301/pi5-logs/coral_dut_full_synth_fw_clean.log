@@ -1,0 +1,55 @@
+warning: coral-usb-oxidized@0.1.0: legacy-runtime feature disabled; skipping libedgetpu/tflite linkage (pure-rusb mode)
+warning: method `size` is never used
+  --> src/flatbuffer.rs:15:19
+   |
+14 | impl Region {
+   | ----------- method in this implementation
+15 |     pub(crate) fn size(&self) -> usize {
+   |                   ^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `ExecutableView` is never constructed
+  --> src/flatbuffer.rs:58:8
+   |
+58 | struct ExecutableView {
+   |        ^^^^^^^^^^^^^^
+
+warning: struct `PackageView` is never constructed
+  --> src/flatbuffer.rs:76:19
+   |
+76 | pub(crate) struct PackageView {
+   |                   ^^^^^^^^^^^
+
+warning: function `inspect_packages` is never used
+   --> src/flatbuffer.rs:380:15
+    |
+380 | pub(crate) fn inspect_packages(blob: &[u8]) -> Vec<PackageView> {
+    |               ^^^^^^^^^^^^^^^^
+
+warning: function `select_dense_parameter_region` is never used
+   --> src/flatbuffer.rs:516:15
+    |
+516 | pub(crate) fn select_dense_parameter_region(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `coral-usb-oxidized` (lib) generated 5 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.57s
+     Running `target/debug/examples/rusb_serialized_exec_replay --model /tmp/dense-1536/dense_1536x1536_quant_edgetpu.tflite --firmware /home/rpc/coral-usb-oxidized-lab/apex_latest_single_ep.bin --bootstrap-known-good-order --instruction-patch-spec docs/artifacts/instruction-synthesis-20260301/family7952_2096_768to2304_target1536.patchspec --runs 1 --input-bytes 1536 --output-bytes 1536`
+Model: /tmp/dense-1536/dense_1536x1536_quant_edgetpu.tflite
+Descriptor tags: instr=0(Instructions), params=2(Parameters), input=1(InputActivations)
+Extracted executables: 2
+  pkg=0 exec=0 type=2(EXECUTION_ONLY) payload=16384 bytes instr_chunks=1 param_stream=0 param_region=4096..4096 (0 bytes)
+  pkg=0 exec=1 type=1(PARAMETER_CACHING) payload=2367488 bytes instr_chunks=1 param_stream=2359296 param_region=4096..2363392 (2359296 bytes)
+Instruction patch spec: path=docs/artifacts/instruction-synthesis-20260301/family7952_2096_768to2304_target1536.patchspec payload_lens=2 rule_count=191
+  patch len=7952 entries=94 first=Some((504, 4)) last=Some((6223, 254))
+  patch len=2096 entries=97 first=Some((187, 11)) last=Some((1785, 37))
+Using USB device: bus=4 addr=2 id=1a6e:089a runtime=false
+Boot-mode device detected; uploading firmware from /home/rpc/coral-usb-oxidized-lab/apex_latest_single_ep.bin (10783 bytes)
+Post-firmware device: bus=4 addr=3 id=18d1:9302 runtime=true
+Applying edgetpuxray runtime setup sequence (38 steps, include_reads=false, verify_reads=false)
+Bootstrap phase (known-good order): send PARAMETER_CACHING streams before EXECUTION_ONLY run chunks
+  PARAMETER_CACHING executable idx=1 chunks=1 params=2359296 bytes
+    instr chunk 0 (2096 bytes)
+  bootstrap param_caching: instr patch chunk=0 len=2096 rules=97 changed=97 fnv_before=bce64ee57b63bb23 fnv_after=df71f347c4c7f515
+Error: ProtocolError("descriptor tag=2 payload write failed at offset 0 of 2359296 bytes: Protocol error: bulk write failed on endpoint 0x01: Operation timed out")

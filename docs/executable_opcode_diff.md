@@ -66,3 +66,10 @@ python3 tools/exec_chunk_diff.py \
   stable code.
 - If instruction-word change counts are clustered in small regions, those
   windows are strong candidates for opcode field analysis.
+
+## Follow-up: Dimension Field Analysis
+
+For multi-pair dimension correlation results and reproducible tooling, see:
+
+- `docs/instruction_dim_field_analysis_2026-03-01.md`
+- `tools/instruction_dim_field_analysis.py`
