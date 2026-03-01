@@ -30,7 +30,8 @@ pub use crate::delegate::{version, EdgeTPUDelegate};
 pub use crate::device::{is_device_connected, CoralDevice};
 pub use crate::error::{CoralError, DenseGemmError, TfLiteError};
 pub use crate::flatbuffer::{
-    executable_type_name, extract_serialized_executables_from_tflite, SerializedExecutableBlob,
+    executable_type_name, extract_instruction_chunk_from_serialized_executable,
+    extract_serialized_executables_from_tflite, SerializedExecutableBlob,
 };
 pub use crate::function_gemma::{
     FunctionGemmaDims, FunctionGemmaError, FunctionGemmaLayerLinearNames, FunctionGemmaLinearStage,

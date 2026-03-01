@@ -33,6 +33,8 @@ class OverrideRule:
     div: Optional[int]
     domain: Optional[str]
     bits: Optional[int]
+    bit_lo: Optional[int]
+    bit_hi: Optional[int]
 
 
 def _read_chunk_bytes(path: Path, chunk_index: int) -> bytes:
@@ -82,6 +84,19 @@ def _load_field_spec(path: Optional[str]) -> Dict[str, List[OverrideRule]]:
         div = obj.get("div")
         domain = obj.get("domain")
         bits = obj.get("bits")
+        bit_lo = obj.get("bit_lo")
+        bit_hi = obj.get("bit_hi")
+        bit_range = obj.get("bit_range")
+
+        if bit_range is not None:
+            if bit_lo is not None or bit_hi is not None:
+                raise SystemExit(
+                    "field-spec rule must use either bit_range or bit_lo/bit_hi (not both)"
+                )
+            if (not isinstance(bit_range, list)) or len(bit_range) != 2:
+                raise SystemExit(f"field-spec bit_range must be [lo,hi], got: {bit_range}")
+            bit_lo = bit_range[0]
+            bit_hi = bit_range[1]
 
         if policy is not None and policy not in ("endpoint", "best"):
             raise SystemExit(f"field-spec policy must be endpoint|best, got: {policy}")
@@ -89,6 +104,22 @@ def _load_field_spec(path: Optional[str]) -> Dict[str, List[OverrideRule]]:
             raise SystemExit(f"field-spec domain must be u|s|mod, got: {domain}")
         if model is not None and model not in ("const", "tile-linear", "tile-quadratic", "tile2div-linear"):
             raise SystemExit(f"field-spec model unsupported: {model}")
+
+        lane_bits = 16 if lane == "lane16" else 32
+        if (bit_lo is None) != (bit_hi is None):
+            raise SystemExit("field-spec requires both bit_lo and bit_hi when selecting bit ranges")
+        if bit_lo is not None and bit_hi is not None:
+            bit_lo = int(bit_lo)
+            bit_hi = int(bit_hi)
+            if bit_lo < 0 or bit_hi < bit_lo or bit_hi >= lane_bits:
+                raise SystemExit(
+                    f"field-spec bit range out of bounds for {lane}: [{bit_lo},{bit_hi}]"
+                )
+
+        if bits is not None:
+            bits = int(bits)
+            if bits <= 0 or bits > lane_bits:
+                raise SystemExit(f"field-spec bits out of bounds for {lane}: {bits}")
 
         return OverrideRule(
             lane=lane,
@@ -98,7 +129,9 @@ def _load_field_spec(path: Optional[str]) -> Dict[str, List[OverrideRule]]:
             model=str(model) if model is not None else None,
             div=int(div) if div is not None else None,
             domain=str(domain) if domain is not None else None,
-            bits=int(bits) if bits is not None else None,
+            bits=bits,
+            bit_lo=bit_lo,
+            bit_hi=bit_hi,
         )
 
     for obj in raw.get("offset_rules", []):
@@ -440,28 +473,57 @@ def main() -> int:
                 else:
                     model, p = _pick_formula(best, mode=mode_use)
 
-            bits = (lane.lane_bytes * 8)
+            lane_bits = (lane.lane_bytes * 8)
+            bit_lo = override.bit_lo if override is not None else None
+            bit_hi = override.bit_hi if override is not None else None
+            has_bit_range = (bit_lo is not None) and (bit_hi is not None)
+
+            if has_bit_range:
+                field_width = int(bit_hi - bit_lo + 1)
+                field_mask = (1 << field_width) - 1
+                low_eval = (low_val >> bit_lo) & field_mask
+                high_eval = (high_val >> bit_lo) & field_mask
+                bits = field_width
+            else:
+                field_width = lane_bits
+                field_mask = (1 << field_width) - 1
+                low_eval = low_val
+                high_eval = high_val
+                bits = lane_bits
+
             if override is not None and override.bits is not None:
                 bits = int(override.bits)
+
             domain = "u"
             if override is not None and override.domain is not None:
                 domain = override.domain
 
-            pred_val = _predict_value(
+            pred_field = _predict_value(
                 model=model,
                 params=p,
                 low_dim=args.low_dim,
-                low_val=low_val,
+                low_val=low_eval,
                 high_dim=args.high_dim,
-                high_val=high_val,
+                high_val=high_eval,
                 target_dim=args.target_dim,
                 tile_size=args.tile_size,
                 mode=mode_use,
                 domain=domain,
                 bits=bits,
             )
+            pred_field &= field_mask
 
-            max_val = (1 << (8 * lane.lane_bytes)) - 1
+            if has_bit_range:
+                base_word = int.from_bytes(
+                    base[off : off + lane.lane_bytes],
+                    "little",
+                    signed=False,
+                )
+                pred_val = (base_word & ~(field_mask << bit_lo)) | ((pred_field & field_mask) << bit_lo)
+            else:
+                pred_val = pred_field
+
+            max_val = (1 << lane_bits) - 1
             pred_val &= max_val
             pred_bytes = pred_val.to_bytes(lane.lane_bytes, "little", signed=False)
 
@@ -474,6 +536,9 @@ def main() -> int:
                 "policy": mode_use,
                 "domain": domain,
                 "bits": bits,
+                "bit_lo": bit_lo,
+                "bit_hi": bit_hi,
+                "pred_field_value": int(pred_field),
                 "pred_value": pred_val,
                 "pred_bytes": list(pred_bytes),
                 "stride_residue": per.get("stride_residue"),

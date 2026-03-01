@@ -438,6 +438,38 @@ pub fn executable_type_name(type_value: i16) -> &'static str {
     }
 }
 
+fn extract_instruction_bitstreams_from_payload(
+    payload: &[u8],
+) -> Result<Vec<Vec<u8>>, DenseGemmError> {
+    let executable_table = parse_root_table(payload, 0, None)?;
+    let mut instruction_bitstreams = Vec::new();
+    for bitstream_table_offset in read_vector_table_offsets(&executable_table, 5)? {
+        let bitstream_table = parse_table_at(payload, bitstream_table_offset)?;
+        if let Some(bitstream_region) = read_vector_region(&bitstream_table, 0)? {
+            let bitstream = payload[bitstream_region.start..bitstream_region.end].to_vec();
+            if !bitstream.is_empty() {
+                instruction_bitstreams.push(bitstream);
+            }
+        }
+    }
+    Ok(instruction_bitstreams)
+}
+
+pub fn extract_instruction_chunk_from_serialized_executable(
+    payload: &[u8],
+    chunk_index: usize,
+) -> Result<Vec<u8>, DenseGemmError> {
+    let chunks = extract_instruction_bitstreams_from_payload(payload)?;
+    if chunk_index >= chunks.len() {
+        return Err(invalid_template(format!(
+            "instruction chunk index {} out of range (count={})",
+            chunk_index,
+            chunks.len()
+        )));
+    }
+    Ok(chunks[chunk_index].clone())
+}
+
 pub fn extract_serialized_executables_from_tflite(
     blob: &[u8],
 ) -> Result<Vec<SerializedExecutableBlob>, DenseGemmError> {
@@ -474,16 +506,7 @@ pub fn extract_serialized_executables_from_tflite(
             let parameter_region =
                 read_vector_region(&executable_table, 6)?.map(|r| (r.start, r.end));
 
-            let mut instruction_bitstreams = Vec::new();
-            for bitstream_table_offset in read_vector_table_offsets(&executable_table, 5)? {
-                let bitstream_table = parse_table_at(payload, bitstream_table_offset)?;
-                if let Some(bitstream_region) = read_vector_region(&bitstream_table, 0)? {
-                    let bitstream = payload[bitstream_region.start..bitstream_region.end].to_vec();
-                    if !bitstream.is_empty() {
-                        instruction_bitstreams.push(bitstream);
-                    }
-                }
-            }
+            let instruction_bitstreams = extract_instruction_bitstreams_from_payload(payload)?;
 
             let parameters_stream = match parameter_region {
                 Some((start, end)) if end > start && end <= payload.len() => {
