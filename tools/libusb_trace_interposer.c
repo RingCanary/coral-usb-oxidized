@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <time.h>
@@ -225,6 +226,14 @@ static FILE *g_log = NULL;
 static int g_out_only = 1;
 static unsigned long long g_seq = 0;
 
+#define MAX_DUMP_LENS 32
+static int g_dump_enabled = 0;
+static int g_dump_once_per_len = 1;
+static char g_dump_dir[512];
+static int g_dump_lens[MAX_DUMP_LENS];
+static int g_dump_seen[MAX_DUMP_LENS];
+static size_t g_dump_lens_count = 0;
+
 struct stream_state {
     int valid;
     uint32_t tag;
@@ -232,6 +241,72 @@ struct stream_state {
 };
 
 static struct stream_state g_stream = {0, 0, 0};
+
+static void parse_dump_lens(const char *raw) {
+    if (raw == NULL || raw[0] == '\0') {
+        return;
+    }
+    char *tmp = strdup(raw);
+    if (tmp == NULL) {
+        return;
+    }
+    char *saveptr = NULL;
+    char *tok = strtok_r(tmp, ",", &saveptr);
+    while (tok != NULL && g_dump_lens_count < MAX_DUMP_LENS) {
+        while (*tok == ' ' || *tok == '\t') {
+            tok++;
+        }
+        if (*tok != '\0') {
+            char *endptr = NULL;
+            long v = strtol(tok, &endptr, 10);
+            if (endptr != tok && v > 0 && v <= INT32_MAX) {
+                g_dump_lens[g_dump_lens_count] = (int)v;
+                g_dump_seen[g_dump_lens_count] = 0;
+                g_dump_lens_count++;
+            }
+        }
+        tok = strtok_r(NULL, ",", &saveptr);
+    }
+    free(tmp);
+}
+
+static int find_dump_len_index(int len) {
+    for (size_t i = 0; i < g_dump_lens_count; ++i) {
+        if (g_dump_lens[i] == len) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+static void maybe_dump_payload(const char *api,
+                               int len,
+                               const unsigned char *data,
+                               int is_in,
+                               unsigned long long seq) {
+    if (!g_dump_enabled || is_in || data == NULL || len <= 0) {
+        return;
+    }
+    int idx = find_dump_len_index(len);
+    if (idx < 0) {
+        return;
+    }
+    if (g_dump_once_per_len && g_dump_seen[idx]) {
+        return;
+    }
+
+    char out_path[1024];
+    snprintf(out_path, sizeof(out_path), "%s/%s_len%d_seq%llu.bin", g_dump_dir, api, len, seq);
+    FILE *f = fopen(out_path, "wb");
+    if (f == NULL) {
+        return;
+    }
+    size_t written = fwrite(data, 1, (size_t)len, f);
+    fclose(f);
+    if (written == (size_t)len && g_dump_once_per_len) {
+        g_dump_seen[idx] = 1;
+    }
+}
 
 static void resolve_symbols(void) {
     if (real_submit_transfer == NULL) {
@@ -264,6 +339,20 @@ static void init_logger_once(void) {
     const char *out_only_env = getenv("LIBUSB_TRACE_OUT_ONLY");
     if (out_only_env != NULL && strcmp(out_only_env, "0") == 0) {
         g_out_only = 0;
+    }
+
+    const char *dump_dir = getenv("LIBUSB_TRACE_DUMP_DIR");
+    const char *dump_lens = getenv("LIBUSB_TRACE_DUMP_LENS");
+    const char *dump_once = getenv("LIBUSB_TRACE_DUMP_ONCE_PER_LEN");
+    if (dump_once != NULL && strcmp(dump_once, "0") == 0) {
+        g_dump_once_per_len = 0;
+    }
+    if (dump_dir != NULL && dump_dir[0] != '\0' && dump_lens != NULL && dump_lens[0] != '\0') {
+        snprintf(g_dump_dir, sizeof(g_dump_dir), "%s", dump_dir);
+        parse_dump_lens(dump_lens);
+        if (g_dump_lens_count > 0) {
+            g_dump_enabled = 1;
+        }
     }
 
     g_log = fopen(path, "a");
@@ -371,6 +460,7 @@ static void log_transfer(const char *api,
     }
 
     unsigned long long seq = ++g_seq;
+    maybe_dump_payload(api, len, data, is_in, seq);
     fprintf(g_log,
             "%llu\t%llu\t%d\t%ld\t%s\t0x%02x\t%c\t%d\t%s\t%s\t%s\t%d\t%u\t%u\t%d\t%u\t%u\t%d\t%d\t%u\n",
             now_us(), seq, getpid(), get_tid(), api, endpoint, is_in ? 'I' : 'O', len,
