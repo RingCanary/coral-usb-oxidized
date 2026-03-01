@@ -1,0 +1,4762 @@
+{
+  "chunk_index": 0,
+  "entries": [
+    {
+      "dim": 768,
+      "path": "/tmp/dense-768/extract/package_000/serialized_executable_001.bin",
+      "sha256": "9cca84f56cf9702eced2248f00d88ca1e2cd3264ae1c5a4e0fca7fd3a3002d32",
+      "size": 2096
+    },
+    {
+      "dim": 1536,
+      "path": "/tmp/dense-1536/extract/package_000/serialized_executable_001.bin",
+      "sha256": "217f41cc48068eb542796eb12a9c044813fea597a2b549146937c98afadc0cde",
+      "size": 2096
+    },
+    {
+      "dim": 2304,
+      "path": "traces/dense-template-2304x2304-20260222T062229Z/extract/package_000/serialized_executable_001.bin",
+      "sha256": "524f752954c923e080c5a7234c0d5c1bc871f00158a5b9a5a3d8a8891fbc82f1",
+      "size": 2096
+    }
+  ],
+  "generated_at_utc": "2026-03-01T11:57:01+00:00",
+  "lane16": {
+    "changed_lane_count": 144,
+    "changed_offset_count": 144,
+    "lane_bytes": 2,
+    "lane_count": 1048,
+    "stride_used": 64,
+    "top_groups": [
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 1,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-linear",
+          "params": {
+            "a": 8.0,
+            "b": 32767.0
+          },
+          "top_candidates": [
+            {
+              "complexity": 1,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-linear",
+              "params": {
+                "a": 8.0,
+                "b": 32767.0
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": 7.318590178329032e-13,
+                "b": 7.99999999996453,
+                "c": 32767.00000000036
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 32.0,
+                "b": 32863.0,
+                "div": 192
+              }
+            },
+            {
+              "complexity": 0,
+              "exact_ratio": 0.3333333333333333,
+              "mae": 64.0,
+              "model": "const",
+              "params": {
+                "c": 32959.0
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 7.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 15.853211009174313,
+                "b": 32853.31192660551,
+                "div": 96
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 8.666666666666666,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 37.89473684210526,
+                "b": 32870.57894736842,
+                "div": 256
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 9.333333333333334,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 5.246963562753036,
+                "b": 32850.562753036436,
+                "div": 32
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 9.333333333333334,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 10.493927125506072,
+                "b": 32850.562753036436,
+                "div": 64
+              }
+            }
+          ]
+        },
+        "lane_bytes": 2,
+        "occurrence_count": 24,
+        "offsets": [
+          284,
+          348,
+          412,
+          476,
+          540,
+          604,
+          668,
+          732,
+          796,
+          860,
+          924,
+          988,
+          1052,
+          1116,
+          1180,
+          1244,
+          1308,
+          1372,
+          1436,
+          1500,
+          1564,
+          1628,
+          1692,
+          1756
+        ],
+        "repeated_identical_per_dim": false,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 32863
+          },
+          {
+            "dim": 1536,
+            "value": 32959
+          },
+          {
+            "dim": 2304,
+            "value": 33055
+          }
+        ],
+        "stride_residue": 28,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              32863,
+              32863,
+              32863,
+              32863,
+              32863,
+              32863,
+              32863,
+              32863,
+              32863,
+              32863,
+              32863,
+              32863,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              6,
+              6,
+              6,
+              6,
+              6,
+              6,
+              6,
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": -2.666666666666444,
+            "b": -1.000444171950221e-11,
+            "c": 65538.0000000001
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": -2.666666666666444,
+                "b": -1.000444171950221e-11,
+                "c": 65538.0000000001
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -2.6666666666666665,
+                "b": 65538.0,
+                "div": 1
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -5.333333333333333,
+                "b": 65538.0,
+                "div": 2
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -8.0,
+                "b": 65538.0,
+                "div": 3
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -10.666666666666666,
+                "b": 65538.0,
+                "div": 4
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -16.0,
+                "b": 65538.0,
+                "div": 6
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -21.333333333333332,
+                "b": 65538.0,
+                "div": 8
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -32.0,
+                "b": 65538.0,
+                "div": 12
+              }
+            }
+          ]
+        },
+        "lane_bytes": 2,
+        "occurrence_count": 24,
+        "offsets": [
+          294,
+          358,
+          422,
+          486,
+          550,
+          614,
+          678,
+          742,
+          806,
+          870,
+          934,
+          998,
+          1062,
+          1126,
+          1190,
+          1254,
+          1318,
+          1382,
+          1446,
+          1510,
+          1574,
+          1638,
+          1702,
+          1766
+        ],
+        "repeated_identical_per_dim": false,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 65154
+          },
+          {
+            "dim": 1536,
+            "value": 64002
+          },
+          {
+            "dim": 2304,
+            "value": 62082
+          }
+        ],
+        "stride_residue": 38,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              65154,
+              65154,
+              65154,
+              65154,
+              65154,
+              65154,
+              65154,
+              65154,
+              65154,
+              65154,
+              65154,
+              65154,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              64002,
+              64002,
+              64002,
+              64002,
+              64002,
+              64002,
+              64002,
+              64002,
+              64002,
+              64002,
+              64002,
+              64002,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              62082,
+              62082,
+              62082,
+              62082,
+              62082,
+              62082,
+              62082,
+              62082,
+              62082,
+              62082,
+              62082,
+              62082,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640,
+              32640
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": -0.02777777777777738,
+            "b": 1.666666666666647,
+            "c": -11.999999999999797
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": -0.02777777777777738,
+                "b": 1.666666666666647,
+                "c": -11.999999999999797
+              }
+            },
+            {
+              "complexity": 1,
+              "exact_ratio": 0.0,
+              "mae": 1.6666666666666667,
+              "model": "tile-linear",
+              "params": {
+                "a": 0.3333333333333333,
+                "b": 1.3333333333333333
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 1.6666666666666667,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 1.3333333333333333,
+                "b": 5.333333333333333,
+                "div": 192
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 2.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.006235827664399093,
+                "b": 5.142857142857143,
+                "div": 1
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 2.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.012471655328798186,
+                "b": 5.142857142857143,
+                "div": 2
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 2.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.01870748299319728,
+                "b": 5.142857142857143,
+                "div": 3
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 2.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.024943310657596373,
+                "b": 5.142857142857143,
+                "div": 4
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 2.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.03741496598639456,
+                "b": 5.142857142857143,
+                "div": 6
+              }
+            }
+          ]
+        },
+        "lane_bytes": 2,
+        "occurrence_count": 24,
+        "offsets": [
+          298,
+          362,
+          426,
+          490,
+          554,
+          618,
+          682,
+          746,
+          810,
+          874,
+          938,
+          1002,
+          1066,
+          1130,
+          1194,
+          1258,
+          1322,
+          1386,
+          1450,
+          1514,
+          1578,
+          1642,
+          1706,
+          1770
+        ],
+        "repeated_identical_per_dim": false,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 4
+          },
+          {
+            "dim": 1536,
+            "value": 12
+          },
+          {
+            "dim": 2304,
+            "value": 12
+          }
+        ],
+        "stride_residue": 42,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              4,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              12,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": 227.2222222222224,
+            "b": -13633.333333333343,
+            "c": 196320.00000000006
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": 227.2222222222224,
+                "b": -13633.333333333343,
+                "c": 196320.00000000006
+              }
+            },
+            {
+              "complexity": 1,
+              "exact_ratio": 0.0,
+              "mae": 14542.333333333334,
+              "model": "tile-linear",
+              "params": {
+                "a": -2726.6666666666665,
+                "b": 87253.33333333333
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 14542.333333333334,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -10906.666666666666,
+                "b": 54533.333333333336,
+                "div": 192
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 16810.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -5103.119266055046,
+                "b": 55834.12844036697,
+                "div": 96
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 17221.333333333332,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -12054.736842105263,
+                "b": 49941.052631578954,
+                "div": 256
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 17486.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -1655.8704453441296,
+                "b": 56034.65587044534,
+                "div": 32
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 17486.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -3311.7408906882592,
+                "b": 56034.65587044534,
+                "div": 64
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 17806.666666666668,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -51.00907029478458,
+                "b": 56091.42857142857,
+                "div": 1
+              }
+            }
+          ]
+        },
+        "lane_bytes": 2,
+        "occurrence_count": 12,
+        "offsets": [
+          286,
+          350,
+          414,
+          478,
+          542,
+          606,
+          670,
+          734,
+          798,
+          862,
+          926,
+          990
+        ],
+        "repeated_identical_per_dim": true,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 65440
+          },
+          {
+            "dim": 1536,
+            "value": 0
+          },
+          {
+            "dim": 2304,
+            "value": 0
+          }
+        ],
+        "stride_residue": 30,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              65440,
+              65440,
+              65440,
+              65440,
+              65440,
+              65440,
+              65440,
+              65440,
+              65440,
+              65440,
+              65440,
+              65440
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 1,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-linear",
+          "params": {
+            "a": 0.08333333333333333,
+            "b": -1.0
+          },
+          "top_candidates": [
+            {
+              "complexity": 1,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-linear",
+              "params": {
+                "a": 0.08333333333333333,
+                "b": -1.0
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": 2.168404344971009e-17,
+                "b": 0.08333333333333226,
+                "c": -0.9999999999999889
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.0017006802721088435,
+                "b": -0.1428571428571428,
+                "div": 1
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.003401360544217687,
+                "b": -0.1428571428571428,
+                "div": 2
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.00510204081632653,
+                "b": -0.1428571428571428,
+                "div": 3
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.006802721088435374,
+                "b": -0.1428571428571428,
+                "div": 4
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.01020408163265306,
+                "b": -0.1428571428571428,
+                "div": 6
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.013605442176870748,
+                "b": -0.1428571428571428,
+                "div": 8
+              }
+            }
+          ]
+        },
+        "lane_bytes": 2,
+        "occurrence_count": 12,
+        "offsets": [
+          288,
+          352,
+          416,
+          480,
+          544,
+          608,
+          672,
+          736,
+          800,
+          864,
+          928,
+          992
+        ],
+        "repeated_identical_per_dim": true,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 0
+          },
+          {
+            "dim": 1536,
+            "value": 1
+          },
+          {
+            "dim": 2304,
+            "value": 2
+          }
+        ],
+        "stride_residue": 32,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2,
+              2
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": -1.333333333332547,
+            "b": -3.8198777474462986e-11,
+            "c": 65537.0000000004
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": -1.333333333332547,
+                "b": -3.8198777474462986e-11,
+                "c": 65537.0000000004
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -1.3333333333333333,
+                "b": 65537.0,
+                "div": 1
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -2.6666666666666665,
+                "b": 65537.0,
+                "div": 2
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -4.0,
+                "b": 65537.0,
+                "div": 3
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -5.333333333333333,
+                "b": 65537.0,
+                "div": 4
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -8.0,
+                "b": 65537.0,
+                "div": 6
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -10.666666666666666,
+                "b": 65537.0,
+                "div": 8
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -16.0,
+                "b": 65537.0,
+                "div": 12
+              }
+            }
+          ]
+        },
+        "lane_bytes": 2,
+        "occurrence_count": 12,
+        "offsets": [
+          290,
+          354,
+          418,
+          482,
+          546,
+          610,
+          674,
+          738,
+          802,
+          866,
+          930,
+          994
+        ],
+        "repeated_identical_per_dim": true,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 65345
+          },
+          {
+            "dim": 1536,
+            "value": 64769
+          },
+          {
+            "dim": 2304,
+            "value": 63809
+          }
+        ],
+        "stride_residue": 34,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              65345,
+              65345,
+              65345,
+              65345,
+              65345,
+              65345,
+              65345,
+              65345,
+              65345,
+              65345,
+              65345,
+              65345
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              64769,
+              64769,
+              64769,
+              64769,
+              64769,
+              64769,
+              64769,
+              64769,
+              64769,
+              64769,
+              64769,
+              64769
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              63809,
+              63809,
+              63809,
+              63809,
+              63809,
+              63809,
+              63809,
+              63809,
+              63809,
+              63809,
+              63809,
+              63809
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": 14.229166666666654,
+            "b": -682.9999999999992,
+            "c": 8195.99999999999
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": 14.229166666666654,
+                "b": -682.9999999999992,
+                "c": 8195.99999999999
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 878.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 48.785714285714285,
+                "b": 1122.0714285714287,
+                "div": 128
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 892.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.290391156462585,
+                "b": 1170.857142857143,
+                "div": 1
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 892.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.58078231292517,
+                "b": 1170.857142857143,
+                "div": 2
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 892.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 0.8711734693877551,
+                "b": 1170.857142857143,
+                "div": 3
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 892.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 1.16156462585034,
+                "b": 1170.857142857143,
+                "div": 4
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 892.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 1.7423469387755102,
+                "b": 1170.857142857143,
+                "div": 6
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 892.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 2.32312925170068,
+                "b": 1170.857142857143,
+                "div": 8
+              }
+            }
+          ]
+        },
+        "lane_bytes": 2,
+        "occurrence_count": 12,
+        "offsets": [
+          1064,
+          1128,
+          1192,
+          1256,
+          1320,
+          1384,
+          1448,
+          1512,
+          1576,
+          1640,
+          1704,
+          1768
+        ],
+        "repeated_identical_per_dim": true,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 2049
+          },
+          {
+            "dim": 1536,
+            "value": 0
+          },
+          {
+            "dim": 2304,
+            "value": 2049
+          }
+        ],
+        "stride_residue": 40,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049,
+              2049
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": 128.0,
+            "b": -5461.333333333334,
+            "c": 65504.0
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": 128.0,
+                "b": -5461.333333333334,
+                "c": 65504.0
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 6729.333333333333,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 2194.285714285714,
+                "b": 9476.57142857143,
+                "div": 128
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 7133.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 16.54421768707483,
+                "b": 9330.285714285716,
+                "div": 1
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 7133.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 33.08843537414966,
+                "b": 9330.285714285716,
+                "div": 2
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 7133.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 49.63265306122449,
+                "b": 9330.285714285716,
+                "div": 3
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 7133.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 66.17687074829932,
+                "b": 9330.285714285716,
+                "div": 4
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 7133.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 99.26530612244898,
+                "b": 9330.285714285716,
+                "div": 6
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 7133.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 132.35374149659864,
+                "b": 9330.285714285716,
+                "div": 8
+              }
+            }
+          ]
+        },
+        "lane_bytes": 2,
+        "occurrence_count": 12,
+        "offsets": [
+          248,
+          1144,
+          1208,
+          1272,
+          1336,
+          1400,
+          1464,
+          1528,
+          1592,
+          1656,
+          1720,
+          1784
+        ],
+        "repeated_identical_per_dim": false,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 18400
+          },
+          {
+            "dim": 1536,
+            "value": 8160
+          },
+          {
+            "dim": 2304,
+            "value": 34784
+          }
+        ],
+        "stride_residue": 56,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              18400,
+              769,
+              1537,
+              2305,
+              3073,
+              3841,
+              4609,
+              5377,
+              6145,
+              6913,
+              7681,
+              8449
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              8160,
+              3073,
+              6145,
+              9217,
+              12289,
+              15361,
+              18433,
+              21505,
+              24577,
+              27649,
+              30721,
+              33793
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              34784,
+              6913,
+              13825,
+              20737,
+              27649,
+              34561,
+              41473,
+              48385,
+              55297,
+              62209,
+              3585,
+              10497
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": -0.44444444444443815,
+            "b": 21.333333333333023,
+            "c": 3.2400748750660468e-12
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": -0.44444444444443815,
+                "b": 21.333333333333023,
+                "c": 3.2400748750660468e-12
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 27.333333333333332,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -1.5238095238095237,
+                "b": 220.95238095238096,
+                "div": 128
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 28.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -0.009070294784580499,
+                "b": 219.42857142857144,
+                "div": 1
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 28.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -0.018140589569160998,
+                "b": 219.42857142857144,
+                "div": 2
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 28.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -0.027210884353741496,
+                "b": 219.42857142857144,
+                "div": 3
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 28.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -0.036281179138321996,
+                "b": 219.42857142857144,
+                "div": 4
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 28.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -0.05442176870748299,
+                "b": 219.42857142857144,
+                "div": 6
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 28.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -0.07256235827664399,
+                "b": 219.42857142857144,
+                "div": 8
+              }
+            }
+          ]
+        },
+        "lane_bytes": 2,
+        "occurrence_count": 10,
+        "offsets": [
+          1106,
+          1170,
+          1234,
+          1298,
+          1362,
+          1426,
+          1490,
+          1618,
+          1682,
+          1746
+        ],
+        "repeated_identical_per_dim": false,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 192
+          },
+          {
+            "dim": 1536,
+            "value": 256
+          },
+          {
+            "dim": 2304,
+            "value": 192
+          }
+        ],
+        "stride_residue": 18,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              192,
+              384,
+              64,
+              256,
+              448,
+              128,
+              320,
+              192,
+              384,
+              64
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              256,
+              0,
+              256,
+              0,
+              256,
+              0,
+              256,
+              256,
+              0,
+              256
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              192,
+              384,
+              64,
+              256,
+              448,
+              128,
+              320,
+              192,
+              384,
+              64
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": 4.0,
+            "b": 0.0,
+            "c": 0.0
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": 4.0,
+                "b": 0.0,
+                "c": 0.0
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 4.0,
+                "b": 0.0,
+                "div": 1
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 8.0,
+                "b": 0.0,
+                "div": 2
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 12.0,
+                "b": 0.0,
+                "div": 3
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 16.0,
+                "b": 0.0,
+                "div": 4
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 24.0,
+                "b": 0.0,
+                "div": 6
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 32.0,
+                "b": 0.0,
+                "div": 8
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 48.0,
+                "b": 0.0,
+                "div": 12
+              }
+            }
+          ]
+        },
+        "lane_bytes": 2,
+        "occurrence_count": 2,
+        "offsets": [
+          186,
+          250
+        ],
+        "repeated_identical_per_dim": false,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 576
+          },
+          {
+            "dim": 1536,
+            "value": 2304
+          },
+          {
+            "dim": 2304,
+            "value": 5184
+          }
+        ],
+        "stride_residue": 58,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              576,
+              1024
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              2304,
+              1025
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              5184,
+              1026
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "lane32": {
+    "changed_lane_count": 107,
+    "changed_offset_count": 107,
+    "lane_bytes": 4,
+    "lane_count": 524,
+    "stride_used": 64,
+    "top_groups": [
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": 14891235.555555558,
+            "b": -893474125.3333334,
+            "c": 12866060286.999998
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": 14891235.555555558,
+                "b": -893474125.3333334,
+                "c": 12866060286.999998
+              }
+            },
+            {
+              "complexity": 1,
+              "exact_ratio": 0.0,
+              "mae": 953039075.6666666,
+              "model": "tile-linear",
+              "params": {
+                "a": -178694818.66666666,
+                "b": 5718267220.333333
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 953039075.6666666,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -714779274.6666666,
+                "b": 3573929396.3333335,
+                "div": 192
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 1101678190.6666667,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -334438008.3669725,
+                "b": 3659178294.779817,
+                "div": 96
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 1128598896.6666667,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -790019195.7894737,
+                "b": 3272969695.8421054,
+                "div": 256
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 1145961956.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -108519120.25910932,
+                "b": 3672320057.688259,
+                "div": 32
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 1145961956.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -217038240.51821864,
+                "b": 3672320057.688259,
+                "div": 64
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 1166986612.6666667,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -3342930.267573696,
+                "b": 3676040712.142857,
+                "div": 1
+              }
+            }
+          ]
+        },
+        "bitfield_fits": [
+          {
+            "best_formula": {
+              "candidate_count": 19,
+              "complexity": 1,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-linear",
+              "params": {
+                "a": 0.25,
+                "b": -1.0
+              },
+              "top_candidates": [
+                {
+                  "complexity": 1,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-linear",
+                  "params": {
+                    "a": 0.25,
+                    "b": -1.0
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-quadratic",
+                  "params": {
+                    "a": -4.96564594998361e-17,
+                    "b": 0.25000000000000244,
+                    "c": -1.0000000000000253
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.00510204081632653,
+                    "b": 1.5714285714285718,
+                    "div": 1
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.01020408163265306,
+                    "b": 1.5714285714285718,
+                    "div": 2
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.015306122448979591,
+                    "b": 1.5714285714285718,
+                    "div": 3
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.02040816326530612,
+                    "b": 1.5714285714285718,
+                    "div": 4
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.030612244897959183,
+                    "b": 1.5714285714285718,
+                    "div": 6
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.04081632653061224,
+                    "b": 1.5714285714285718,
+                    "div": 8
+                  }
+                }
+              ]
+            },
+            "bit_range": [
+              5,
+              8
+            ],
+            "values_by_dim": [
+              {
+                "dim": 768,
+                "value": 2
+              },
+              {
+                "dim": 1536,
+                "value": 5
+              },
+              {
+                "dim": 2304,
+                "value": 8
+              }
+            ],
+            "width": 4
+          },
+          {
+            "best_formula": {
+              "candidate_count": 19,
+              "complexity": 1,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-linear",
+              "params": {
+                "a": -0.041666666666666664,
+                "b": 1.3333333333333333
+              },
+              "top_candidates": [
+                {
+                  "complexity": 1,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-linear",
+                  "params": {
+                    "a": -0.041666666666666664,
+                    "b": 1.3333333333333333
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-quadratic",
+                  "params": {
+                    "a": 0.0034722222222222303,
+                    "b": -0.20833333333333376,
+                    "c": 3.000000000000004
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.0007794784580498867,
+                    "b": 0.8571428571428571,
+                    "div": 1
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.0015589569160997733,
+                    "b": 0.8571428571428571,
+                    "div": 2
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.00233843537414966,
+                    "b": 0.8571428571428571,
+                    "div": 3
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.0031179138321995466,
+                    "b": 0.8571428571428571,
+                    "div": 4
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.00467687074829932,
+                    "b": 0.8571428571428571,
+                    "div": 6
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.006235827664399093,
+                    "b": 0.8571428571428571,
+                    "div": 8
+                  }
+                }
+              ]
+            },
+            "bit_range": [
+              21,
+              21
+            ],
+            "values_by_dim": [
+              {
+                "dim": 768,
+                "value": 1
+              },
+              {
+                "dim": 1536,
+                "value": 0
+              },
+              {
+                "dim": 2304,
+                "value": 0
+              }
+            ],
+            "width": 1
+          },
+          {
+            "best_formula": {
+              "candidate_count": 19,
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": 1.774305555555557,
+                "b": -106.45833333333339,
+                "c": 1533.0000000000005
+              },
+              "top_candidates": [
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-quadratic",
+                  "params": {
+                    "a": 1.774305555555557,
+                    "b": -106.45833333333339,
+                    "c": 1533.0000000000005
+                  }
+                },
+                {
+                  "complexity": 1,
+                  "exact_ratio": 0.0,
+                  "mae": 113.33333333333333,
+                  "model": "tile-linear",
+                  "params": {
+                    "a": -21.291666666666668,
+                    "b": 681.3333333333334
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.0,
+                  "mae": 113.33333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -85.16666666666667,
+                    "b": 425.8333333333333,
+                    "div": 192
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.0,
+                  "mae": 131.33333333333334,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -39.84862385321101,
+                    "b": 435.99082568807336,
+                    "div": 96
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.0,
+                  "mae": 134.66666666666666,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -94.13157894736842,
+                    "b": 389.9736842105263,
+                    "div": 256
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.0,
+                  "mae": 136.66666666666666,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -12.930161943319838,
+                    "b": 437.55668016194335,
+                    "div": 32
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.0,
+                  "mae": 136.66666666666666,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -25.860323886639677,
+                    "b": 437.55668016194335,
+                    "div": 64
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.0,
+                  "mae": 139.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.39831349206349204,
+                    "b": 438.0,
+                    "div": 1
+                  }
+                }
+              ]
+            },
+            "bit_range": [
+              23,
+              31
+            ],
+            "values_by_dim": [
+              {
+                "dim": 768,
+                "value": 511
+              },
+              {
+                "dim": 1536,
+                "value": 0
+              },
+              {
+                "dim": 2304,
+                "value": 0
+              }
+            ],
+            "width": 9
+          }
+        ],
+        "lane_bytes": 4,
+        "occurrence_count": 24,
+        "offsets": [
+          284,
+          348,
+          412,
+          476,
+          540,
+          604,
+          668,
+          732,
+          796,
+          860,
+          924,
+          988,
+          1052,
+          1116,
+          1180,
+          1244,
+          1308,
+          1372,
+          1436,
+          1500,
+          1564,
+          1628,
+          1692,
+          1756
+        ],
+        "repeated_identical_per_dim": false,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 4288708703
+          },
+          {
+            "dim": 1536,
+            "value": 32959
+          },
+          {
+            "dim": 2304,
+            "value": 33055
+          }
+        ],
+        "representative_vary_mask_hex": "0xffa001e0",
+        "stride_residue": 28,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              4288708703,
+              4288708703,
+              4288708703,
+              4288708703,
+              4288708703,
+              4288708703,
+              4288708703,
+              4288708703,
+              4288708703,
+              4288708703,
+              4288708703,
+              4288708703,
+              3222274048,
+              3222274048,
+              3222274048,
+              3222274048,
+              3222274048,
+              3222274048,
+              3222274048,
+              3222274048,
+              3222274048,
+              3222274048,
+              3222274048,
+              3222274048
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              32959,
+              3222274050,
+              3222274050,
+              3222274050,
+              3222274050,
+              3222274050,
+              3222274050,
+              3222274050,
+              3222274050,
+              3222274050,
+              3222274050,
+              3222274050,
+              3222274050
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              33055,
+              3222274054,
+              3222274054,
+              3222274054,
+              3222274054,
+              3222274054,
+              3222274054,
+              3222274054,
+              3222274054,
+              3222274054,
+              3222274054,
+              3222274054,
+              3222274054
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": -174762.66666662507,
+            "b": -2.0265579223632812e-06,
+            "c": 4295098369.000021
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": -174762.66666662507,
+                "b": -2.0265579223632812e-06,
+                "c": 4295098369.000021
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -174762.66666666666,
+                "b": 4295098369.0,
+                "div": 1
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -349525.3333333333,
+                "b": 4295098369.0,
+                "div": 2
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -524288.0,
+                "b": 4295098369.0,
+                "div": 3
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -699050.6666666666,
+                "b": 4295098369.0,
+                "div": 4
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -1048576.0,
+                "b": 4295098369.0,
+                "div": 6
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -1398101.3333333333,
+                "b": 4295098369.0,
+                "div": 8
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -2097152.0,
+                "b": 4295098369.0,
+                "div": 12
+              }
+            }
+          ]
+        },
+        "bitfield_fits": [
+          {
+            "best_formula": {
+              "candidate_count": 19,
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": 0.0069444444444444415,
+                "b": -0.33333333333333315,
+                "c": 3.999999999999998
+              },
+              "top_candidates": [
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-quadratic",
+                  "params": {
+                    "a": 0.0069444444444444415,
+                    "b": -0.33333333333333315,
+                    "c": 3.999999999999998
+                  }
+                },
+                {
+                  "complexity": 0,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "const",
+                  "params": {
+                    "c": 0.6666666666666666
+                  }
+                },
+                {
+                  "complexity": 1,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile-linear",
+                  "params": {
+                    "a": 0.0,
+                    "b": 0.6666666666666666
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0001417233560090703,
+                    "b": 0.5714285714285715,
+                    "div": 1
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0002834467120181406,
+                    "b": 0.5714285714285715,
+                    "div": 2
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.00042517006802721087,
+                    "b": 0.5714285714285715,
+                    "div": 3
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0005668934240362812,
+                    "b": 0.5714285714285715,
+                    "div": 4
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0008503401360544217,
+                    "b": 0.5714285714285715,
+                    "div": 6
+                  }
+                }
+              ]
+            },
+            "bit_range": [
+              23,
+              23
+            ],
+            "values_by_dim": [
+              {
+                "dim": 768,
+                "value": 1
+              },
+              {
+                "dim": 1536,
+                "value": 0
+              },
+              {
+                "dim": 2304,
+                "value": 1
+              }
+            ],
+            "width": 1
+          },
+          {
+            "best_formula": {
+              "candidate_count": 19,
+              "complexity": 1,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-linear",
+              "params": {
+                "a": -0.125,
+                "b": 4.666666666666667
+              },
+              "top_candidates": [
+                {
+                  "complexity": 1,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-linear",
+                  "params": {
+                    "a": -0.125,
+                    "b": 4.666666666666667
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-quadratic",
+                  "params": {
+                    "a": -0.0034722222222221223,
+                    "b": 0.0416666666666618,
+                    "c": 3.0000000000000506
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.0026218820861678006,
+                    "b": 3.428571428571429,
+                    "div": 1
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.005243764172335601,
+                    "b": 3.428571428571429,
+                    "div": 2
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.007865646258503401,
+                    "b": 3.4285714285714284,
+                    "div": 3
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.010487528344671202,
+                    "b": 3.428571428571429,
+                    "div": 4
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.015731292517006803,
+                    "b": 3.4285714285714284,
+                    "div": 6
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.020975056689342405,
+                    "b": 3.428571428571429,
+                    "div": 8
+                  }
+                }
+              ]
+            },
+            "bit_range": [
+              26,
+              27
+            ],
+            "values_by_dim": [
+              {
+                "dim": 768,
+                "value": 3
+              },
+              {
+                "dim": 1536,
+                "value": 2
+              },
+              {
+                "dim": 2304,
+                "value": 0
+              }
+            ],
+            "width": 2
+          }
+        ],
+        "lane_bytes": 4,
+        "occurrence_count": 24,
+        "offsets": [
+          292,
+          356,
+          420,
+          484,
+          548,
+          612,
+          676,
+          740,
+          804,
+          868,
+          932,
+          996,
+          1060,
+          1124,
+          1188,
+          1252,
+          1316,
+          1380,
+          1444,
+          1508,
+          1572,
+          1636,
+          1700,
+          1764
+        ],
+        "repeated_identical_per_dim": false,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 4269932545
+          },
+          {
+            "dim": 1536,
+            "value": 4194435073
+          },
+          {
+            "dim": 2304,
+            "value": 4068605953
+          }
+        ],
+        "representative_vary_mask_hex": "0x0c800000",
+        "stride_residue": 36,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              4269932545,
+              4269932545,
+              4269932545,
+              4269932545,
+              4269932545,
+              4269932545,
+              4269932545,
+              4269932545,
+              4269932545,
+              4269932545,
+              4269932545,
+              4269932545,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              4194435073,
+              4194435073,
+              4194435073,
+              4194435073,
+              4194435073,
+              4194435073,
+              4194435073,
+              4194435073,
+              4194435073,
+              4194435073,
+              4194435073,
+              4194435073,
+              4097,
+              4097,
+              4097,
+              4097,
+              4097,
+              4097,
+              4097,
+              4097,
+              4097,
+              4097,
+              4097,
+              4097
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              4068605953,
+              4068605953,
+              4068605953,
+              4068605953,
+              4068605953,
+              4068605953,
+              4068605953,
+              4068605953,
+              4068605953,
+              4068605953,
+              4068605953,
+              4068605953,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137,
+              2139099137
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": -1820.4444444444428,
+            "b": 109226.66666666657,
+            "c": -786428.9999999987
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": -1820.4444444444428,
+                "b": 109226.66666666657,
+                "c": -786428.9999999987
+              }
+            },
+            {
+              "complexity": 1,
+              "exact_ratio": 0.0,
+              "mae": 116508.33333333333,
+              "model": "tile-linear",
+              "params": {
+                "a": 21845.333333333332,
+                "b": 87384.33333333333
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 116508.33333333333,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 87381.33333333333,
+                "b": 349528.3333333333,
+                "div": 192
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 134679.66666666666,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 40884.84403669725,
+                "b": 339106.70642201835,
+                "div": 96
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 137970.33333333334,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 96579.36842105263,
+                "b": 386320.4736842105,
+                "div": 256
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 140093.33333333334,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 13266.396761133603,
+                "b": 337500.1336032389,
+                "div": 32
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 140093.33333333334,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 26532.793522267206,
+                "b": 337500.1336032389,
+                "div": 64
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 142663.33333333334,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 408.671201814059,
+                "b": 337045.28571428574,
+                "div": 1
+              }
+            }
+          ]
+        },
+        "bitfield_fits": [
+          {
+            "best_formula": {
+              "candidate_count": 19,
+              "complexity": 1,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-linear",
+              "params": {
+                "a": 0.041666666666666664,
+                "b": -0.3333333333333333
+              },
+              "top_candidates": [
+                {
+                  "complexity": 1,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-linear",
+                  "params": {
+                    "a": 0.041666666666666664,
+                    "b": -0.3333333333333333
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-quadratic",
+                  "params": {
+                    "a": -0.0034722222222222008,
+                    "b": 0.20833333333333226,
+                    "c": -1.999999999999989
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0007794784580498867,
+                    "b": 0.14285714285714288,
+                    "div": 1
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0015589569160997733,
+                    "b": 0.14285714285714288,
+                    "div": 2
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.00233843537414966,
+                    "b": 0.14285714285714288,
+                    "div": 3
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0031179138321995466,
+                    "b": 0.14285714285714288,
+                    "div": 4
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.00467687074829932,
+                    "b": 0.14285714285714288,
+                    "div": 6
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.006235827664399093,
+                    "b": 0.14285714285714288,
+                    "div": 8
+                  }
+                }
+              ]
+            },
+            "bit_range": [
+              19,
+              19
+            ],
+            "values_by_dim": [
+              {
+                "dim": 768,
+                "value": 0
+              },
+              {
+                "dim": 1536,
+                "value": 1
+              },
+              {
+                "dim": 2304,
+                "value": 1
+              }
+            ],
+            "width": 1
+          }
+        ],
+        "lane_bytes": 4,
+        "occurrence_count": 24,
+        "offsets": [
+          296,
+          360,
+          424,
+          488,
+          552,
+          616,
+          680,
+          744,
+          808,
+          872,
+          936,
+          1000,
+          1064,
+          1128,
+          1192,
+          1256,
+          1320,
+          1384,
+          1448,
+          1512,
+          1576,
+          1640,
+          1704,
+          1768
+        ],
+        "repeated_identical_per_dim": false,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 262147
+          },
+          {
+            "dim": 1536,
+            "value": 786435
+          },
+          {
+            "dim": 2304,
+            "value": 786435
+          }
+        ],
+        "representative_vary_mask_hex": "0x00080000",
+        "stride_residue": 40,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              262147,
+              262147,
+              262147,
+              262147,
+              262147,
+              262147,
+              262147,
+              262147,
+              262147,
+              262147,
+              262147,
+              262147,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              786435,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201,
+              2099201
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": 262144.0,
+            "b": 0.0,
+            "c": 0.0
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": 262144.0,
+                "b": 0.0,
+                "c": 0.0
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 262144.0,
+                "b": 0.0,
+                "div": 1
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 524288.0,
+                "b": 0.0,
+                "div": 2
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 786432.0,
+                "b": 0.0,
+                "div": 3
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 1048576.0,
+                "b": 0.0,
+                "div": 4
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 1572864.0,
+                "b": 0.0,
+                "div": 6
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 2097152.0,
+                "b": 0.0,
+                "div": 8
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": 3145728.0,
+                "b": 0.0,
+                "div": 12
+              }
+            }
+          ]
+        },
+        "bitfield_fits": [
+          {
+            "best_formula": {
+              "candidate_count": 19,
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": 0.0069444444444444415,
+                "b": -0.33333333333333315,
+                "c": 3.999999999999998
+              },
+              "top_candidates": [
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-quadratic",
+                  "params": {
+                    "a": 0.0069444444444444415,
+                    "b": -0.33333333333333315,
+                    "c": 3.999999999999998
+                  }
+                },
+                {
+                  "complexity": 0,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "const",
+                  "params": {
+                    "c": 0.6666666666666666
+                  }
+                },
+                {
+                  "complexity": 1,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile-linear",
+                  "params": {
+                    "a": 0.0,
+                    "b": 0.6666666666666666
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0001417233560090703,
+                    "b": 0.5714285714285715,
+                    "div": 1
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0002834467120181406,
+                    "b": 0.5714285714285715,
+                    "div": 2
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.00042517006802721087,
+                    "b": 0.5714285714285715,
+                    "div": 3
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0005668934240362812,
+                    "b": 0.5714285714285715,
+                    "div": 4
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0008503401360544217,
+                    "b": 0.5714285714285715,
+                    "div": 6
+                  }
+                }
+              ]
+            },
+            "bit_range": [
+              22,
+              22
+            ],
+            "values_by_dim": [
+              {
+                "dim": 768,
+                "value": 1
+              },
+              {
+                "dim": 1536,
+                "value": 0
+              },
+              {
+                "dim": 2304,
+                "value": 1
+              }
+            ],
+            "width": 1
+          },
+          {
+            "best_formula": {
+              "candidate_count": 19,
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": 0.013888888888888928,
+                "b": 0.08333333333333148,
+                "c": -0.9999999999999805
+              },
+              "top_candidates": [
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-quadratic",
+                  "params": {
+                    "a": 0.013888888888888928,
+                    "b": 0.08333333333333148,
+                    "c": -0.9999999999999805
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.015589569160997732,
+                    "b": -0.14285714285714235,
+                    "div": 1
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.031179138321995464,
+                    "b": -0.14285714285714235,
+                    "div": 2
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0467687074829932,
+                    "b": -0.14285714285714354,
+                    "div": 3
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.06235827664399093,
+                    "b": -0.14285714285714235,
+                    "div": 4
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0935374149659864,
+                    "b": -0.14285714285714354,
+                    "div": 6
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.12471655328798185,
+                    "b": -0.14285714285714235,
+                    "div": 8
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.1870748299319728,
+                    "b": -0.14285714285714354,
+                    "div": 12
+                  }
+                }
+              ]
+            },
+            "bit_range": [
+              24,
+              28
+            ],
+            "values_by_dim": [
+              {
+                "dim": 768,
+                "value": 2
+              },
+              {
+                "dim": 1536,
+                "value": 9
+              },
+              {
+                "dim": 2304,
+                "value": 20
+              }
+            ],
+            "width": 5
+          }
+        ],
+        "lane_bytes": 4,
+        "occurrence_count": 13,
+        "offsets": [
+          184,
+          248,
+          1144,
+          1208,
+          1272,
+          1336,
+          1400,
+          1464,
+          1528,
+          1592,
+          1656,
+          1720,
+          1784
+        ],
+        "repeated_identical_per_dim": false,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 37748736
+          },
+          {
+            "dim": 1536,
+            "value": 150994944
+          },
+          {
+            "dim": 2304,
+            "value": 339738624
+          }
+        ],
+        "representative_vary_mask_hex": "0x1f400000",
+        "stride_residue": 56,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              37748736,
+              67127264,
+              66305,
+              67073,
+              67841,
+              68609,
+              69377,
+              70145,
+              70913,
+              71681,
+              72449,
+              73217,
+              73985
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              150994944,
+              67182560,
+              68609,
+              71681,
+              74753,
+              77825,
+              80897,
+              83969,
+              87041,
+              90113,
+              93185,
+              96257,
+              99329
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              339738624,
+              67274720,
+              72449,
+              79361,
+              86273,
+              93185,
+              100097,
+              107009,
+              113921,
+              120833,
+              127745,
+              69121,
+              76033
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": -87381.33333327528,
+            "b": 0.08333051204681396,
+            "c": 4295032831.00003
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": -87381.33333327528,
+                "b": 0.08333051204681396,
+                "c": 4295032831.00003
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -87381.33163265306,
+                "b": 4295032831.857142,
+                "div": 1
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -174762.66326530612,
+                "b": 4295032831.857142,
+                "div": 2
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -262143.99489795917,
+                "b": 4295032831.857142,
+                "div": 3
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -349525.32653061225,
+                "b": 4295032831.857142,
+                "div": 4
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -524287.98979591834,
+                "b": 4295032831.857142,
+                "div": 6
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -699050.6530612245,
+                "b": 4295032831.857142,
+                "div": 8
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -1048575.9795918367,
+                "b": 4295032831.857142,
+                "div": 12
+              }
+            }
+          ]
+        },
+        "bitfield_fits": [
+          {
+            "best_formula": {
+              "candidate_count": 19,
+              "complexity": 1,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-linear",
+              "params": {
+                "a": 0.08333333333333333,
+                "b": -1.0
+              },
+              "top_candidates": [
+                {
+                  "complexity": 1,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-linear",
+                  "params": {
+                    "a": 0.08333333333333333,
+                    "b": -1.0
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-quadratic",
+                  "params": {
+                    "a": 2.168404344971009e-17,
+                    "b": 0.08333333333333226,
+                    "c": -0.9999999999999889
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0017006802721088435,
+                    "b": -0.1428571428571428,
+                    "div": 1
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.003401360544217687,
+                    "b": -0.1428571428571428,
+                    "div": 2
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.00510204081632653,
+                    "b": -0.1428571428571428,
+                    "div": 3
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.006802721088435374,
+                    "b": -0.1428571428571428,
+                    "div": 4
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.01020408163265306,
+                    "b": -0.1428571428571428,
+                    "div": 6
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.013605442176870748,
+                    "b": -0.1428571428571428,
+                    "div": 8
+                  }
+                }
+              ]
+            },
+            "bit_range": [
+              0,
+              1
+            ],
+            "values_by_dim": [
+              {
+                "dim": 768,
+                "value": 0
+              },
+              {
+                "dim": 1536,
+                "value": 1
+              },
+              {
+                "dim": 2304,
+                "value": 2
+              }
+            ],
+            "width": 2
+          },
+          {
+            "best_formula": {
+              "candidate_count": 19,
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": 0.0069444444444444415,
+                "b": -0.33333333333333315,
+                "c": 3.999999999999998
+              },
+              "top_candidates": [
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-quadratic",
+                  "params": {
+                    "a": 0.0069444444444444415,
+                    "b": -0.33333333333333315,
+                    "c": 3.999999999999998
+                  }
+                },
+                {
+                  "complexity": 0,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "const",
+                  "params": {
+                    "c": 0.6666666666666666
+                  }
+                },
+                {
+                  "complexity": 1,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile-linear",
+                  "params": {
+                    "a": 0.0,
+                    "b": 0.6666666666666666
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0001417233560090703,
+                    "b": 0.5714285714285715,
+                    "div": 1
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0002834467120181406,
+                    "b": 0.5714285714285715,
+                    "div": 2
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.00042517006802721087,
+                    "b": 0.5714285714285715,
+                    "div": 3
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0005668934240362812,
+                    "b": 0.5714285714285715,
+                    "div": 4
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": 0.0008503401360544217,
+                    "b": 0.5714285714285715,
+                    "div": 6
+                  }
+                }
+              ]
+            },
+            "bit_range": [
+              22,
+              22
+            ],
+            "values_by_dim": [
+              {
+                "dim": 768,
+                "value": 1
+              },
+              {
+                "dim": 1536,
+                "value": 0
+              },
+              {
+                "dim": 2304,
+                "value": 1
+              }
+            ],
+            "width": 1
+          },
+          {
+            "best_formula": {
+              "candidate_count": 19,
+              "complexity": 1,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-linear",
+              "params": {
+                "a": -0.125,
+                "b": 4.666666666666667
+              },
+              "top_candidates": [
+                {
+                  "complexity": 1,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-linear",
+                  "params": {
+                    "a": -0.125,
+                    "b": 4.666666666666667
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-quadratic",
+                  "params": {
+                    "a": -0.0034722222222221223,
+                    "b": 0.0416666666666618,
+                    "c": 3.0000000000000506
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.0026218820861678006,
+                    "b": 3.428571428571429,
+                    "div": 1
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.005243764172335601,
+                    "b": 3.428571428571429,
+                    "div": 2
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.007865646258503401,
+                    "b": 3.4285714285714284,
+                    "div": 3
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.010487528344671202,
+                    "b": 3.428571428571429,
+                    "div": 4
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.015731292517006803,
+                    "b": 3.4285714285714284,
+                    "div": 6
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.020975056689342405,
+                    "b": 3.428571428571429,
+                    "div": 8
+                  }
+                }
+              ]
+            },
+            "bit_range": [
+              25,
+              26
+            ],
+            "values_by_dim": [
+              {
+                "dim": 768,
+                "value": 3
+              },
+              {
+                "dim": 1536,
+                "value": 2
+              },
+              {
+                "dim": 2304,
+                "value": 0
+              }
+            ],
+            "width": 2
+          }
+        ],
+        "lane_bytes": 4,
+        "occurrence_count": 12,
+        "offsets": [
+          288,
+          352,
+          416,
+          480,
+          544,
+          608,
+          672,
+          736,
+          800,
+          864,
+          928,
+          992
+        ],
+        "repeated_identical_per_dim": true,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 4282449920
+          },
+          {
+            "dim": 1536,
+            "value": 4244701185
+          },
+          {
+            "dim": 2304,
+            "value": 4181786626
+          }
+        ],
+        "representative_vary_mask_hex": "0x06400003",
+        "stride_residue": 32,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              4282449920,
+              4282449920,
+              4282449920,
+              4282449920,
+              4282449920,
+              4282449920,
+              4282449920,
+              4282449920,
+              4282449920,
+              4282449920,
+              4282449920,
+              4282449920
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              4244701185,
+              4244701185,
+              4244701185,
+              4244701185,
+              4244701185,
+              4244701185,
+              4244701185,
+              4244701185,
+              4244701185,
+              4244701185,
+              4244701185,
+              4244701185
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              4181786626,
+              4181786626,
+              4181786626,
+              4181786626,
+              4181786626,
+              4181786626,
+              4181786626,
+              4181786626,
+              4181786626,
+              4181786626,
+              4181786626,
+              4181786626
+            ]
+          }
+        ]
+      },
+      {
+        "best_formula": {
+          "candidate_count": 19,
+          "complexity": 2,
+          "exact_ratio": 1.0,
+          "mae": 0.0,
+          "model": "tile-quadratic",
+          "params": {
+            "a": -29127.111111110982,
+            "b": 1398101.3333333267,
+            "c": 2432.000000070773
+          },
+          "top_candidates": [
+            {
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": -29127.111111110982,
+                "b": 1398101.3333333267,
+                "c": 2432.000000070773
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 1797558.6666666667,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -99864.38095238095,
+                "b": 14482767.238095239,
+                "div": 128
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 1826091.3333333333,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -594.4308390022676,
+                "b": 14382902.857142858,
+                "div": 1
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 1826091.3333333333,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -1188.8616780045352,
+                "b": 14382902.857142858,
+                "div": 2
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 1826091.3333333333,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -1783.2925170068027,
+                "b": 14382902.857142858,
+                "div": 3
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 1826091.3333333333,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -2377.7233560090704,
+                "b": 14382902.857142858,
+                "div": 4
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 1826091.3333333333,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -3566.5850340136053,
+                "b": 14382902.857142858,
+                "div": 6
+              }
+            },
+            {
+              "complexity": 2,
+              "exact_ratio": 0.0,
+              "mae": 1826091.3333333333,
+              "model": "tile2div-linear",
+              "params": {
+                "a": -4755.446712018141,
+                "b": 14382902.857142858,
+                "div": 8
+              }
+            }
+          ]
+        },
+        "bitfield_fits": [
+          {
+            "best_formula": {
+              "candidate_count": 19,
+              "complexity": 2,
+              "exact_ratio": 1.0,
+              "mae": 0.0,
+              "model": "tile-quadratic",
+              "params": {
+                "a": -0.006944444444444346,
+                "b": 0.3333333333333285,
+                "c": 5.062616992290698e-14
+              },
+              "top_candidates": [
+                {
+                  "complexity": 2,
+                  "exact_ratio": 1.0,
+                  "mae": 0.0,
+                  "model": "tile-quadratic",
+                  "params": {
+                    "a": -0.006944444444444346,
+                    "b": 0.3333333333333285,
+                    "c": 5.062616992290698e-14
+                  }
+                },
+                {
+                  "complexity": 0,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "const",
+                  "params": {
+                    "c": 3.3333333333333335
+                  }
+                },
+                {
+                  "complexity": 1,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile-linear",
+                  "params": {
+                    "a": 0.0,
+                    "b": 3.3333333333333335
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.0001417233560090703,
+                    "b": 3.428571428571429,
+                    "div": 1
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.0002834467120181406,
+                    "b": 3.428571428571429,
+                    "div": 2
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.00042517006802721087,
+                    "b": 3.428571428571429,
+                    "div": 3
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.0005668934240362812,
+                    "b": 3.428571428571429,
+                    "div": 4
+                  }
+                },
+                {
+                  "complexity": 2,
+                  "exact_ratio": 0.6666666666666666,
+                  "mae": 0.3333333333333333,
+                  "model": "tile2div-linear",
+                  "params": {
+                    "a": -0.0008503401360544217,
+                    "b": 3.428571428571429,
+                    "div": 6
+                  }
+                }
+              ]
+            },
+            "bit_range": [
+              22,
+              24
+            ],
+            "values_by_dim": [
+              {
+                "dim": 768,
+                "value": 3
+              },
+              {
+                "dim": 1536,
+                "value": 4
+              },
+              {
+                "dim": 2304,
+                "value": 3
+              }
+            ],
+            "width": 3
+          }
+        ],
+        "lane_bytes": 4,
+        "occurrence_count": 10,
+        "offsets": [
+          1104,
+          1168,
+          1232,
+          1296,
+          1360,
+          1424,
+          1488,
+          1616,
+          1680,
+          1744
+        ],
+        "repeated_identical_per_dim": false,
+        "representative_values_by_dim": [
+          {
+            "dim": 768,
+            "value": 12585344
+          },
+          {
+            "dim": 1536,
+            "value": 16779648
+          },
+          {
+            "dim": 2304,
+            "value": 12585344
+          }
+        ],
+        "representative_vary_mask_hex": "0x01c00000",
+        "stride_residue": 16,
+        "values_by_dim": [
+          {
+            "dim": 768,
+            "values": [
+              12585344,
+              25168256,
+              4196736,
+              16779648,
+              29362560,
+              8391040,
+              20973952,
+              12585344,
+              25168256,
+              4196736
+            ]
+          },
+          {
+            "dim": 1536,
+            "values": [
+              16779648,
+              2432,
+              16779648,
+              2432,
+              16779648,
+              2432,
+              16779648,
+              16779648,
+              2432,
+              16779648
+            ]
+          },
+          {
+            "dim": 2304,
+            "values": [
+              12585344,
+              25168256,
+              4196736,
+              16779648,
+              29362560,
+              8391040,
+              20973952,
+              12585344,
+              25168256,
+              4196736
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "tile_size": 64
+}
