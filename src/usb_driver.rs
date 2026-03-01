@@ -1,9 +1,9 @@
 use crate::control_plane::{split_offset, VendorControlStep};
-use crate::device::{
+use crate::error::CoralError;
+use crate::usb_ids::{
     CORAL_USB_PRODUCT_ID, CORAL_USB_PRODUCT_ID_INITIALIZED, CORAL_USB_VENDOR_ID,
     CORAL_USB_VENDOR_ID_INITIALIZED,
 };
-use crate::error::CoralError;
 use rusb::{Context, Device, DeviceDescriptor, DeviceHandle, UsbContext};
 use std::cmp::min;
 use std::time::Duration;

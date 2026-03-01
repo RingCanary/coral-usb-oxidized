@@ -21,3 +21,4 @@ cc = "1.2.16"
 
 [features]
 default = []
+legacy-runtime = []

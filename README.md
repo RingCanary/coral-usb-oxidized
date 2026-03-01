@@ -1,6 +1,9 @@
 # Coral USB Oxidized
 
-Rust SDK/driver layer for Google Coral USB Accelerator discovery, delegate creation, and TensorFlow Lite C API interop.
+Rust SDK/driver layer for Google Coral USB Accelerator:
+
+- pure-rusb control/data-plane tooling (no legacy runtime linkage)
+- optional legacy delegate/TFLite interoperability paths
 
 ## What this crate provides
 
@@ -57,14 +60,22 @@ You need a new login session after `usermod -aG`.
 
 ```bash
 cargo check --lib
-cargo run --example basic_usage
-cargo run --example simple_delegate
-cargo run --example tflite_test
+cargo run --example rusb_control_plane_probe -- --verbose-configs
+cargo run --example rusb_serialized_exec_replay -- --help
+```
+
+For legacy delegate/TFLite examples, enable `legacy-runtime`:
+
+```bash
+cargo run --features legacy-runtime --example basic_usage
+cargo run --features legacy-runtime --example simple_delegate
+cargo run --features legacy-runtime --example tflite_test
 ```
 
 ## Linking behavior
 
-The build script checks these library locations:
+With `--features legacy-runtime`, the build script links `libedgetpu` and a
+TensorFlow Lite C runtime from these locations:
 
 - `/usr/lib`
 - `/usr/local/lib`
@@ -79,7 +90,11 @@ Overrides:
 - `TFLITE_LIB_DIR`
 - `TFLITE_LINK_LIB` (explicitly choose link name, for example `tensorflowlite_c` or `tensorflow-lite`)
 
-By default, TensorFlow Lite linking prefers `libtensorflowlite_c.so` when present, otherwise falls back to distro naming (`libtensorflow-lite.so`).
+By default, TensorFlow Lite linking prefers `libtensorflowlite_c.so` when
+present, otherwise falls back to distro naming (`libtensorflow-lite.so`).
+
+Without `legacy-runtime`, no `libedgetpu`/`libtensorflowlite*` link flags are
+added. This is the pure-rusb mode for protocol RE and direct transport work.
 
 ## Device behavior
 
@@ -93,29 +108,23 @@ Both IDs are expected and should be included in udev rules.
 ## Examples
 
 ```bash
-cargo run --example basic_usage
-cargo run --example verify_device
-cargo run --example delegate_usage
-cargo run --example simple_delegate
-cargo run --example tflite_test
-cargo run --example tflite_standard_example
-cargo run --example cpu_vs_edgetpu_mvp -- --help
-cargo run --example gemm_int8 -- <dense_template_edgetpu.tflite> shift_plus1 ramp
-cargo run --example gemm_int8_dynamic -- <dense_template_edgetpu.tflite> <input_dim> <output_dim> identity ramp
-cargo run --example gemm_int8_bundled -- 2688 identity 30
-cargo run --example gemm_tiled_rows -- 8192 identity_cycle 1
-cargo run --example transformer_linear_block -- 8 5 1
-cargo run --example transformer_linear_block -- 16 3 1 --no-attention --weight-source f32
-cargo run --example gemm_weight_load_verify -- 8 3 1 2
-cargo run --example clip_vit_safetensors_report -- /path/to/model.safetensors 0 127
-cargo run --example clip_vit_layer_tpu_probe -- /path/to/model.safetensors /path/to/template_edgetpu.tflite 0 q 20 127
-cargo run --example clip_vit_block_tpu_pipeline -- /path/to/model.safetensors /path/to/template_768x768_edgetpu.tflite /path/to/template_768x3072_edgetpu.tflite /path/to/template_3072x768_edgetpu.tflite 0 8 3 1 32
-cargo run --example clip_vit_full_forward -- /path/to/model.safetensors /path/to/template_768x768_edgetpu.tflite /path/to/template_768x3072_edgetpu.tflite /path/to/template_3072x768_edgetpu.tflite --max-layers 12 --out-norm-f32le /tmp/clip_embed_norm.f32le
-cargo run --example function_gemma_layer_tpu_probe -- /path/to/model.safetensors /path/to/template_edgetpu.tflite 0 q 20 32 100
-cargo run --example function_gemma_lm_head_sanity -- /path/to/model.safetensors 42 10
-cargo run --example function_gemma_decode_loop -- /path/to/model.safetensors /path/to/functiongemma-templates-b1 2,2516,29901 --steps 8 --rounds 2 --weight-quant per-channel --lm-head coral-preload --lm-template /path/to/dense_640x2624_quant_edgetpu.tflite
-cargo run --example function_gemma_decode_loop -- /path/to/model.safetensors /path/to/functiongemma-templates-b1 2,2516,29901 --steps 8 --rounds 2 --weight-quant per-channel --lm-head coral-lazy --lm-template /path/to/dense_640x2624_quant_edgetpu.tflite --lm-cache-capacity 32 --lm-shortlist-tiles 16
 cargo run --example rusb_control_plane_probe -- --verbose-configs
+cargo run --example rusb_serialized_exec_replay -- --help
+cargo run --example rusb_param_glitch_fuzz -- --help
+cargo run --example rust_dense_template_compile -- --help
+```
+
+Legacy delegate/TFLite/GEMM examples (requires `legacy-runtime`):
+
+```bash
+cargo run --features legacy-runtime --example basic_usage
+cargo run --features legacy-runtime --example verify_device
+cargo run --features legacy-runtime --example delegate_usage
+cargo run --features legacy-runtime --example simple_delegate
+cargo run --features legacy-runtime --example tflite_test
+cargo run --features legacy-runtime --example tflite_standard_example
+cargo run --features legacy-runtime --example cpu_vs_edgetpu_mvp -- --help
+cargo run --features legacy-runtime --example gemm_int8_dynamic -- <dense_template_edgetpu.tflite> <input_dim> <output_dim> identity ramp
 ```
 
 ## Offline EdgeTPU package extractor

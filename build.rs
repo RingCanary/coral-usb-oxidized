@@ -22,6 +22,14 @@ fn main() {
     println!("cargo:rerun-if-env-changed=TFLITE_LIB_DIR");
     println!("cargo:rerun-if-env-changed=TFLITE_LINK_LIB");
 
+    let legacy_runtime_enabled = env::var_os("CARGO_FEATURE_LEGACY_RUNTIME").is_some();
+    if !legacy_runtime_enabled {
+        println!(
+            "cargo:warning=legacy-runtime feature disabled; skipping libedgetpu/tflite linkage (pure-rusb mode)"
+        );
+        return;
+    }
+
     let mut link_paths = Vec::new();
 
     for env_var in ["CORAL_LIB_DIR", "EDGETPU_LIB_DIR", "TFLITE_LIB_DIR"] {
