@@ -145,8 +145,40 @@ Representative hashes:
 - `pc14_eo4_mask_08_1000` (615) -> `0x5338654b1c42b53d`
 - full EO4 (`mask 1111`) -> `0x5f482021a9e7c4fd`
 
-## Updated Next Step
-For baseline-equivalent semantics with transport safety, keep:
-- `pc_strict14` (optionally + EO `6726` only)
+## Milestone Candidate Expansion (Neutral-Byte Union)
+Constructed additional neutral candidates:
+- `pc_neutral_res42_plus_res2.patchspec` (`29` bytes)
+- `eo_neutral_6723_6726.patchspec` (`2` bytes)
+- `milestone_candidate_baseline_equiv.patchspec` (`31` bytes = PC29 + EO2)
 
-If semantic drift is acceptable but transport safety is required, use selected EO bytes deliberately and document resulting hash class.
+Validation matrix run dir:
+- `traces/analysis/specv3-milestone-candidate-matrix-20260301T173234Z/`
+
+Results:
+- baseline: **PASS**, hash `0x67709fedfd103a2d`
+- `eo_neutral2`: **PASS**, hash `0x67709fedfd103a2d`
+- `pc_neutral29`: **PASS**, hash `0x67709fedfd103a2d`
+- `milestone31`: **PASS**, hash `0x67709fedfd103a2d`
+
+## Conclusive RE Milestone
+Reboot-repeat validation run dir:
+- `traces/analysis/specv3-milestone31-repeat5-20260301T173514Z/`
+
+Result:
+- `milestone_candidate_baseline_equiv.patchspec` passed **5/5 reboot-isolated runs**
+- output hash stable in all runs: `0x67709fedfd103a2d` (baseline-equivalent)
+
+### Milestone Statement
+For holdout family `EO=8976 / PC=2352` (target `1792`), we now have a DUT-proven patchset that is:
+1. transport-stable (admission/event/output clean),
+2. baseline-semantic (identical output hash), and
+3. reboot-repeat stable across multiple independent boots.
+
+Patch artifact:
+- `traces/analysis/specv3-tiered-holdout-family8976-20260301T170035Z/milestone_candidate_baseline_equiv.patchspec`
+
+## Strategic Next Step
+Use `milestone_candidate_baseline_equiv` as the trusted anchor and expand only via guarded additions:
+- add one candidate field-family at a time,
+- require reboot-first stability + hash invariance gates,
+- auto-demote families that violate either gate into `discrete_flags` quarantine.
