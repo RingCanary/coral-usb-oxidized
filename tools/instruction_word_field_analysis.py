@@ -350,6 +350,19 @@ def _analyze_lane(
             "best_formula": best_formula,
         }
 
+        per_offset_fits: List[Dict[str, Any]] = []
+        for idx, off in enumerate(offs_sorted):
+            vals = [int(values_by_dim[d][idx]) for d in dims]
+            off_best = _fit_best_formula(dims, vals, tile_size=tile_size, t2_divs=t2_divs)
+            per_offset_fits.append(
+                {
+                    "offset": off,
+                    "values_by_dim": [{"dim": d, "value": vals[i]} for i, d in enumerate(dims)],
+                    "best_formula": off_best,
+                }
+            )
+        row["per_offset_fits"] = per_offset_fits
+
         if lane_bytes == 4:
             wvals = rep_vals
             vary_mask = 0
