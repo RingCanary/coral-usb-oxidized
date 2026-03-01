@@ -4,7 +4,7 @@ use coral_usb_oxidized::{
     EDGETPUXRAY_RUNTIME_SETUP_SEQUENCE, LIBEDGETPU_KNOWN_GOOD_SETUP_SEQUENCE,
 };
 use rusb::ffi as libusb;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::env;
 use std::error::Error;
 use std::ffi::CStr;
@@ -97,6 +97,7 @@ struct Config {
     skip_param_preload: bool,
     read_interrupt: bool,
     instructions_tag: u32,
+    instruction_patch_spec: Option<String>,
     parameters_tag: u32,
     input_activations_tag: u32,
     param_stream_chunk_size: Option<usize>,
@@ -149,6 +150,7 @@ struct Config {
     param_submit_event_poll_ms: u64,
     param_submit_log_every: usize,
     param_submit_global_lanes: bool,
+    bootstrap_known_good_order: bool,
     param_require_post_instr_event: bool,
     param_post_instr_event_timeout_ms: u64,
     param_interleave_window_bytes: Option<usize>,
@@ -159,6 +161,24 @@ struct Config {
     script1_interleave: bool,
     script2_queue_probe: bool,
     script3_poison_diff: bool,
+}
+
+#[derive(Debug, Clone)]
+struct InstructionPatchRule {
+    payload_len: usize,
+    offset: usize,
+    value: u8,
+}
+
+#[derive(Debug, Clone, Default)]
+struct InstructionPatchSpec {
+    by_payload_len: HashMap<usize, Vec<(usize, u8)>>,
+}
+
+impl InstructionPatchSpec {
+    fn rule_count(&self) -> usize {
+        self.by_payload_len.values().map(|v| v.len()).sum()
+    }
 }
 
 fn usage(program: &str) {
@@ -188,6 +208,9 @@ fn usage(program: &str) {
     println!(
         "  --instructions-tag N      Descriptor tag for instructions (default: {})",
         DescriptorTag::Instructions.as_u32()
+    );
+    println!(
+        "  --instruction-patch-spec PATH  Patch instruction payload bytes from spec file (<len> <offset> <value>)"
     );
     println!(
         "  --parameters-tag N        Descriptor tag for parameters (default: {})",
@@ -327,6 +350,9 @@ fn usage(program: &str) {
         "  --param-submit-global-lanes   Start submit read lanes + event loop before first bulk-out and keep active across whole replay"
     );
     println!(
+        "  --bootstrap-known-good-order  Preload PARAMETER_CACHING before EXECUTION_ONLY bootstrap chunks"
+    );
+    println!(
         "  --param-require-post-instr-event  Require EP 0x82 event after PARAMETER_CACHING instr chunks before param stream"
     );
     println!(
@@ -379,6 +405,14 @@ fn parse_usize_auto(value: &str) -> Result<usize, Box<dyn Error>> {
     Ok(parse_u64_auto(value)? as usize)
 }
 
+fn parse_u8_auto(value: &str, flag_name: &str) -> Result<u8, Box<dyn Error>> {
+    let parsed = parse_u64_auto(value)?;
+    if parsed > u8::MAX as u64 {
+        return Err(format!("{} value {} exceeds u8 max {}", flag_name, parsed, u8::MAX).into());
+    }
+    Ok(parsed as u8)
+}
+
 fn parse_usize_list_auto(value: &str) -> Result<Vec<usize>, Box<dyn Error>> {
     let mut out = Vec::new();
     for raw in value.split(',') {
@@ -408,6 +442,60 @@ fn parse_tag_u32(value: &str, flag_name: &str) -> Result<u32, Box<dyn Error>> {
         .into());
     }
     Ok(parsed as u32)
+}
+
+fn load_instruction_patch_spec(path: &str) -> Result<InstructionPatchSpec, Box<dyn Error>> {
+    let text = std::fs::read_to_string(path)?;
+    let mut rules = Vec::<InstructionPatchRule>::new();
+    for (line_idx, raw) in text.lines().enumerate() {
+        let clean = raw.split('#').next().unwrap_or("").replace(',', " ");
+        let trimmed = clean.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let fields: Vec<&str> = trimmed.split_whitespace().collect();
+        if fields.len() != 3 {
+            return Err(format!(
+                "{}:{} invalid patch rule (expected '<len> <offset> <value>'): {}",
+                path,
+                line_idx + 1,
+                raw
+            )
+            .into());
+        }
+        let payload_len = parse_usize_auto(fields[0])?;
+        let offset = parse_usize_auto(fields[1])?;
+        let value = parse_u8_auto(fields[2], "--instruction-patch-spec value")?;
+        rules.push(InstructionPatchRule {
+            payload_len,
+            offset,
+            value,
+        });
+    }
+
+    if rules.is_empty() {
+        return Err(format!(
+            "instruction patch spec '{}' has no rules (add '<len> <offset> <value>' lines)",
+            path
+        )
+        .into());
+    }
+
+    let mut by_payload_len: HashMap<usize, HashMap<usize, u8>> = HashMap::new();
+    for rule in rules {
+        by_payload_len
+            .entry(rule.payload_len)
+            .or_default()
+            .insert(rule.offset, rule.value);
+    }
+
+    let mut spec = InstructionPatchSpec::default();
+    for (payload_len, offsets) in by_payload_len {
+        let mut entries: Vec<(usize, u8)> = offsets.into_iter().collect();
+        entries.sort_by_key(|(offset, _)| *offset);
+        spec.by_payload_len.insert(payload_len, entries);
+    }
+    Ok(spec)
 }
 
 fn descriptor_tag_name(tag: u32) -> &'static str {
@@ -479,6 +567,7 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         skip_param_preload: false,
         read_interrupt: false,
         instructions_tag: DescriptorTag::Instructions.as_u32(),
+        instruction_patch_spec: None,
         parameters_tag: DescriptorTag::Parameters.as_u32(),
         input_activations_tag: DescriptorTag::InputActivations.as_u32(),
         param_stream_chunk_size: None,
@@ -531,6 +620,7 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         param_submit_event_poll_ms: 1,
         param_submit_log_every: 0,
         param_submit_global_lanes: false,
+        bootstrap_known_good_order: false,
         param_require_post_instr_event: false,
         param_post_instr_event_timeout_ms: 100,
         param_interleave_window_bytes: None,
@@ -611,6 +701,14 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                     args.get(i).ok_or("--instructions-tag requires value")?,
                     "--instructions-tag",
                 )?;
+            }
+            "--instruction-patch-spec" => {
+                i += 1;
+                config.instruction_patch_spec = Some(
+                    args.get(i)
+                        .ok_or("--instruction-patch-spec requires value")?
+                        .to_string(),
+                );
             }
             "--parameters-tag" => {
                 i += 1;
@@ -939,6 +1037,9 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
             "--param-submit-global-lanes" => {
                 config.param_submit_global_lanes = true;
             }
+            "--bootstrap-known-good-order" => {
+                config.bootstrap_known_good_order = true;
+            }
             "--param-require-post-instr-event" => {
                 config.param_require_post_instr_event = true;
             }
@@ -1028,6 +1129,15 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
 
     if config.model_path.is_empty() {
         return Err("--model is required".into());
+    }
+    if let Some(spec_path) = config.instruction_patch_spec.as_ref() {
+        if !std::path::Path::new(spec_path).is_file() {
+            return Err(format!(
+                "--instruction-patch-spec path does not exist or is not a file: {}",
+                spec_path
+            )
+            .into());
+        }
     }
     if config.runs == 0 {
         return Err("--runs must be >= 1".into());
@@ -1226,6 +1336,75 @@ fn fnv1a64(bytes: &[u8]) -> u64 {
         hash = hash.wrapping_mul(0x100000001b3);
     }
     hash
+}
+
+fn fnv1a64_hex(bytes: &[u8]) -> String {
+    format!("{:016x}", fnv1a64(bytes))
+}
+
+fn apply_instruction_patch_if_enabled(
+    instruction_patch_spec: Option<&InstructionPatchSpec>,
+    payload: &[u8],
+    phase_label: &str,
+    chunk_idx: usize,
+) -> Result<Option<Vec<u8>>, Box<dyn Error>> {
+    let Some(spec) = instruction_patch_spec else {
+        return Ok(None);
+    };
+    let Some(entries) = spec.by_payload_len.get(&payload.len()) else {
+        return Ok(None);
+    };
+
+    let mut patched = payload.to_vec();
+    let mut changed = 0usize;
+    for (offset, value) in entries {
+        if *offset >= patched.len() {
+            return Err(format!(
+                "instruction patch out-of-range (phase='{}' chunk={} len={} offset={}): spec mismatch",
+                phase_label,
+                chunk_idx,
+                patched.len(),
+                offset
+            )
+            .into());
+        }
+        if patched[*offset] != *value {
+            patched[*offset] = *value;
+            changed += 1;
+        }
+    }
+
+    let before_hash = fnv1a64_hex(payload);
+    let after_hash = fnv1a64_hex(&patched);
+    println!(
+        "  {}: instr patch chunk={} len={} rules={} changed={} fnv_before={} fnv_after={}",
+        phase_label,
+        chunk_idx,
+        payload.len(),
+        entries.len(),
+        changed,
+        before_hash,
+        after_hash
+    );
+    Ok(Some(patched))
+}
+
+fn send_instruction_chunk(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    instruction_patch_spec: Option<&InstructionPatchSpec>,
+    phase_label: &str,
+    chunk_idx: usize,
+    payload: &[u8],
+) -> Result<(), Box<dyn Error>> {
+    if let Some(patched) =
+        apply_instruction_patch_if_enabled(instruction_patch_spec, payload, phase_label, chunk_idx)?
+    {
+        driver.send_descriptor_payload_raw(config.instructions_tag, &patched)?;
+    } else {
+        driver.send_descriptor_payload_raw(config.instructions_tag, payload)?;
+    }
+    Ok(())
 }
 
 fn run_param_prepost_reads(
@@ -3256,6 +3435,7 @@ fn stream_parameter_chunks_with_optional_async_lanes(
 fn send_parameter_payload_with_instruction_interleave(
     driver: &EdgeTpuUsbDriver,
     config: &Config,
+    instruction_patch_spec: Option<&InstructionPatchSpec>,
     payload: &[u8],
     phase_label: &str,
     interleave_window_bytes: usize,
@@ -3305,7 +3485,14 @@ fn send_parameter_payload_with_instruction_interleave(
             instr_chunk.len(),
             segment_start
         );
-        driver.send_descriptor_payload_raw(config.instructions_tag, instr_chunk)?;
+        send_instruction_chunk(
+            driver,
+            config,
+            instruction_patch_spec,
+            &format!("{phase_label} interleave"),
+            instr_idx,
+            instr_chunk,
+        )?;
 
         if config.param_interleave_require_event {
             let timeout = Duration::from_millis(config.param_interleave_event_timeout_ms);
@@ -3503,7 +3690,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         || has_param_admission_wait(&config)
     {
         println!(
-            "Parameter stream controls: chunk={:?} max_bytes={:?} force_full_header_len={} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} csr_snapshot_start={:?} csr_snapshot_end={:?} csr_snapshot_every_chunks={} csr_snapshot_on_error={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_out={} submit_bulk_out_depth={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} submit_global_lanes={} require_post_instr_event={} post_instr_event_timeout_ms={} interleave_window={:?} interleave_require_event={} interleave_event_timeout_ms={} csr_probe_offsets={:?} poison_probe_offset={:?} script1={} script2={} script3={}",
+            "Parameter stream controls: chunk={:?} max_bytes={:?} force_full_header_len={} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} csr_snapshot_start={:?} csr_snapshot_end={:?} csr_snapshot_every_chunks={} csr_snapshot_on_error={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_out={} submit_bulk_out_depth={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} submit_global_lanes={} bootstrap_known_good_order={} require_post_instr_event={} post_instr_event_timeout_ms={} interleave_window={:?} interleave_require_event={} interleave_event_timeout_ms={} csr_probe_offsets={:?} poison_probe_offset={:?} script1={} script2={} script3={}",
             config.param_stream_chunk_size,
             config.param_stream_max_bytes,
             config.param_force_full_header_len,
@@ -3555,6 +3742,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.param_submit_event_poll_ms,
             config.param_submit_log_every,
             config.param_submit_global_lanes,
+            config.bootstrap_known_good_order,
             config.param_require_post_instr_event,
             config.param_post_instr_event_timeout_ms,
             config.param_interleave_window_bytes,
@@ -3579,6 +3767,29 @@ fn main() -> Result<(), Box<dyn Error>> {
     let run_exe = choose_execution_executable(&executables, config.exec_index)?;
 
     let input_bytes = load_input(&config)?;
+    let instruction_patch_spec = if let Some(spec_path) = config.instruction_patch_spec.as_ref() {
+        let spec = load_instruction_patch_spec(spec_path)?;
+        println!(
+            "Instruction patch spec: path={} payload_lens={} rule_count={}",
+            spec_path,
+            spec.by_payload_len.len(),
+            spec.rule_count()
+        );
+        for (payload_len, entries) in &spec.by_payload_len {
+            let first = entries.first().copied();
+            let last = entries.last().copied();
+            println!(
+                "  patch len={} entries={} first={:?} last={:?}",
+                payload_len,
+                entries.len(),
+                first,
+                last
+            );
+        }
+        Some(spec)
+    } else {
+        None
+    };
 
     let mut driver =
         EdgeTpuUsbDriver::open_first_prefer_runtime(Duration::from_millis(config.timeout_ms))?;
@@ -3694,12 +3905,25 @@ fn main() -> Result<(), Box<dyn Error>> {
         let config = &replay_config;
         if !config.skip_param_preload {
             if !param_executables.is_empty() && run_exe.executable_type == 2 {
-                println!(
-                    "Bootstrap phase: send EXECUTION_ONLY instruction chunks, then PARAMETER_CACHING streams"
-                );
-                for (idx, chunk) in run_exe.instruction_bitstreams.iter().enumerate() {
-                    println!("  EXECUTION_ONLY chunk {} ({} bytes)", idx, chunk.len());
-                    driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
+                if config.bootstrap_known_good_order {
+                    println!(
+                        "Bootstrap phase (known-good order): send PARAMETER_CACHING streams before EXECUTION_ONLY run chunks"
+                    );
+                } else {
+                    println!(
+                        "Bootstrap phase: send EXECUTION_ONLY instruction chunks, then PARAMETER_CACHING streams"
+                    );
+                    for (idx, chunk) in run_exe.instruction_bitstreams.iter().enumerate() {
+                        println!("  EXECUTION_ONLY chunk {} ({} bytes)", idx, chunk.len());
+                        send_instruction_chunk(
+                            &driver,
+                            config,
+                            instruction_patch_spec.as_ref(),
+                            "bootstrap exec_only",
+                            idx,
+                            chunk,
+                        )?;
+                    }
                 }
                 for exe in &param_executables {
                     println!(
@@ -3710,10 +3934,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                     );
                     for (idx, chunk) in exe.instruction_bitstreams.iter().enumerate() {
                         println!("    instr chunk {} ({} bytes)", idx, chunk.len());
-                        driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
+                        send_instruction_chunk(
+                            &driver,
+                            config,
+                            instruction_patch_spec.as_ref(),
+                            "bootstrap param_caching",
+                            idx,
+                            chunk,
+                        )?;
                     }
                     if config.param_require_post_instr_event {
-                        let timeout = Duration::from_millis(config.param_post_instr_event_timeout_ms);
+                        let timeout =
+                            Duration::from_millis(config.param_post_instr_event_timeout_ms);
                         match driver.read_event_packet_with_timeout(timeout) {
                             Ok(event) => println!(
                                 "    post-instr event (required): tag={} offset=0x{:016x} length={}",
@@ -3729,14 +3961,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                     }
                     if let Some(window_bytes) = config.param_interleave_window_bytes {
-                        let interleave_chunks: &[Vec<u8>] = if !exe.instruction_bitstreams.is_empty() {
-                            &exe.instruction_bitstreams
-                        } else {
-                            &run_exe.instruction_bitstreams
-                        };
+                        let interleave_chunks: &[Vec<u8>] =
+                            if !exe.instruction_bitstreams.is_empty() {
+                                &exe.instruction_bitstreams
+                            } else {
+                                &run_exe.instruction_bitstreams
+                            };
                         send_parameter_payload_with_instruction_interleave(
                             &driver,
                             config,
+                            instruction_patch_spec.as_ref(),
                             &exe.parameters_stream,
                             "bootstrap param",
                             window_bytes,
@@ -3751,12 +3985,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                         )?;
                     }
                 }
-                match driver.read_event_packet() {
-                    Ok(event) => println!(
-                        "  Bootstrap event: tag={} offset=0x{:016x} length={}",
-                        event.tag, event.offset, event.length
-                    ),
-                    Err(err) => println!("  Bootstrap event read failed: {}", err),
+                if config.bootstrap_known_good_order {
+                    println!(
+                        "  Bootstrap event read skipped (known-good order defers EXECUTION_ONLY+input to run phase)"
+                    );
+                } else {
+                    match driver.read_event_packet() {
+                        Ok(event) => println!(
+                            "  Bootstrap event: tag={} offset=0x{:016x} length={}",
+                            event.tag, event.offset, event.length
+                        ),
+                        Err(err) => println!("  Bootstrap event read failed: {}", err),
+                    }
                 }
             } else {
                 for exe in &param_executables {
@@ -3766,11 +4006,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                         exe.instruction_bitstreams.len(),
                         exe.parameters_stream.len()
                     );
-                    for chunk in &exe.instruction_bitstreams {
-                        driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
+                    for (idx, chunk) in exe.instruction_bitstreams.iter().enumerate() {
+                        send_instruction_chunk(
+                            &driver,
+                            config,
+                            instruction_patch_spec.as_ref(),
+                            "preload param_caching",
+                            idx,
+                            chunk,
+                        )?;
                     }
                     if config.param_require_post_instr_event {
-                        let timeout = Duration::from_millis(config.param_post_instr_event_timeout_ms);
+                        let timeout =
+                            Duration::from_millis(config.param_post_instr_event_timeout_ms);
                         match driver.read_event_packet_with_timeout(timeout) {
                             Ok(event) => println!(
                                 "  post-instr event (required): tag={} offset=0x{:016x} length={}",
@@ -3786,14 +4034,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                     }
                     if let Some(window_bytes) = config.param_interleave_window_bytes {
-                        let interleave_chunks: &[Vec<u8>] = if !exe.instruction_bitstreams.is_empty() {
-                            &exe.instruction_bitstreams
-                        } else {
-                            &run_exe.instruction_bitstreams
-                        };
+                        let interleave_chunks: &[Vec<u8>] =
+                            if !exe.instruction_bitstreams.is_empty() {
+                                &exe.instruction_bitstreams
+                            } else {
+                                &run_exe.instruction_bitstreams
+                            };
                         send_parameter_payload_with_instruction_interleave(
                             &driver,
                             config,
+                            instruction_patch_spec.as_ref(),
                             &exe.parameters_stream,
                             "preload param",
                             window_bytes,
@@ -3825,7 +4075,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             println!("RUN {}", run + 1);
             for (idx, chunk) in run_exe.instruction_bitstreams.iter().enumerate() {
                 println!("  run instr chunk {} ({} bytes)", idx, chunk.len());
-                driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
+                send_instruction_chunk(
+                    &driver,
+                    config,
+                    instruction_patch_spec.as_ref(),
+                    "run",
+                    idx,
+                    chunk,
+                )?;
             }
             if !run_exe.parameters_stream.is_empty() {
                 send_parameter_payload(&driver, config, &run_exe.parameters_stream, "run param")?;

@@ -1,0 +1,31 @@
+# Derived from Pi5 known-good vs replay payload dumps (2026-03-01).
+# Format: <payload_len> <offset> <value>
+# Source good dumps:
+#   traces/caller_tagged_delta_20260301T054808Z_good_both/submit_len2608_seq279.bin
+#   traces/caller_tagged_delta_20260301T054808Z_good_both/submit_len9872_seq286.bin
+# Source replay dumps:
+#   traces/caller_tagged_delta_20260301T054632Z_replay9872/submit_len2608_seq45.bin
+#   traces/caller_tagged_delta_20260301T054632Z_replay9872/submit_len9872_seq41.bin
+
+# len=2608 diff_bytes=6
+2608 74 0x4c
+2608 75 0x41
+2608 76 0x28
+2608 88 0x40
+2608 89 0x55
+2608 90 0x15
+
+# len=9872 diff_bytes=13
+9872 232 0x40
+9872 233 0x55
+9872 234 0x15
+9872 249 0x70
+9872 250 0x3d
+9872 251 0x30
+9872 252 0x28
+9872 7672 0x40
+9872 7673 0x55
+9872 7674 0x15
+9872 7690 0x7c
+9872 7691 0x51
+9872 7692 0x28
