@@ -1,0 +1,23 @@
+Instruction word-field analysis
+generated_at_utc=2026-03-01T13:11:02+00:00
+entry_count=3 size=2096
+  dim=768 path=traces/dense-template-768x768-20260301T131009Z/extract/package_000/serialized_executable_001.bin
+  dim=1536 path=/tmp/dense-1536/extract/package_000/serialized_executable_001.bin
+  dim=2304 path=traces/dense-template-2304x2304-20260222T062229Z/extract/package_000/serialized_executable_001.bin
+lane16: changed=144 stride=64 top_groups=10
+  residue=28 count=24 repeat_identical=False model=tile-linear exact=1.000 mae=0.000
+  residue=38 count=24 repeat_identical=False model=tile-quadratic exact=1.000 mae=0.000
+  residue=42 count=24 repeat_identical=False model=tile-quadratic exact=1.000 mae=0.000
+  residue=30 count=12 repeat_identical=True model=tile-quadratic exact=1.000 mae=0.000
+  residue=32 count=12 repeat_identical=True model=tile-linear exact=1.000 mae=0.000
+  residue=34 count=12 repeat_identical=True model=tile-quadratic exact=1.000 mae=0.000
+  residue=40 count=12 repeat_identical=True model=tile-quadratic exact=1.000 mae=0.000
+  residue=56 count=12 repeat_identical=False model=tile-quadratic exact=1.000 mae=0.000
+lane32: changed=107 stride=64 top_groups=6
+  residue=28 count=24 repeat_identical=False model=tile-quadratic exact=1.000 mae=0.000
+  residue=36 count=24 repeat_identical=False model=tile-quadratic exact=1.000 mae=0.000
+  residue=40 count=24 repeat_identical=False model=tile-quadratic exact=1.000 mae=0.000
+  residue=56 count=13 repeat_identical=False model=tile-quadratic exact=1.000 mae=0.000
+  residue=32 count=12 repeat_identical=True model=tile-quadratic exact=1.000 mae=0.000
+  residue=16 count=10 repeat_identical=False model=tile-quadratic exact=1.000 mae=0.000
+json_out=docs/artifacts/instruction-word-field-20260301-r2/pc_2096_768_1536_2304_wordfield.json

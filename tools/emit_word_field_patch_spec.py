@@ -23,6 +23,18 @@ class LanePick:
     lane_bytes: int
 
 
+@dataclass(frozen=True)
+class OverrideRule:
+    lane: str
+    residue: Optional[int]
+    offset: Optional[int]
+    policy: Optional[str]
+    model: Optional[str]
+    div: Optional[int]
+    domain: Optional[str]
+    bits: Optional[int]
+
+
 def _read_chunk_bytes(path: Path, chunk_index: int) -> bytes:
     blob = path.read_bytes()
     root = pe._parse_root_table(blob, 0, file_identifier=None)
@@ -48,6 +60,102 @@ def _fit_linear(x1: float, y1: float, x2: float, y2: float) -> Optional[Tuple[fl
 
 def _predict_linear(a: float, b: float, x: float) -> int:
     return int(round((a * x) + b))
+
+
+def _load_field_spec(path: Optional[str]) -> Dict[str, List[OverrideRule]]:
+    if not path:
+        return {"offset_rules": [], "residue_rules": []}
+
+    raw = json.loads(Path(path).read_text())
+    offset_rules: List[OverrideRule] = []
+    residue_rules: List[OverrideRule] = []
+
+    def parse_rule(obj: Dict[str, Any]) -> OverrideRule:
+        lane = str(obj.get("lane", ""))
+        if lane not in ("lane16", "lane32"):
+            raise SystemExit(f"field-spec rule lane must be lane16 or lane32, got: {lane}")
+
+        residue = obj.get("residue")
+        offset = obj.get("offset")
+        policy = obj.get("policy")
+        model = obj.get("model")
+        div = obj.get("div")
+        domain = obj.get("domain")
+        bits = obj.get("bits")
+
+        if policy is not None and policy not in ("endpoint", "best"):
+            raise SystemExit(f"field-spec policy must be endpoint|best, got: {policy}")
+        if domain is not None and domain not in ("u", "s", "mod"):
+            raise SystemExit(f"field-spec domain must be u|s|mod, got: {domain}")
+        if model is not None and model not in ("const", "tile-linear", "tile-quadratic", "tile2div-linear"):
+            raise SystemExit(f"field-spec model unsupported: {model}")
+
+        return OverrideRule(
+            lane=lane,
+            residue=int(residue) if residue is not None else None,
+            offset=int(offset) if offset is not None else None,
+            policy=str(policy) if policy is not None else None,
+            model=str(model) if model is not None else None,
+            div=int(div) if div is not None else None,
+            domain=str(domain) if domain is not None else None,
+            bits=int(bits) if bits is not None else None,
+        )
+
+    for obj in raw.get("offset_rules", []):
+        offset_rules.append(parse_rule(obj))
+    for obj in raw.get("residue_rules", []):
+        residue_rules.append(parse_rule(obj))
+
+    return {"offset_rules": offset_rules, "residue_rules": residue_rules}
+
+
+def _match_override(
+    spec: Dict[str, List[OverrideRule]],
+    lane: str,
+    offset: int,
+    residue: Optional[int],
+) -> Optional[OverrideRule]:
+    for rule in spec["offset_rules"]:
+        if rule.lane == lane and rule.offset == offset:
+            return rule
+    if residue is not None:
+        for rule in spec["residue_rules"]:
+            if rule.lane == lane and rule.residue == residue:
+                return rule
+    return None
+
+
+def _pick_best_candidate(
+    best: Dict[str, Any],
+    model_override: Optional[str],
+    div_override: Optional[int],
+) -> Tuple[str, Dict[str, Any]]:
+    cands = [best] + list(best.get("top_candidates", []))
+    filtered = []
+    for c in cands:
+        model = str(c.get("model", "none"))
+        params = dict(c.get("params", {}))
+        if model_override is not None and model != model_override:
+            continue
+        if div_override is not None:
+            if model != "tile2div-linear":
+                continue
+            if int(params.get("div", -1)) != int(div_override):
+                continue
+        filtered.append(c)
+
+    if not filtered:
+        return (str(best.get("model", "none")), dict(best.get("params", {})))
+
+    def rank(c: Dict[str, Any]) -> Tuple[float, float, int, str]:
+        exact = float(c.get("exact_ratio", 0.0))
+        mae = float(c.get("mae", 1e9))
+        model = str(c.get("model", "none"))
+        complexity = 0 if model == "const" else (1 if model == "tile-linear" else 2)
+        return (-exact, mae, complexity, model)
+
+    chosen = sorted(filtered, key=rank)[0]
+    return (str(chosen.get("model", "none")), dict(chosen.get("params", {})))
 
 
 def _pick_formula(best: Dict[str, Any], mode: str) -> Tuple[str, Dict[str, Any]]:
@@ -80,6 +188,47 @@ def _pick_formula(best: Dict[str, Any], mode: str) -> Tuple[str, Dict[str, Any]]
     return (str(best.get("model", "none")), dict(best.get("params", {})))
 
 
+def _to_signed(v: int, bits: int) -> int:
+    mask = (1 << bits) - 1
+    v &= mask
+    sign = 1 << (bits - 1)
+    return v - (1 << bits) if (v & sign) else v
+
+
+def _from_signed(v: int, bits: int) -> int:
+    return v & ((1 << bits) - 1)
+
+
+def _interp_domain(
+    low: int,
+    high: int,
+    xl: float,
+    xh: float,
+    xt: float,
+    bits: int,
+    domain: str,
+) -> int:
+    if xh == xl:
+        return low
+    frac = (xt - xl) / (xh - xl)
+
+    if domain == "u":
+        return int(round(low + (high - low) * frac))
+    if domain == "s":
+        l = _to_signed(low, bits)
+        h = _to_signed(high, bits)
+        p = int(round(l + (h - l) * frac))
+        return _from_signed(p, bits)
+    if domain == "mod":
+        ring = 1 << bits
+        half = ring // 2
+        delta = ((high - low + half) % ring) - half
+        p = int(round(low + (delta * frac)))
+        return p % ring
+
+    return int(round(low + (high - low) * frac))
+
+
 def _predict_value(
     model: str,
     params: Dict[str, Any],
@@ -90,6 +239,8 @@ def _predict_value(
     target_dim: int,
     tile_size: int,
     mode: str,
+    domain: str,
+    bits: int,
 ) -> int:
     # all-points: evaluate paramized model directly
     if mode == "best":
@@ -116,25 +267,37 @@ def _predict_value(
     if model == "const":
         return int(low_val)
     if model == "tile-linear":
-        fit = _fit_linear(float(tl), float(low_val), float(th), float(high_val))
-        if fit is None:
-            return int(low_val)
-        return _predict_linear(fit[0], fit[1], float(tt))
+        return _interp_domain(
+            low=low_val,
+            high=high_val,
+            xl=float(tl),
+            xh=float(th),
+            xt=float(tt),
+            bits=bits,
+            domain=domain,
+        )
     if model == "tile2div-linear":
         d = int(params.get("div", 1))
-        xl = float((tl * tl) // d)
-        xh = float((th * th) // d)
-        xt = float((tt * tt) // d)
-        fit = _fit_linear(xl, float(low_val), xh, float(high_val))
-        if fit is None:
-            return int(low_val)
-        return _predict_linear(fit[0], fit[1], xt)
+        return _interp_domain(
+            low=low_val,
+            high=high_val,
+            xl=float((tl * tl) // d),
+            xh=float((th * th) // d),
+            xt=float((tt * tt) // d),
+            bits=bits,
+            domain=domain,
+        )
     if model == "tile-quadratic":
         # underconstrained with 2 points; fallback to tile-linear in tiles domain
-        fit = _fit_linear(float(tl), float(low_val), float(th), float(high_val))
-        if fit is None:
-            return int(low_val)
-        return _predict_linear(fit[0], fit[1], float(tt))
+        return _interp_domain(
+            low=low_val,
+            high=high_val,
+            xl=float(tl),
+            xh=float(th),
+            xt=float(tt),
+            bits=bits,
+            domain=domain,
+        )
 
     return int(low_val)
 
@@ -148,10 +311,42 @@ def _values_map(per: Dict[str, Any]) -> Dict[int, int]:
 
 def _iter_per_offsets(lane_obj: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
     for g in lane_obj.get("top_groups", []):
-        for per in g.get("per_offset_fits", []):
-            row = dict(per)
-            row["stride_residue"] = g.get("stride_residue")
-            yield row
+        per_offset = g.get("per_offset_fits", [])
+        if per_offset:
+            for per in per_offset:
+                row = dict(per)
+                row["stride_residue"] = g.get("stride_residue")
+                yield row
+            continue
+
+        # Backward-compatible path for grouped analysis JSON that stores:
+        #   offsets=[...], values_by_dim=[{"dim": d, "values": [...]}]
+        offsets = g.get("offsets", [])
+        grouped_values = g.get("values_by_dim", [])
+        if not offsets or not grouped_values:
+            continue
+
+        dim_to_values: Dict[int, Sequence[int]] = {}
+        for row in grouped_values:
+            dim = row.get("dim")
+            vals = row.get("values")
+            if dim is None or not isinstance(vals, list):
+                continue
+            dim_to_values[int(dim)] = [int(v) for v in vals]
+
+        for idx, off in enumerate(offsets):
+            vals_by_dim: List[Dict[str, int]] = []
+            for dim, vals in dim_to_values.items():
+                if idx < len(vals):
+                    vals_by_dim.append({"dim": dim, "value": int(vals[idx])})
+            if not vals_by_dim:
+                continue
+            yield {
+                "offset": int(off),
+                "values_by_dim": vals_by_dim,
+                "best_formula": g.get("best_formula", {}),
+                "stride_residue": g.get("stride_residue"),
+            }
 
 
 def _lane_plan(priority: str) -> List[LanePick]:
@@ -181,6 +376,7 @@ def main() -> int:
     ap.add_argument("--tile-size", type=int, default=64)
     ap.add_argument("--predict-mode", choices=["best", "endpoint"], default="endpoint")
     ap.add_argument("--lane-priority", default="lane32,lane16")
+    ap.add_argument("--field-spec", default=None, help="optional JSON override for residue/offset rules")
     ap.add_argument("--out-spec", required=True)
     ap.add_argument("--out-json", default=None)
     args = ap.parse_args()
@@ -194,6 +390,7 @@ def main() -> int:
     )
 
     lanes = _lane_plan(args.lane_priority)
+    field_spec = _load_field_spec(args.field_spec)
     assigned: Dict[int, Dict[str, Any]] = {}
 
     for lane in lanes:
@@ -215,7 +412,41 @@ def main() -> int:
             high_val = int(vals[args.high_dim])
 
             best = dict(per.get("best_formula", {}))
-            model, p = _pick_formula(best, mode=args.predict_mode)
+            override = _match_override(
+                spec=field_spec,
+                lane=lane.lane_key,
+                offset=off,
+                residue=per.get("stride_residue"),
+            )
+
+            mode_use = args.predict_mode
+            model: str
+            p: Dict[str, Any]
+            if override is not None and override.policy is not None:
+                mode_use = override.policy
+
+            if mode_use == "best":
+                model, p = _pick_best_candidate(
+                    best=best,
+                    model_override=override.model if override else None,
+                    div_override=override.div if override else None,
+                )
+            else:
+                if override is not None and override.model is not None:
+                    model = override.model
+                    p = {}
+                    if override.div is not None:
+                        p["div"] = int(override.div)
+                else:
+                    model, p = _pick_formula(best, mode=mode_use)
+
+            bits = (lane.lane_bytes * 8)
+            if override is not None and override.bits is not None:
+                bits = int(override.bits)
+            domain = "u"
+            if override is not None and override.domain is not None:
+                domain = override.domain
+
             pred_val = _predict_value(
                 model=model,
                 params=p,
@@ -225,7 +456,9 @@ def main() -> int:
                 high_val=high_val,
                 target_dim=args.target_dim,
                 tile_size=args.tile_size,
-                mode=args.predict_mode,
+                mode=mode_use,
+                domain=domain,
+                bits=bits,
             )
 
             max_val = (1 << (8 * lane.lane_bytes)) - 1
@@ -238,9 +471,13 @@ def main() -> int:
                 "lane_bytes": lane.lane_bytes,
                 "model": model,
                 "params": p,
+                "policy": mode_use,
+                "domain": domain,
+                "bits": bits,
                 "pred_value": pred_val,
                 "pred_bytes": list(pred_bytes),
                 "stride_residue": per.get("stride_residue"),
+                "override_applied": override is not None,
                 "known_values": vals,
             }
 
@@ -270,6 +507,7 @@ def main() -> int:
         "target_exec": args.target_exec,
         "chunk_index": args.chunk_index,
         "predict_mode": args.predict_mode,
+        "field_spec": args.field_spec,
         "dims": {
             "low": args.low_dim,
             "high": args.high_dim,

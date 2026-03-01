@@ -59,3 +59,28 @@ Two-point (`768`,`2304`) endpoint-only prediction is still underconstrained for 
 
 ## Next Step
 Add explicit field-spec constraints per residue/bit-range (signedness, modulo domain, preferred `tile2/div` form), then re-emit endpoint patches and re-run the same fresh-boot split matrix.
+
+## R2 Update (Per-Offset Fits + Reboot-First)
+
+### What Changed
+- Regenerated word-field analysis from real `768/1536/2304` executables with `per_offset_fits` present:
+  - `docs/artifacts/instruction-word-field-20260301-r2/eo_7952_768_1536_2304_wordfield.json`
+  - `docs/artifacts/instruction-word-field-20260301-r2/pc_2096_768_1536_2304_wordfield.json`
+- Emitted endpoint patch specs with v1 field constraints against dense-1536 ground truth:
+  - `PC`: `changed=0`, `mismatch_vs_target=0`
+  - `EO`: `changed=95`, `mismatch_vs_target=95`
+
+### Clean DUT Protocol
+- One case per reboot (Pi5 + Coral), with explicit dense-1536 I/O sizing:
+  - `--input-bytes 1536 --output-bytes 1536`
+- Baseline command now validated end-to-end (no model-shape mismatch artifacts).
+
+### R2 DUT Results
+- Baseline: **PASS**
+  - output hash: `fnv1a64=0xdc8c52f84cb2e9c0`
+- EO patch (`95` changed bytes): **RUN phase reached**, completion event observed, then **`UsbError(Timeout)` on output read**
+- PC patch: **no-op for target 1536** (no emitted rules), so no admission perturbation in this target case.
+
+### Current Implication
+- Remaining synthesis error for this family/target is concentrated in EO execution/output semantics.
+- Admission-path failure is no longer reproduced in the `r2` target-1536 setup because PC is exact for this target.

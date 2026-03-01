@@ -1,0 +1,19 @@
+{
+  "residue_rules": [
+    {"lane":"lane16", "residue":34, "policy":"endpoint", "model":"tile2div-linear", "div":3, "domain":"u", "bits":16},
+
+    {"lane":"lane16", "residue":18, "policy":"best"},
+    {"lane":"lane16", "residue":28, "policy":"best"},
+    {"lane":"lane16", "residue":30, "policy":"best"},
+    {"lane":"lane16", "residue":38, "policy":"best"},
+    {"lane":"lane16", "residue":40, "policy":"best"},
+    {"lane":"lane16", "residue":42, "policy":"best"},
+    {"lane":"lane16", "residue":56, "policy":"best"},
+
+    {"lane":"lane32", "residue":16, "policy":"best"},
+    {"lane":"lane32", "residue":28, "policy":"best"},
+    {"lane":"lane32", "residue":36, "policy":"best"},
+    {"lane":"lane32", "residue":40, "policy":"best"},
+    {"lane":"lane32", "residue":56, "policy":"best"}
+  ]
+}
