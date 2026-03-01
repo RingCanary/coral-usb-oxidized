@@ -118,8 +118,35 @@ Results:
 - Combined `pc_strict14 + eo_minus_toxic4` is now transport-safe end-to-end.
 - Remaining work is now semantic convergence (hash matching), not transport stability.
 
-## Next Step
-Perform semantic delta-debugging on transfer-safe set (`pc_strict14 + eo_minus_toxic4`) to recover baseline hash while preserving stability:
-- ablate EO safe bytes first (`615, 642, 866, 6726`)
-- then test selective re-introduction of additional non-toxic EO/PC bytes
-- keep reboot-first acceptance criteria: admission/event/output stability + hash objective.
+## Semantic Delta-Debug Matrix (PC14 + EO4 subsets)
+Run dir:
+- `traces/analysis/specv3-semantic-ablate-pc14-eo4-20260301T171718Z/`
+
+Setup:
+- Fixed PC subset: `pc_strict14`
+- EO candidate set (strict-minus-toxic4): `{615, 642, 866, 6726}`
+- Evaluated all `2^4 = 16` EO subset combinations with reboot-first isolation.
+
+Result summary:
+- **All 16 subsets are transport-stable** (all produced output, no timeouts).
+- Baseline hash `0x67709fedfd103a2d` is recovered only for:
+  - `mask 0000` (PC14 only)
+  - `mask 0001` (PC14 + EO{6726})
+- Any subset including `642` or `866` changes output hash.
+- `615` strongly changes output hash and introduces interaction with `6726`:
+  - with `615` absent, toggling `6726` is hash-neutral in tested pairs
+  - with `615` present, toggling `6726` changes hash
+
+Representative hashes:
+- `pc14_eo4_mask_00_0000` -> `0x67709fedfd103a2d`
+- `pc14_eo4_mask_01_0001` -> `0x67709fedfd103a2d`
+- `pc14_eo4_mask_02_0010` (866) -> `0xbab026191ca608bd`
+- `pc14_eo4_mask_04_0100` (642) -> `0xd1acb1e10033b9a5`
+- `pc14_eo4_mask_08_1000` (615) -> `0x5338654b1c42b53d`
+- full EO4 (`mask 1111`) -> `0x5f482021a9e7c4fd`
+
+## Updated Next Step
+For baseline-equivalent semantics with transport safety, keep:
+- `pc_strict14` (optionally + EO `6726` only)
+
+If semantic drift is acceptable but transport safety is required, use selected EO bytes deliberately and document resulting hash class.
