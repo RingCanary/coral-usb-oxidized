@@ -136,3 +136,22 @@ Implication:
 DUT artifacts:
 - `docs/artifacts/instruction-synthesis-20260301/pi5_dut_summary.md`
 - `docs/artifacts/instruction-synthesis-20260301/pi5-logs/`
+
+## Formula-Gated Synth Update (2026-03-01)
+`tools/synthesize_instruction_patch_spec.py` now supports formula-based byte synthesis from multiple fit points:
+- `--fit-point DIM:EO_PATH:PC_PATH` (repeatable)
+- model families: `const`, `tile-linear`, `tile-quadratic`, `tile2div-linear`
+- `--offset-mode changed-fit-union`
+- strict application gate:
+  - `--min-apply-loo-exact` (default `1.0`)
+  - `--max-apply-loo-mae` (default `0.0`)
+  - plus endpoint consistency check against explicit `--low-*` / `--high-*` streams
+
+Design intent:
+- baseline remains endpoint interpolation (or base bytes),
+- formula predictions are only applied for offsets with perfect leave-one-out behavior and endpoint consistency.
+
+Local hold-out sanity run (`target=2048`) produced zero mismatches against real bytes while still applying a small set of formula offsets:
+- artifacts:
+  - `docs/artifacts/instruction-synthesis-formula-20260301/holdout_target2048.report.json`
+  - `docs/artifacts/instruction-synthesis-formula-20260301/holdout_target2048.patchspec`

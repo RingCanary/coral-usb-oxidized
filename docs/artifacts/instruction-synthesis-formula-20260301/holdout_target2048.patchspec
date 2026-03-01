@@ -1,0 +1,3 @@
+# synthesized by synthesize_instruction_patch_spec.py
+# target_dim=2048 chunk_index=0 tile_size=64
+# offset_mode=changed-fit-union families=const,tile-linear,tile-quadratic,tile2div-linear
