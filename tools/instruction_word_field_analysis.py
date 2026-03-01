@@ -299,6 +299,36 @@ def _bit_ranges(mask: int) -> List[Tuple[int, int]]:
     return ranges
 
 
+def _classify_monotonicity(vals: Sequence[int], dims: Sequence[int]) -> Dict[str, Any]:
+    if len(vals) < 2 or len(vals) != len(dims):
+        return {
+            "monotonicity": "insufficient",
+            "is_monotone": False,
+            "monotonicity_dims": list(dims),
+        }
+
+    pairs = sorted(zip(dims, vals), key=lambda x: x[0])
+    dims_sorted = [int(d) for d, _ in pairs]
+    vals_sorted = [int(v) for _, v in pairs]
+
+    if all(v == vals_sorted[0] for v in vals_sorted):
+        cls = "const"
+    elif all(vals_sorted[i] <= vals_sorted[i + 1] for i in range(len(vals_sorted) - 1)):
+        cls = "monotone_up"
+    elif all(vals_sorted[i] >= vals_sorted[i + 1] for i in range(len(vals_sorted) - 1)):
+        cls = "monotone_down"
+    elif len(vals_sorted) == 3 and vals_sorted[0] == vals_sorted[2] and vals_sorted[0] != vals_sorted[1]:
+        cls = "midpoint_pulse"
+    else:
+        cls = "non_monotone"
+
+    return {
+        "monotonicity": cls,
+        "is_monotone": cls in {"const", "monotone_up", "monotone_down"},
+        "monotonicity_dims": dims_sorted,
+    }
+
+
 def _analyze_lane(
     bitstreams: Dict[int, Bitstream],
     lane_bytes: int,
@@ -351,17 +381,28 @@ def _analyze_lane(
         }
 
         per_offset_fits: List[Dict[str, Any]] = []
+        non_monotone_count = 0
         for idx, off in enumerate(offs_sorted):
             vals = [int(values_by_dim[d][idx]) for d in dims]
             off_best = _fit_best_formula(dims, vals, tile_size=tile_size, t2_divs=t2_divs)
+            mono = _classify_monotonicity(vals, dims)
+            if not mono["is_monotone"]:
+                non_monotone_count += 1
             per_offset_fits.append(
                 {
                     "offset": off,
                     "values_by_dim": [{"dim": d, "value": vals[i]} for i, d in enumerate(dims)],
                     "best_formula": off_best,
+                    "monotonicity": mono["monotonicity"],
+                    "is_monotone": mono["is_monotone"],
+                    "monotonicity_dims": mono["monotonicity_dims"],
                 }
             )
         row["per_offset_fits"] = per_offset_fits
+        row["non_monotone_offset_count"] = int(non_monotone_count)
+        row["non_monotone_fraction"] = (
+            float(non_monotone_count) / float(len(offs_sorted)) if offs_sorted else 0.0
+        )
 
         if lane_bytes == 4:
             wvals = rep_vals

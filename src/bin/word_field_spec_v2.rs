@@ -11,6 +11,8 @@ use std::path::Path;
 enum PredictMode {
     Endpoint,
     Best,
+    Strict,
+    ThreePoint,
 }
 
 impl PredictMode {
@@ -18,8 +20,10 @@ impl PredictMode {
         match value {
             "endpoint" => Ok(Self::Endpoint),
             "best" => Ok(Self::Best),
+            "strict" => Ok(Self::Strict),
+            "threepoint" => Ok(Self::ThreePoint),
             _ => Err(format!(
-                "invalid --predict-mode '{}', expected endpoint|best",
+                "invalid --predict-mode '{}', expected endpoint|best|strict|threepoint",
                 value
             )),
         }
@@ -29,8 +33,137 @@ impl PredictMode {
         match self {
             Self::Endpoint => "endpoint",
             Self::Best => "best",
+            Self::Strict => "strict",
+            Self::ThreePoint => "threepoint",
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum MonotonicityClass {
+    Const,
+    MonotoneUp,
+    MonotoneDown,
+    MidpointPulse,
+    NonMonotone,
+    Insufficient,
+}
+
+impl MonotonicityClass {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Const => "const",
+            Self::MonotoneUp => "monotone_up",
+            Self::MonotoneDown => "monotone_down",
+            Self::MidpointPulse => "midpoint_pulse",
+            Self::NonMonotone => "non_monotone",
+            Self::Insufficient => "insufficient",
+        }
+    }
+
+    fn is_monotone(self) -> bool {
+        matches!(self, Self::Const | Self::MonotoneUp | Self::MonotoneDown)
+    }
+
+    fn tier(self) -> PatchTier {
+        match self {
+            Self::Const | Self::MonotoneUp | Self::MonotoneDown => PatchTier::SafeCore,
+            Self::MidpointPulse | Self::NonMonotone => PatchTier::DiscreteFlags,
+            Self::Insufficient => PatchTier::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum PatchTier {
+    SafeCore,
+    DiscreteFlags,
+    Unknown,
+}
+
+impl PatchTier {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::SafeCore => "safe_core",
+            Self::DiscreteFlags => "discrete_flags",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+fn classify_three_point(lo: u64, mid: u64, hi: u64) -> MonotonicityClass {
+    if lo == mid && mid == hi {
+        return MonotonicityClass::Const;
+    }
+    if lo == hi && lo != mid {
+        return MonotonicityClass::MidpointPulse;
+    }
+    if lo <= mid && mid <= hi {
+        return MonotonicityClass::MonotoneUp;
+    }
+    if lo >= mid && mid >= hi {
+        return MonotonicityClass::MonotoneDown;
+    }
+    MonotonicityClass::NonMonotone
+}
+
+fn classify_word_monotonicity(
+    low: u64,
+    mid: Option<u64>,
+    high: u64,
+    lane_bytes: usize,
+) -> MonotonicityClass {
+    let Some(mid_val) = mid else {
+        return MonotonicityClass::Insufficient;
+    };
+
+    let mut classes = Vec::with_capacity(lane_bytes);
+    for idx in 0..lane_bytes {
+        let shift = idx * 8;
+        let lo_b = (low >> shift) & 0xff;
+        let mid_b = (mid_val >> shift) & 0xff;
+        let hi_b = (high >> shift) & 0xff;
+        classes.push(classify_three_point(lo_b, mid_b, hi_b));
+    }
+
+    if classes
+        .iter()
+        .any(|c| matches!(c, MonotonicityClass::Insufficient))
+    {
+        return MonotonicityClass::Insufficient;
+    }
+    if classes
+        .iter()
+        .any(|c| matches!(c, MonotonicityClass::NonMonotone))
+    {
+        return MonotonicityClass::NonMonotone;
+    }
+    if classes
+        .iter()
+        .any(|c| matches!(c, MonotonicityClass::MidpointPulse))
+    {
+        return MonotonicityClass::MidpointPulse;
+    }
+
+    let any_up = classes
+        .iter()
+        .any(|c| matches!(c, MonotonicityClass::MonotoneUp));
+    let any_down = classes
+        .iter()
+        .any(|c| matches!(c, MonotonicityClass::MonotoneDown));
+
+    if any_up && any_down {
+        return MonotonicityClass::NonMonotone;
+    }
+    if any_up {
+        return MonotonicityClass::MonotoneUp;
+    }
+    if any_down {
+        return MonotonicityClass::MonotoneDown;
+    }
+    MonotonicityClass::Const
 }
 
 #[derive(Debug, Clone)]
@@ -42,12 +175,16 @@ struct Config {
     low_dim: i64,
     high_dim: i64,
     target_dim: i64,
+    mid_dim: Option<i64>,
+    mid_exec: Option<String>,
     tile_size: i64,
     predict_mode: PredictMode,
     lane_priority: String,
     out_spec: String,
     out_report: Option<String>,
     out_patchspec: Option<String>,
+    out_patchspec_safe: Option<String>,
+    out_patchspec_discrete: Option<String>,
 }
 
 fn parse_i64_flag(value: &str, flag: &str) -> Result<i64, String> {
@@ -87,12 +224,16 @@ fn parse_args() -> Result<Config, String> {
     let mut low_dim: Option<i64> = None;
     let mut high_dim: Option<i64> = None;
     let mut target_dim: Option<i64> = None;
+    let mut mid_dim: Option<i64> = None;
+    let mut mid_exec: Option<String> = None;
     let mut tile_size: i64 = 64;
     let mut predict_mode = PredictMode::Endpoint;
     let mut lane_priority = "lane32,lane16".to_string();
     let mut out_spec: Option<String> = None;
     let mut out_report: Option<String> = None;
     let mut out_patchspec: Option<String> = None;
+    let mut out_patchspec_safe: Option<String> = None;
+    let mut out_patchspec_discrete: Option<String> = None;
 
     let mut idx = 1usize;
     while idx < args.len() {
@@ -130,6 +271,15 @@ fn parse_args() -> Result<Config, String> {
                     "--target-dim",
                 )?);
             }
+            "--mid-dim" => {
+                mid_dim = Some(parse_i64_flag(
+                    &next_arg(&args, &mut idx, "--mid-dim")?,
+                    "--mid-dim",
+                )?);
+            }
+            "--mid-exec" => {
+                mid_exec = Some(next_arg(&args, &mut idx, "--mid-exec")?);
+            }
             "--tile-size" => {
                 tile_size =
                     parse_i64_flag(&next_arg(&args, &mut idx, "--tile-size")?, "--tile-size")?;
@@ -148,6 +298,13 @@ fn parse_args() -> Result<Config, String> {
             }
             "--out-patchspec" => {
                 out_patchspec = Some(next_arg(&args, &mut idx, "--out-patchspec")?);
+            }
+            "--out-patchspec-safe" => {
+                out_patchspec_safe = Some(next_arg(&args, &mut idx, "--out-patchspec-safe")?);
+            }
+            "--out-patchspec-discrete" => {
+                out_patchspec_discrete =
+                    Some(next_arg(&args, &mut idx, "--out-patchspec-discrete")?);
             }
             other => {
                 return Err(format!("unknown flag: {}", other));
@@ -182,6 +339,10 @@ fn parse_args() -> Result<Config, String> {
         return Err("--tile-size must be > 0".to_string());
     }
 
+    if mid_exec.is_some() && mid_dim.is_none() {
+        return Err("--mid-exec requires --mid-dim".to_string());
+    }
+
     Ok(Config {
         analysis_json,
         base_exec,
@@ -190,12 +351,16 @@ fn parse_args() -> Result<Config, String> {
         low_dim,
         high_dim,
         target_dim,
+        mid_dim,
+        mid_exec,
         tile_size,
         predict_mode,
         lane_priority,
         out_spec,
         out_report,
         out_patchspec,
+        out_patchspec_safe,
+        out_patchspec_discrete,
     })
 }
 
@@ -312,9 +477,11 @@ struct WordContext {
     lane_bytes: usize,
     residue: Option<i64>,
     low_val: u64,
+    mid_val: Option<u64>,
     high_val: u64,
     base_word: u64,
     target_word: u64,
+    mono_class: MonotonicityClass,
     best_formula: FormulaFit,
     group_bitfield_fits: Vec<BitfieldFit>,
 }
@@ -391,6 +558,7 @@ struct PatchSimulation {
     summary: MismatchSummary,
     patched: Vec<u8>,
     changed_from_base: Vec<usize>,
+    byte_tiers: HashMap<usize, PatchTier>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -398,6 +566,8 @@ struct OffsetNote {
     offset: usize,
     lane: String,
     residue: Option<i64>,
+    mono_class: String,
+    patch_tier: String,
     baseline_word_mismatch_bytes: usize,
     selected: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -419,12 +589,19 @@ struct ReportOut {
     baseline: MismatchSummary,
     with_v2_spec: MismatchSummary,
     v2_changed_byte_count: usize,
+    safe_core_byte_count: usize,
+    discrete_flags_byte_count: usize,
+    unknown_byte_count: usize,
     residue_rule_count: usize,
     offset_rule_count: usize,
     per_offset_notes: Vec<OffsetNote>,
     out_spec: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     out_patchspec: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    out_patchspec_safe: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    out_patchspec_discrete: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -644,6 +821,8 @@ fn build_contexts(
     target_blob: &[u8],
     low_dim: i64,
     high_dim: i64,
+    mid_dim: Option<i64>,
+    mid_blob: Option<&[u8]>,
     lanes: &[LaneKey],
 ) -> Vec<WordContext> {
     let mut contexts = Vec::new();
@@ -680,15 +859,35 @@ fn build_contexts(
                         per.best_formula.clone()
                     };
 
+                    let mid_val = if let Some(md) = mid_dim {
+                        vals.get(&md).copied().or_else(|| {
+                            mid_blob.and_then(|blob| {
+                                if off + lane_bytes <= blob.len() {
+                                    Some(read_word_le(blob, off, lane_bytes))
+                                } else {
+                                    None
+                                }
+                            })
+                        })
+                    } else {
+                        None
+                    };
+                    let base_word = read_word_le(base_blob, off, lane_bytes);
+                    let target_word = read_word_le(target_blob, off, lane_bytes);
+                    let mono_class =
+                        classify_word_monotonicity(low_val, mid_val, high_val, lane_bytes);
+
                     contexts.push(WordContext {
                         offset: off,
                         lane: *lane,
                         lane_bytes,
                         residue,
                         low_val,
+                        mid_val,
                         high_val,
-                        base_word: read_word_le(base_blob, off, lane_bytes),
-                        target_word: read_word_le(target_blob, off, lane_bytes),
+                        base_word,
+                        target_word,
+                        mono_class,
                         best_formula,
                         group_bitfield_fits: group.bitfield_fits.clone(),
                     });
@@ -723,15 +922,40 @@ fn build_contexts(
                     continue;
                 }
 
+                let low_val = low_series[idx] as u64;
+                let high_val = high_series[idx] as u64;
+                let mid_val = if let Some(md) = mid_dim {
+                    dim_to_values
+                        .get(&md)
+                        .and_then(|series| series.get(idx).copied())
+                        .map(|x| x as u64)
+                        .or_else(|| {
+                            mid_blob.and_then(|blob| {
+                                if off + lane_bytes <= blob.len() {
+                                    Some(read_word_le(blob, off, lane_bytes))
+                                } else {
+                                    None
+                                }
+                            })
+                        })
+                } else {
+                    None
+                };
+                let base_word = read_word_le(base_blob, off, lane_bytes);
+                let target_word = read_word_le(target_blob, off, lane_bytes);
+                let mono_class = classify_word_monotonicity(low_val, mid_val, high_val, lane_bytes);
+
                 contexts.push(WordContext {
                     offset: off,
                     lane: *lane,
                     lane_bytes,
                     residue,
-                    low_val: low_series[idx] as u64,
-                    high_val: high_series[idx] as u64,
-                    base_word: read_word_le(base_blob, off, lane_bytes),
-                    target_word: read_word_le(target_blob, off, lane_bytes),
+                    low_val,
+                    mid_val,
+                    high_val,
+                    base_word,
+                    target_word,
+                    mono_class,
                     best_formula: group.best_formula.clone(),
                     group_bitfield_fits: group.bitfield_fits.clone(),
                 });
@@ -802,6 +1026,108 @@ fn interp_domain(low: u64, high: u64, xl: f64, xh: f64, xt: f64, bits: u8, domai
             let y = low as f64 + ((high as f64 - low as f64) * frac);
             y.round() as i128
         }
+    }
+}
+
+fn solve_3x3(a: [[f64; 3]; 3], b: [f64; 3]) -> Option<[f64; 3]> {
+    let mut m = [[0.0f64; 4]; 3];
+    for r in 0..3 {
+        for c in 0..3 {
+            m[r][c] = a[r][c];
+        }
+        m[r][3] = b[r];
+    }
+
+    for col in 0..3 {
+        let mut pivot = col;
+        for r in (col + 1)..3 {
+            if m[r][col].abs() > m[pivot][col].abs() {
+                pivot = r;
+            }
+        }
+        if m[pivot][col].abs() <= 1e-12 {
+            return None;
+        }
+        if pivot != col {
+            m.swap(col, pivot);
+        }
+
+        let p = m[col][col];
+        for j in col..4 {
+            m[col][j] /= p;
+        }
+        for r in 0..3 {
+            if r == col {
+                continue;
+            }
+            let factor = m[r][col];
+            if factor.abs() <= 1e-12 {
+                continue;
+            }
+            for j in col..4 {
+                m[r][j] -= factor * m[col][j];
+            }
+        }
+    }
+
+    Some([m[0][3], m[1][3], m[2][3]])
+}
+
+fn fit_three_point_predict(
+    lo_x: f64,
+    lo_y: f64,
+    mid_x: f64,
+    mid_y: f64,
+    hi_x: f64,
+    hi_y: f64,
+    target_x: f64,
+) -> i128 {
+    if (lo_y - mid_y).abs() <= 1e-12 && (mid_y - hi_y).abs() <= 1e-12 {
+        return lo_y.round() as i128;
+    }
+
+    if (hi_x - lo_x).abs() > 1e-12 {
+        let mid_lin = lo_y + ((hi_y - lo_y) * ((mid_x - lo_x) / (hi_x - lo_x)));
+        if (mid_lin - mid_y).abs() <= 1e-9 {
+            let yt = lo_y + ((hi_y - lo_y) * ((target_x - lo_x) / (hi_x - lo_x)));
+            return yt.round() as i128;
+        }
+    }
+
+    let mat = [
+        [lo_x * lo_x, lo_x, 1.0],
+        [mid_x * mid_x, mid_x, 1.0],
+        [hi_x * hi_x, hi_x, 1.0],
+    ];
+    let rhs = [lo_y, mid_y, hi_y];
+    if let Some(sol) = solve_3x3(mat, rhs) {
+        let yt = sol[0] * target_x * target_x + sol[1] * target_x + sol[2];
+        return yt.round() as i128;
+    }
+
+    if (hi_x - lo_x).abs() > 1e-12 {
+        let yt = lo_y + ((hi_y - lo_y) * ((target_x - lo_x) / (hi_x - lo_x)));
+        yt.round() as i128
+    } else {
+        lo_y.round() as i128
+    }
+}
+
+fn decode_domain_value(v: u64, bits: u8, domain: &str) -> f64 {
+    match domain {
+        "s" => to_signed(v, bits) as f64,
+        _ => v as f64,
+    }
+}
+
+fn encode_domain_value(v: i128, bits: u8, domain: &str) -> i128 {
+    match domain {
+        "s" => from_signed(v as i64, bits) as i128,
+        "mod" => {
+            let ring = 1i128 << bits;
+            v.rem_euclid(ring)
+        }
+        _ => v,
     }
 }
 
@@ -918,15 +1244,116 @@ fn predict_word(
     global_mode: PredictMode,
     low_dim: i64,
     high_dim: i64,
+    mid_dim: Option<i64>,
     target_dim: i64,
     tile_size: i64,
     rule: Option<&RuleChoice>,
 ) -> (u64, String, Map<String, Value>, String, u8) {
+    if matches!(global_mode, PredictMode::Strict) && !ctx.mono_class.is_monotone() {
+        return (
+            ctx.base_word,
+            "strict-skip".to_string(),
+            Map::new(),
+            "u".to_string(),
+            (ctx.lane_bytes * 8) as u8,
+        );
+    }
+
     let mut mode_use = global_mode;
     if let Some(r) = rule {
         if let Some(p) = r.policy {
             mode_use = p;
         }
+    }
+    if matches!(mode_use, PredictMode::Strict) {
+        mode_use = PredictMode::Endpoint;
+    }
+
+    let lane_bits = (ctx.lane_bytes * 8) as u8;
+    let bit_lo = rule.and_then(|r| r.bit_lo);
+    let bit_hi = rule.and_then(|r| r.bit_hi);
+    let has_bit_range = bit_lo.is_some() && bit_hi.is_some();
+
+    let (low_eval, high_eval, mid_eval, width, mut bits) = if has_bit_range {
+        let lo = bit_lo.unwrap();
+        let hi = bit_hi.unwrap();
+        let width = hi - lo + 1;
+        let mask = bits_mask(width);
+        (
+            (ctx.low_val >> lo) & mask,
+            (ctx.high_val >> lo) & mask,
+            ctx.mid_val.map(|v| (v >> lo) & mask),
+            width,
+            width,
+        )
+    } else {
+        (ctx.low_val, ctx.high_val, ctx.mid_val, lane_bits, lane_bits)
+    };
+
+    if let Some(r) = rule {
+        if let Some(rb) = r.bits {
+            bits = rb;
+        }
+    }
+
+    let domain = rule
+        .and_then(|r| r.domain.as_ref())
+        .map(|x| x.as_str())
+        .unwrap_or("u")
+        .to_string();
+
+    if matches!(mode_use, PredictMode::ThreePoint) {
+        if let (Some(mid_d), Some(mid_v)) = (mid_dim, mid_eval) {
+            let tl = tiles(low_dim, tile_size) as f64;
+            let tm = tiles(mid_d, tile_size) as f64;
+            let th = tiles(high_dim, tile_size) as f64;
+            let tt = tiles(target_dim, tile_size) as f64;
+
+            let lo_dec = decode_domain_value(low_eval, bits, &domain);
+            let mid_dec = decode_domain_value(mid_v, bits, &domain);
+            let hi_dec = decode_domain_value(high_eval, bits, &domain);
+
+            let linear_mid = if (th - tl).abs() > 1e-12 {
+                lo_dec + ((hi_dec - lo_dec) * ((tm - tl) / (th - tl)))
+            } else {
+                lo_dec
+            };
+            let mode_name =
+                if (lo_dec - mid_dec).abs() <= 1e-12 && (mid_dec - hi_dec).abs() <= 1e-12 {
+                    "const"
+                } else if (linear_mid - mid_dec).abs() <= 1e-9 {
+                    "tile-linear"
+                } else {
+                    "tile-quadratic"
+                };
+
+            let pred_dec = fit_three_point_predict(tl, lo_dec, tm, mid_dec, th, hi_dec, tt);
+            let pred_field = encode_domain_value(pred_dec, bits, &domain);
+
+            let field_mod = 1i128 << width;
+            let pred_field_norm = pred_field.rem_euclid(field_mod) as u64;
+
+            let pred_word = if has_bit_range {
+                let lo = bit_lo.unwrap();
+                let mask = bits_mask(width);
+                (ctx.base_word & !(mask << lo)) | ((pred_field_norm & mask) << lo)
+            } else {
+                pred_field_norm
+            };
+
+            let lane_mod = 1u128 << lane_bits;
+            let pred_word_norm = (pred_word as u128 % lane_mod) as u64;
+
+            return (
+                pred_word_norm,
+                mode_name.to_string(),
+                Map::new(),
+                domain,
+                bits,
+            );
+        }
+
+        mode_use = PredictMode::Best;
     }
 
     let (model, params) = if matches!(mode_use, PredictMode::Best) {
@@ -948,38 +1375,6 @@ fn predict_word(
     } else {
         pick_formula(&ctx.best_formula, mode_use)
     };
-
-    let lane_bits = (ctx.lane_bytes * 8) as u8;
-    let bit_lo = rule.and_then(|r| r.bit_lo);
-    let bit_hi = rule.and_then(|r| r.bit_hi);
-    let has_bit_range = bit_lo.is_some() && bit_hi.is_some();
-
-    let (low_eval, high_eval, width, mut bits) = if has_bit_range {
-        let lo = bit_lo.unwrap();
-        let hi = bit_hi.unwrap();
-        let width = hi - lo + 1;
-        let mask = bits_mask(width);
-        (
-            (ctx.low_val >> lo) & mask,
-            (ctx.high_val >> lo) & mask,
-            width,
-            width,
-        )
-    } else {
-        (ctx.low_val, ctx.high_val, lane_bits, lane_bits)
-    };
-
-    if let Some(r) = rule {
-        if let Some(rb) = r.bits {
-            bits = rb;
-        }
-    }
-
-    let domain = rule
-        .and_then(|r| r.domain.as_ref())
-        .map(|x| x.as_str())
-        .unwrap_or("u")
-        .to_string();
 
     let pred_field = predict_value(
         &model, &params, low_dim, low_eval, high_dim, high_eval, target_dim, tile_size, mode_use,
@@ -1126,6 +1521,7 @@ fn evaluate_rule_on_ctx(
     global_mode: PredictMode,
     low_dim: i64,
     high_dim: i64,
+    mid_dim: Option<i64>,
     target_dim: i64,
     tile_size: i64,
     rule: RuleChoice,
@@ -1135,6 +1531,7 @@ fn evaluate_rule_on_ctx(
         global_mode,
         low_dim,
         high_dim,
+        mid_dim,
         target_dim,
         tile_size,
         Some(&rule),
@@ -1169,14 +1566,20 @@ fn propose_offset_rule(
     global_mode: PredictMode,
     low_dim: i64,
     high_dim: i64,
+    mid_dim: Option<i64>,
     target_dim: i64,
     tile_size: i64,
 ) -> (usize, Option<CandidateEval>) {
+    if matches!(global_mode, PredictMode::Strict) && !ctx.mono_class.is_monotone() {
+        return (0, None);
+    }
+
     let (baseline_pred, _m, _p, _d, _b) = predict_word(
         ctx,
         global_mode,
         low_dim,
         high_dim,
+        mid_dim,
         target_dim,
         tile_size,
         None,
@@ -1210,6 +1613,7 @@ fn propose_offset_rule(
                     global_mode,
                     low_dim,
                     high_dim,
+                    mid_dim,
                     target_dim,
                     tile_size,
                     rule,
@@ -1264,6 +1668,7 @@ fn propose_offset_rule(
                         global_mode,
                         low_dim,
                         high_dim,
+                        mid_dim,
                         target_dim,
                         tile_size,
                         rule,
@@ -1311,12 +1716,14 @@ fn simulate_patch(
     global_mode: PredictMode,
     low_dim: i64,
     high_dim: i64,
+    mid_dim: Option<i64>,
     target_dim: i64,
     tile_size: i64,
     offset_rules: &HashMap<usize, RuleChoice>,
     residue_rules: &HashMap<(LaneKey, i64), RuleChoice>,
 ) -> PatchSimulation {
     let mut patched = base_blob.to_vec();
+    let mut byte_tiers: HashMap<usize, PatchTier> = HashMap::new();
 
     for ctx in contexts {
         let rule_ref = offset_rules.get(&ctx.offset).or_else(|| {
@@ -1328,11 +1735,23 @@ fn simulate_patch(
             global_mode,
             low_dim,
             high_dim,
+            mid_dim,
             target_dim,
             tile_size,
             rule_ref,
         );
         write_word_le(&mut patched, ctx.offset, ctx.lane_bytes, pred_word);
+
+        let tier = ctx.mono_class.tier();
+        for idx in 0..ctx.lane_bytes {
+            let off = ctx.offset + idx;
+            let pb = ((pred_word >> (idx * 8)) & 0xff) as u8;
+            if pb != base_blob[off] {
+                byte_tiers.insert(off, tier);
+            } else {
+                byte_tiers.remove(&off);
+            }
+        }
     }
 
     let mut mism = Vec::new();
@@ -1354,6 +1773,7 @@ fn simulate_patch(
         },
         patched,
         changed_from_base,
+        byte_tiers,
     }
 }
 
@@ -1388,6 +1808,53 @@ fn ensure_parent_dir(path: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn write_patchspec(
+    path: &str,
+    payload_len: usize,
+    predict_mode: PredictMode,
+    target_dim: i64,
+    low_dim: i64,
+    high_dim: i64,
+    lane_priority: &str,
+    changed_from_base: &[usize],
+    patched: &[u8],
+    byte_tiers: &HashMap<usize, PatchTier>,
+    tier_filter: Option<PatchTier>,
+) -> Result<usize, Box<dyn Error>> {
+    ensure_parent_dir(path)?;
+
+    let mut lines = vec![
+        "# emitted by word_field_spec_v2.rs".to_string(),
+        format!(
+            "# mode={} target_dim={} low_dim={} high_dim={}",
+            predict_mode.as_str(),
+            target_dim,
+            low_dim,
+            high_dim
+        ),
+        format!("# lane_priority={}", lane_priority),
+    ];
+    if let Some(t) = tier_filter {
+        lines.push(format!("# tier_filter={}", t.as_str()));
+    }
+    lines.push(String::new());
+
+    let mut emitted = 0usize;
+    for off in changed_from_base {
+        if let Some(filter) = tier_filter {
+            let tier = byte_tiers.get(off).copied().unwrap_or(PatchTier::Unknown);
+            if tier != filter {
+                continue;
+            }
+        }
+        lines.push(format!("{} {} 0x{:02x}", payload_len, off, patched[*off]));
+        emitted += 1;
+    }
+
+    fs::write(path, lines.join("\n") + "\n")?;
+    Ok(emitted)
+}
+
 fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let analysis_blob = fs::read(&config.analysis_json)?;
     let analysis: AnalysisReport = serde_json::from_slice(&analysis_blob)?;
@@ -1402,6 +1869,16 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
         config.chunk_index,
     )?;
 
+    let mid_blob: Option<Vec<u8>> = if let Some(mid_exec) = &config.mid_exec {
+        let mid_exec_blob = fs::read(mid_exec)?;
+        Some(extract_instruction_chunk_from_serialized_executable(
+            &mid_exec_blob,
+            config.chunk_index,
+        )?)
+    } else {
+        None
+    };
+
     if base_blob.len() != target_blob.len() {
         return Err(format!(
             "base/target chunk size mismatch: base={} target={}",
@@ -1409,6 +1886,29 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
             target_blob.len()
         )
         .into());
+    }
+
+    if let Some(mid) = &mid_blob {
+        if mid.len() != base_blob.len() {
+            return Err(format!(
+                "base/mid chunk size mismatch: base={} mid={}",
+                base_blob.len(),
+                mid.len()
+            )
+            .into());
+        }
+    }
+
+    if matches!(config.predict_mode, PredictMode::ThreePoint) {
+        if config.mid_dim == Some(config.target_dim) {
+            eprintln!(
+                "warning: --mid-dim equals --target-dim; threepoint prediction is exact by construction (self-validation mode)"
+            );
+        } else if config.mid_dim.is_none() {
+            eprintln!(
+                "warning: --predict-mode threepoint without --mid-dim; falling back to best-mode prediction"
+            );
+        }
     }
 
     let lanes = parse_lane_priority(&config.lane_priority)?;
@@ -1419,6 +1919,8 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
         &target_blob,
         config.low_dim,
         config.high_dim,
+        config.mid_dim,
+        mid_blob.as_deref(),
         &lanes,
     );
 
@@ -1433,6 +1935,7 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
         config.predict_mode,
         config.low_dim,
         config.high_dim,
+        config.mid_dim,
         config.target_dim,
         config.tile_size,
         &HashMap::new(),
@@ -1448,6 +1951,7 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
             config.predict_mode,
             config.low_dim,
             config.high_dim,
+            config.mid_dim,
             config.target_dim,
             config.tile_size,
         );
@@ -1459,6 +1963,8 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
                 offset: ctx.offset,
                 lane: ctx.lane.as_str().to_string(),
                 residue: ctx.residue,
+                mono_class: ctx.mono_class.as_str().to_string(),
+                patch_tier: ctx.mono_class.tier().as_str().to_string(),
                 baseline_word_mismatch_bytes: baseline_word_mismatch,
                 selected: true,
                 selected_rule: Some(rule_out),
@@ -1469,6 +1975,8 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
                 offset: ctx.offset,
                 lane: ctx.lane.as_str().to_string(),
                 residue: ctx.residue,
+                mono_class: ctx.mono_class.as_str().to_string(),
+                patch_tier: ctx.mono_class.tier().as_str().to_string(),
                 baseline_word_mismatch_bytes: baseline_word_mismatch,
                 selected: false,
                 selected_rule: None,
@@ -1539,6 +2047,7 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
         config.predict_mode,
         config.low_dim,
         config.high_dim,
+        config.mid_dim,
         config.target_dim,
         config.tile_size,
         &chosen_offset_rules,
@@ -1568,29 +2077,68 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
         serde_json::to_string_pretty(&spec)? + "\n",
     )?;
 
+    let safe_core_byte_count = improved
+        .byte_tiers
+        .values()
+        .filter(|t| **t == PatchTier::SafeCore)
+        .count();
+    let discrete_flags_byte_count = improved
+        .byte_tiers
+        .values()
+        .filter(|t| **t == PatchTier::DiscreteFlags)
+        .count();
+    let unknown_byte_count = improved
+        .byte_tiers
+        .values()
+        .filter(|t| **t == PatchTier::Unknown)
+        .count();
+
     if let Some(out_patchspec) = &config.out_patchspec {
-        ensure_parent_dir(out_patchspec)?;
-        let mut lines = vec![
-            "# emitted by word_field_spec_v2.rs".to_string(),
-            format!(
-                "# mode={} target_dim={} low_dim={} high_dim={}",
-                config.predict_mode.as_str(),
-                config.target_dim,
-                config.low_dim,
-                config.high_dim
-            ),
-            format!("# lane_priority={}", config.lane_priority),
-            String::new(),
-        ];
-        for off in &improved.changed_from_base {
-            lines.push(format!(
-                "{} {} 0x{:02x}",
-                base_blob.len(),
-                off,
-                improved.patched[*off]
-            ));
-        }
-        fs::write(out_patchspec, lines.join("\n") + "\n")?;
+        write_patchspec(
+            out_patchspec,
+            base_blob.len(),
+            config.predict_mode,
+            config.target_dim,
+            config.low_dim,
+            config.high_dim,
+            &config.lane_priority,
+            &improved.changed_from_base,
+            &improved.patched,
+            &improved.byte_tiers,
+            None,
+        )?;
+    }
+
+    if let Some(out_patchspec_safe) = &config.out_patchspec_safe {
+        write_patchspec(
+            out_patchspec_safe,
+            base_blob.len(),
+            config.predict_mode,
+            config.target_dim,
+            config.low_dim,
+            config.high_dim,
+            &config.lane_priority,
+            &improved.changed_from_base,
+            &improved.patched,
+            &improved.byte_tiers,
+            Some(PatchTier::SafeCore),
+        )?;
+    }
+
+    if let Some(out_patchspec_discrete) = &config.out_patchspec_discrete {
+        write_patchspec(
+            out_patchspec_discrete,
+            base_blob.len(),
+            config.predict_mode,
+            config.target_dim,
+            config.low_dim,
+            config.high_dim,
+            &config.lane_priority,
+            &improved.changed_from_base,
+            &improved.patched,
+            &improved.byte_tiers,
+            Some(PatchTier::DiscreteFlags),
+        )?;
     }
 
     let report = ReportOut {
@@ -1610,11 +2158,16 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
         baseline: baseline.summary.clone(),
         with_v2_spec: improved.summary.clone(),
         v2_changed_byte_count: improved.changed_from_base.len(),
+        safe_core_byte_count,
+        discrete_flags_byte_count,
+        unknown_byte_count,
         residue_rule_count: spec.residue_rules.len(),
         offset_rule_count: spec.offset_rules.len(),
         per_offset_notes: notes,
         out_spec: config.out_spec.clone(),
         out_patchspec: config.out_patchspec.clone(),
+        out_patchspec_safe: config.out_patchspec_safe.clone(),
+        out_patchspec_discrete: config.out_patchspec_discrete.clone(),
     };
 
     if let Some(out_report) = &config.out_report {
@@ -1626,13 +2179,22 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
     if let Some(out_patchspec) = &config.out_patchspec {
         println!("Wrote patchspec: {}", out_patchspec);
     }
+    if let Some(out_patchspec_safe) = &config.out_patchspec_safe {
+        println!("Wrote safe patchspec: {}", out_patchspec_safe);
+    }
+    if let Some(out_patchspec_discrete) = &config.out_patchspec_discrete {
+        println!("Wrote discrete patchspec: {}", out_patchspec_discrete);
+    }
     println!(
-        "baseline_mismatch={} v2_mismatch={} residue_rules={} offset_rules={} changed_bytes={}",
+        "baseline_mismatch={} v2_mismatch={} residue_rules={} offset_rules={} changed_bytes={} safe_core_bytes={} discrete_flags_bytes={} unknown_bytes={}",
         report.baseline.mismatch_vs_target,
         report.with_v2_spec.mismatch_vs_target,
         report.residue_rule_count,
         report.offset_rule_count,
         report.v2_changed_byte_count,
+        report.safe_core_byte_count,
+        report.discrete_flags_byte_count,
+        report.unknown_byte_count,
     );
 
     Ok(())
