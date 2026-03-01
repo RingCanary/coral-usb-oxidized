@@ -479,7 +479,10 @@ impl EdgeTpuUsbDriver {
         self.write_bulk_all(EP_BULK_OUT, payload)
     }
 
-    pub fn read_event_packet_with_timeout(&self, timeout: Duration) -> Result<EventPacket, CoralError> {
+    pub fn read_event_packet_with_timeout(
+        &self,
+        timeout: Duration,
+    ) -> Result<EventPacket, CoralError> {
         let mut buf = [0u8; 16];
         let read = self
             .handle

@@ -1,9 +1,10 @@
 use coral_usb_oxidized::{
     executable_type_name, extract_serialized_executables_from_tflite, CoralError, DescriptorTag,
     EdgeTpuUsbDriver, SerializedExecutableBlob, VendorDirection,
-    EDGETPUXRAY_RUNTIME_SETUP_SEQUENCE,
+    EDGETPUXRAY_RUNTIME_SETUP_SEQUENCE, LIBEDGETPU_KNOWN_GOOD_SETUP_SEQUENCE,
 };
 use rusb::ffi as libusb;
+use std::collections::VecDeque;
 use std::env;
 use std::error::Error;
 use std::ffi::CStr;
@@ -33,7 +34,12 @@ impl ParamAdmissionWaitMode {
     }
 
     fn needs_event(self) -> bool {
-        matches!(self, ParamAdmissionWaitMode::Event | ParamAdmissionWaitMode::Either | ParamAdmissionWaitMode::Both)
+        matches!(
+            self,
+            ParamAdmissionWaitMode::Event
+                | ParamAdmissionWaitMode::Either
+                | ParamAdmissionWaitMode::Both
+        )
     }
 
     fn needs_interrupt(self) -> bool {
@@ -80,6 +86,7 @@ struct Config {
     timeout_ms: u64,
     chunk_size: usize,
     setup: bool,
+    setup_libedgetpu: bool,
     verify_setup_reads: bool,
     setup_include_reads: bool,
     reset_before_claim: bool,
@@ -131,12 +138,17 @@ struct Config {
     param_admission_wait_every_chunks: usize,
     param_admission_wait_strict: bool,
     param_submit_bulk_in_lanes: usize,
+    param_submit_bulk_out: bool,
+    param_submit_bulk_out_accept_partial: bool,
+    param_submit_bulk_out_max_retries: usize,
+    param_submit_bulk_out_depth: usize,
     param_submit_event_lanes: usize,
     param_submit_interrupt_lanes: usize,
     param_submit_buffer_size: usize,
     param_submit_timeout_ms: u64,
     param_submit_event_poll_ms: u64,
     param_submit_log_every: usize,
+    param_submit_global_lanes: bool,
     param_require_post_instr_event: bool,
     param_post_instr_event_timeout_ms: u64,
     param_interleave_window_bytes: Option<usize>,
@@ -161,10 +173,15 @@ fn usage(program: &str) {
     println!("  --input-file PATH         Use raw input bytes from file instead of ramp");
     println!("  --exec-index N            Force executable index from extracted list");
     println!("  --skip-setup              Skip edgetpuxray runtime setup sequence");
+    println!(
+        "  --setup-libedgetpu        Use libedgetpu's 95-step setup (default: edgetpuxray 52-step)"
+    );
     println!("  --setup-include-reads     Include setup read steps (default: write-only)");
     println!("  --verify-setup-reads      Enforce exact readback match for setup sequence");
     println!("  --reset-before-claim      Reset USB device, reopen, then claim/setup (pyusb parity probe)");
-    println!("  --post-reset-sleep-ms N   Sleep after reset-before-claim before reopen (default: 600)");
+    println!(
+        "  --post-reset-sleep-ms N   Sleep after reset-before-claim before reopen (default: 600)"
+    );
     println!("  --firmware PATH           apex_latest_single_ep.bin for boot-mode devices");
     println!("  --skip-param-preload      Do not send PARAMETER_CACHING executables");
     println!("  --read-interrupt          Read one interrupt packet after run");
@@ -185,13 +202,11 @@ fn usage(program: &str) {
     println!(
         "  --param-force-full-header-len  Keep descriptor header length at full parameter payload even when stream is capped"
     );
-    println!("  --param-descriptor-split-bytes N  Split parameter stream across descriptor headers");
     println!(
-        "  --param-read-event-every N  Poll EP 0x82 every N parameter chunks (0=off)"
+        "  --param-descriptor-split-bytes N  Split parameter stream across descriptor headers"
     );
-    println!(
-        "  --param-read-interrupt-every N  Poll EP 0x83 every N parameter chunks (0=off)"
-    );
+    println!("  --param-read-event-every N  Poll EP 0x82 every N parameter chunks (0=off)");
+    println!("  --param-read-interrupt-every N  Poll EP 0x83 every N parameter chunks (0=off)");
     println!(
         "  --param-drain-event-every-descriptors N  Poll EP 0x82 after every N parameter descriptors (0=off)"
     );
@@ -219,24 +234,18 @@ fn usage(program: &str) {
     println!(
         "  --param-prepost-interrupt-reads N  Number of pre/post EP 0x83 read attempts per descriptor (default: 0)"
     );
-    println!(
-        "  --param-prepost-timeout-ms N  Timeout for pre/post reads (default: 1)"
-    );
+    println!("  --param-prepost-timeout-ms N  Timeout for pre/post reads (default: 1)");
     println!(
         "  --param-async-bulk-in-lanes N  Concurrent EP 0x81 read lanes during param stream (default: 0)"
     );
-    println!(
-        "  --param-async-bulk-in-size N   EP 0x81 async read buffer size (default: 1024)"
-    );
+    println!("  --param-async-bulk-in-size N   EP 0x81 async read buffer size (default: 1024)");
     println!(
         "  --param-async-event-lanes N    Concurrent EP 0x82 read lanes during param stream (default: 0)"
     );
     println!(
         "  --param-async-interrupt-lanes N  Concurrent EP 0x83 read lanes during param stream (default: 0)"
     );
-    println!(
-        "  --param-async-timeout-ms N     Timeout per async lane read attempt (default: 100)"
-    );
+    println!("  --param-async-timeout-ms N     Timeout per async lane read attempt (default: 100)");
     println!(
         "  --param-gate-known-good-offsets LIST  Pause stream at byte offsets and inject known-good control gate (comma-separated, e.g. 32768,40960)"
     );
@@ -289,22 +298,33 @@ fn usage(program: &str) {
         "  --param-submit-bulk-in-lanes N  libusb_submit_transfer lanes on EP 0x81 (default: 0)"
     );
     println!(
+        "  --param-submit-bulk-out      Send EP 0x01 parameter chunks via one-shot libusb_submit_transfer"
+    );
+    println!(
+        "  --param-submit-bulk-out-accept-partial  Advance stream offset by actual_length on short/timeout submit completions"
+    );
+    println!(
+        "  --param-submit-bulk-out-max-retries N   Retries for zero-progress bulk_out submit attempts (default: 0)"
+    );
+    println!(
+        "  --param-submit-bulk-out-depth N   Max in-flight EP 0x01 submit transfers (default: 1)"
+    );
+    println!(
         "  --param-submit-event-lanes N    libusb_submit_transfer lanes on EP 0x82 (default: 0)"
     );
     println!(
         "  --param-submit-interrupt-lanes N  libusb_submit_transfer lanes on EP 0x83 (default: 0)"
     );
-    println!(
-        "  --param-submit-buffer-size N    Buffer size for submit lanes (default: 1024)"
-    );
+    println!("  --param-submit-buffer-size N    Buffer size for submit lanes (default: 1024)");
     println!(
         "  --param-submit-timeout-ms N     Per-transfer timeout for submit lanes (default: 100)"
     );
     println!(
         "  --param-submit-event-poll-ms N  Event loop poll timeout for submit lanes (default: 1)"
     );
+    println!("  --param-submit-log-every N      Callback log cadence per lane (0=off, default: 0)");
     println!(
-        "  --param-submit-log-every N      Callback log cadence per lane (0=off, default: 0)"
+        "  --param-submit-global-lanes   Start submit read lanes + event loop before first bulk-out and keep active across whole replay"
     );
     println!(
         "  --param-require-post-instr-event  Require EP 0x82 event after PARAMETER_CACHING instr chunks before param stream"
@@ -448,6 +468,7 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         timeout_ms: 6000,
         chunk_size: 0x100000,
         setup: true,
+        setup_libedgetpu: false,
         verify_setup_reads: false,
         setup_include_reads: false,
         reset_before_claim: false,
@@ -499,12 +520,17 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         param_admission_wait_every_chunks: 1,
         param_admission_wait_strict: false,
         param_submit_bulk_in_lanes: 0,
+        param_submit_bulk_out: false,
+        param_submit_bulk_out_accept_partial: false,
+        param_submit_bulk_out_max_retries: 0,
+        param_submit_bulk_out_depth: 1,
         param_submit_event_lanes: 0,
         param_submit_interrupt_lanes: 0,
         param_submit_buffer_size: 1024,
         param_submit_timeout_ms: 100,
         param_submit_event_poll_ms: 1,
         param_submit_log_every: 0,
+        param_submit_global_lanes: false,
         param_require_post_instr_event: false,
         param_post_instr_event_timeout_ms: 100,
         param_interleave_window_bytes: None,
@@ -563,14 +589,14 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                 )?);
             }
             "--skip-setup" => config.setup = false,
+            "--setup-libedgetpu" => config.setup_libedgetpu = true,
             "--setup-include-reads" => config.setup_include_reads = true,
             "--verify-setup-reads" => config.verify_setup_reads = true,
             "--reset-before-claim" => config.reset_before_claim = true,
             "--post-reset-sleep-ms" => {
                 i += 1;
-                config.post_reset_sleep_ms = parse_u64_auto(
-                    args.get(i).ok_or("--post-reset-sleep-ms requires value")?,
-                )?;
+                config.post_reset_sleep_ms =
+                    parse_u64_auto(args.get(i).ok_or("--post-reset-sleep-ms requires value")?)?;
             }
             "--firmware" => {
                 i += 1;
@@ -595,8 +621,10 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
             }
             "--input-tag" => {
                 i += 1;
-                config.input_activations_tag =
-                    parse_tag_u32(args.get(i).ok_or("--input-tag requires value")?, "--input-tag")?;
+                config.input_activations_tag = parse_tag_u32(
+                    args.get(i).ok_or("--input-tag requires value")?,
+                    "--input-tag",
+                )?;
             }
             "--param-stream-chunk-size" => {
                 i += 1;
@@ -846,6 +874,26 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                         .ok_or("--param-submit-bulk-in-lanes requires value")?,
                 )?;
             }
+            "--param-submit-bulk-out" => {
+                config.param_submit_bulk_out = true;
+            }
+            "--param-submit-bulk-out-accept-partial" => {
+                config.param_submit_bulk_out_accept_partial = true;
+            }
+            "--param-submit-bulk-out-max-retries" => {
+                i += 1;
+                config.param_submit_bulk_out_max_retries = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-submit-bulk-out-max-retries requires value")?,
+                )?;
+            }
+            "--param-submit-bulk-out-depth" => {
+                i += 1;
+                config.param_submit_bulk_out_depth = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--param-submit-bulk-out-depth requires value")?,
+                )?;
+            }
             "--param-submit-event-lanes" => {
                 i += 1;
                 config.param_submit_event_lanes = parse_usize_auto(
@@ -887,6 +935,9 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                     args.get(i)
                         .ok_or("--param-submit-log-every requires value")?,
                 )?;
+            }
+            "--param-submit-global-lanes" => {
+                config.param_submit_global_lanes = true;
             }
             "--param-require-post-instr-event" => {
                 config.param_require_post_instr_event = true;
@@ -940,10 +991,8 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
             }
             "--param-write-sleep-us" => {
                 i += 1;
-                config.param_write_sleep_us = parse_u64_auto(
-                    args.get(i)
-                        .ok_or("--param-write-sleep-us requires value")?,
-                )?;
+                config.param_write_sleep_us =
+                    parse_u64_auto(args.get(i).ok_or("--param-write-sleep-us requires value")?)?;
             }
             other => return Err(format!("unknown argument: {}", other).into()),
         }
@@ -1033,6 +1082,9 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
     if config.param_submit_event_poll_ms == 0 {
         return Err("--param-submit-event-poll-ms must be >= 1".into());
     }
+    if config.param_submit_bulk_out_depth == 0 {
+        return Err("--param-submit-bulk-out-depth must be >= 1".into());
+    }
     let has_window_gate_config = config.param_gate_window_start_bytes.is_some()
         || config.param_gate_window_end_bytes.is_some()
         || config.param_gate_window_step_bytes.is_some();
@@ -1064,9 +1116,9 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         let start = config.param_csr_snapshot_start_bytes.ok_or(
             "--param-csr-snapshot-start-bytes is required when using CSR snapshot controls",
         )?;
-        let end = config.param_csr_snapshot_end_bytes.ok_or(
-            "--param-csr-snapshot-end-bytes is required when using CSR snapshot controls",
-        )?;
+        let end = config
+            .param_csr_snapshot_end_bytes
+            .ok_or("--param-csr-snapshot-end-bytes is required when using CSR snapshot controls")?;
         if start >= end {
             return Err(format!(
                 "--param-csr-snapshot-start-bytes ({start}) must be < --param-csr-snapshot-end-bytes ({end})"
@@ -1359,9 +1411,12 @@ fn run_known_good_param_gate(
             phase_label, gate_idx, offset, readback
         );
 
-        driver
-            .vendor_write32(offset, value)
-            .map_err(|err| format!("{}: gate write 0x{offset:08x}=0x{value:08x} failed: {}", phase_label, err))?;
+        driver.vendor_write32(offset, value).map_err(|err| {
+            format!(
+                "{}: gate write 0x{offset:08x}=0x{value:08x} failed: {}",
+                phase_label, err
+            )
+        })?;
     }
 
     let gate_writes = [
@@ -1371,9 +1426,12 @@ fn run_known_good_param_gate(
         (0x0001_a658_u32, 0x0000_0003_u32),
     ];
     for (offset, value) in gate_writes {
-        driver
-            .vendor_write32(offset, value)
-            .map_err(|err| format!("{}: gate write 0x{offset:08x}=0x{value:08x} failed: {}", phase_label, err))?;
+        driver.vendor_write32(offset, value).map_err(|err| {
+            format!(
+                "{}: gate write 0x{offset:08x}=0x{value:08x} failed: {}",
+                phase_label, err
+            )
+        })?;
     }
 
     let readback = driver
@@ -1386,7 +1444,12 @@ fn run_known_good_param_gate(
 
     driver
         .vendor_write32(0x0001_a0d8, config.param_a0d8_write_value)
-        .map_err(|err| format!("{}: gate write 0x0001a0d8=0x{:08x} failed: {}", phase_label, config.param_a0d8_write_value, err))?;
+        .map_err(|err| {
+            format!(
+                "{}: gate write 0x0001a0d8=0x{:08x} failed: {}",
+                phase_label, config.param_a0d8_write_value, err
+            )
+        })?;
 
     println!(
         "      {}: known-good gate #{} wrote 0x0001a0d8 <= 0x{:08x}",
@@ -1414,8 +1477,7 @@ const PARAM_POISON_PROBE_CSRS: [(&str, u32); 2] = [
 ];
 
 fn has_param_csr_snapshot(config: &Config) -> bool {
-    config.param_csr_snapshot_start_bytes.is_some()
-        && config.param_csr_snapshot_end_bytes.is_some()
+    config.param_csr_snapshot_start_bytes.is_some() && config.param_csr_snapshot_end_bytes.is_some()
 }
 
 fn dump_param_csr_snapshot(
@@ -1487,7 +1549,8 @@ fn run_pending_param_csr_probes(
     probe_offsets: &[usize],
     probe_cursor: &mut usize,
 ) {
-    while *probe_cursor < probe_offsets.len() && param_bytes_written >= probe_offsets[*probe_cursor] {
+    while *probe_cursor < probe_offsets.len() && param_bytes_written >= probe_offsets[*probe_cursor]
+    {
         dump_param_csr_snapshot(
             driver,
             phase_label,
@@ -1673,13 +1736,15 @@ fn has_param_admission_wait(config: &Config) -> bool {
 }
 
 fn has_param_submit_lanes(config: &Config) -> bool {
-    config.param_submit_bulk_in_lanes > 0
+    config.param_submit_bulk_out
+        || config.param_submit_bulk_in_lanes > 0
         || config.param_submit_event_lanes > 0
         || config.param_submit_interrupt_lanes > 0
 }
 
 #[derive(Debug, Clone, Copy)]
 enum ParamSubmitLaneKind {
+    BulkOut,
     BulkIn,
     Event,
     Interrupt,
@@ -1688,6 +1753,7 @@ enum ParamSubmitLaneKind {
 impl ParamSubmitLaneKind {
     fn as_str(self) -> &'static str {
         match self {
+            ParamSubmitLaneKind::BulkOut => "bulk_out",
             ParamSubmitLaneKind::BulkIn => "bulk_in",
             ParamSubmitLaneKind::Event => "event",
             ParamSubmitLaneKind::Interrupt => "interrupt",
@@ -1696,6 +1762,7 @@ impl ParamSubmitLaneKind {
 
     fn endpoint(self) -> u8 {
         match self {
+            ParamSubmitLaneKind::BulkOut => 0x01,
             ParamSubmitLaneKind::BulkIn => 0x81,
             ParamSubmitLaneKind::Event => 0x82,
             ParamSubmitLaneKind::Interrupt => 0x83,
@@ -1706,6 +1773,7 @@ impl ParamSubmitLaneKind {
 #[derive(Default)]
 struct ParamSubmitLaneCounters {
     callbacks: AtomicUsize,
+    bytes: AtomicUsize,
     completed: AtomicUsize,
     timed_out: AtomicUsize,
     cancelled: AtomicUsize,
@@ -1720,6 +1788,7 @@ struct ParamSubmitLaneUserData {
     kind: ParamSubmitLaneKind,
     lane_idx: usize,
     stop: Arc<AtomicBool>,
+    resubmit: bool,
     submitted: Arc<AtomicBool>,
     counters: Arc<ParamSubmitLaneCounters>,
     log_every: usize,
@@ -1792,6 +1861,10 @@ extern "system" fn param_submit_transfer_callback(transfer: *mut libusb::libusb_
         let counters = &user_data.counters;
         let callback_idx = counters.callbacks.fetch_add(1, Ordering::Relaxed) + 1;
         let status = (*transfer).status;
+        let actual_length = (*transfer).actual_length.max(0) as usize;
+        if actual_length > 0 {
+            counters.bytes.fetch_add(actual_length, Ordering::Relaxed);
+        }
 
         match status {
             libusb::constants::LIBUSB_TRANSFER_COMPLETED => {
@@ -1828,7 +1901,7 @@ extern "system" fn param_submit_transfer_callback(transfer: *mut libusb::libusb_
             );
         }
 
-        if user_data.stop.load(Ordering::Relaxed) {
+        if !user_data.resubmit || user_data.stop.load(Ordering::Relaxed) {
             user_data.submitted.store(false, Ordering::Relaxed);
             return;
         }
@@ -1868,13 +1941,20 @@ fn create_param_submit_lane(
         .into());
     }
 
-    let mut buffer = vec![0u8; config.param_submit_buffer_size];
+    let lane_buffer_size = match kind {
+        ParamSubmitLaneKind::BulkIn => config.param_submit_buffer_size,
+        ParamSubmitLaneKind::Event => 16,
+        ParamSubmitLaneKind::Interrupt => 4,
+        ParamSubmitLaneKind::BulkOut => config.param_submit_buffer_size,
+    };
+    let mut buffer = vec![0u8; lane_buffer_size];
     let submitted = Arc::new(AtomicBool::new(false));
     let counters = Arc::new(ParamSubmitLaneCounters::default());
     let user_data = Box::new(ParamSubmitLaneUserData {
         kind,
         lane_idx,
         stop,
+        resubmit: true,
         submitted: Arc::clone(&submitted),
         counters: Arc::clone(&counters),
         log_every: config.param_submit_log_every,
@@ -1893,18 +1973,18 @@ fn create_param_submit_lane(
                 user_data_ptr as *mut _,
                 config.param_submit_timeout_ms.min(u32::MAX as u64) as u32,
             ),
-            ParamSubmitLaneKind::BulkIn | ParamSubmitLaneKind::Event => {
-                libusb::libusb_fill_bulk_transfer(
-                    transfer,
-                    driver.raw_libusb_handle(),
-                    kind.endpoint(),
-                    buffer.as_mut_ptr(),
-                    buffer.len() as c_int,
-                    param_submit_transfer_callback,
-                    user_data_ptr as *mut _,
-                    config.param_submit_timeout_ms.min(u32::MAX as u64) as u32,
-                )
-            }
+            ParamSubmitLaneKind::BulkOut
+            | ParamSubmitLaneKind::BulkIn
+            | ParamSubmitLaneKind::Event => libusb::libusb_fill_bulk_transfer(
+                transfer,
+                driver.raw_libusb_handle(),
+                kind.endpoint(),
+                buffer.as_mut_ptr(),
+                buffer.len() as c_int,
+                param_submit_transfer_callback,
+                user_data_ptr as *mut _,
+                config.param_submit_timeout_ms.min(u32::MAX as u64) as u32,
+            ),
         }
 
         let rc = libusb::libusb_submit_transfer(transfer);
@@ -1932,6 +2012,409 @@ fn create_param_submit_lane(
         counters,
         _buffer: buffer,
     })
+}
+
+struct ParamBulkOutAttemptStats {
+    bytes: usize,
+    completed: usize,
+    timed_out: usize,
+    cancelled: usize,
+    stalled: usize,
+    no_device: usize,
+    overflow: usize,
+    errors: usize,
+    submit_errors: usize,
+}
+
+impl ParamBulkOutAttemptStats {
+    fn summary(&self) -> String {
+        format!(
+            "actual={} completed={} timed_out={} cancelled={} stall={} no_device={} overflow={} errors={} submit_errors={}",
+            self.bytes,
+            self.completed,
+            self.timed_out,
+            self.cancelled,
+            self.stalled,
+            self.no_device,
+            self.overflow,
+            self.errors,
+            self.submit_errors
+        )
+    }
+}
+
+fn submit_param_bulk_out_once(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    phase_label: &str,
+    lane_idx: usize,
+    stream_offset: usize,
+    chunk: &[u8],
+) -> Result<ParamBulkOutAttemptStats, Box<dyn Error>> {
+    let transfer = unsafe { libusb::libusb_alloc_transfer(0) };
+    if transfer.is_null() {
+        return Err("failed to allocate libusb transfer for bulk_out chunk".into());
+    }
+
+    let mut buffer = chunk.to_vec();
+    let submitted = Arc::new(AtomicBool::new(false));
+    let counters = Arc::new(ParamSubmitLaneCounters::default());
+    let stop = Arc::new(AtomicBool::new(false));
+    let user_data = Box::new(ParamSubmitLaneUserData {
+        kind: ParamSubmitLaneKind::BulkOut,
+        lane_idx,
+        stop,
+        resubmit: false,
+        submitted: Arc::clone(&submitted),
+        counters: Arc::clone(&counters),
+        log_every: config.param_submit_log_every,
+    });
+    let user_data_ptr = Box::into_raw(user_data);
+
+    unsafe {
+        libusb::libusb_fill_bulk_transfer(
+            transfer,
+            driver.raw_libusb_handle(),
+            ParamSubmitLaneKind::BulkOut.endpoint(),
+            buffer.as_mut_ptr(),
+            buffer.len() as c_int,
+            param_submit_transfer_callback,
+            user_data_ptr as *mut _,
+            config.param_submit_timeout_ms.min(u32::MAX as u64) as u32,
+        );
+    }
+
+    let submit_rc = unsafe { libusb::libusb_submit_transfer(transfer) };
+    if submit_rc != 0 {
+        unsafe {
+            let _ = Box::from_raw(user_data_ptr);
+            libusb::libusb_free_transfer(transfer);
+        }
+        return Err(format!(
+            "{}: failed to submit bulk_out lane={} at offset {} ({} bytes): {} ({})",
+            phase_label,
+            lane_idx,
+            stream_offset,
+            chunk.len(),
+            submit_rc,
+            libusb_error_name(submit_rc)
+        )
+        .into());
+    }
+    submitted.store(true, Ordering::Relaxed);
+
+    let settle_deadline = Instant::now()
+        + Duration::from_millis(config.param_submit_timeout_ms.saturating_mul(4).max(200));
+    while submitted.load(Ordering::Relaxed) && Instant::now() < settle_deadline {
+        std::thread::sleep(Duration::from_micros(200));
+    }
+    if submitted.load(Ordering::Relaxed) {
+        let cancel_rc = unsafe { libusb::libusb_cancel_transfer(transfer) };
+        let cancel_deadline = Instant::now()
+            + Duration::from_millis(config.param_submit_timeout_ms.saturating_mul(2).max(100));
+        while submitted.load(Ordering::Relaxed) && Instant::now() < cancel_deadline {
+            std::thread::sleep(Duration::from_micros(200));
+        }
+        if submitted.load(Ordering::Relaxed) {
+            unsafe {
+                libusb::libusb_free_transfer(transfer);
+                let _ = Box::from_raw(user_data_ptr);
+            }
+            return Err(format!(
+                "{}: bulk_out lane={} stuck after cancel at offset {} ({} bytes), cancel_rc={} ({})",
+                phase_label,
+                lane_idx,
+                stream_offset,
+                chunk.len(),
+                cancel_rc,
+                libusb_error_name(cancel_rc)
+            )
+            .into());
+        }
+    }
+
+    let stats = ParamBulkOutAttemptStats {
+        bytes: counters.bytes.load(Ordering::Relaxed),
+        completed: counters.completed.load(Ordering::Relaxed),
+        timed_out: counters.timed_out.load(Ordering::Relaxed),
+        cancelled: counters.cancelled.load(Ordering::Relaxed),
+        stalled: counters.stalled.load(Ordering::Relaxed),
+        no_device: counters.no_device.load(Ordering::Relaxed),
+        overflow: counters.overflow.load(Ordering::Relaxed),
+        errors: counters.errors.load(Ordering::Relaxed),
+        submit_errors: counters.submit_errors.load(Ordering::Relaxed),
+    };
+
+    unsafe {
+        libusb::libusb_free_transfer(transfer);
+        let _ = Box::from_raw(user_data_ptr);
+    }
+
+    Ok(stats)
+}
+
+fn submit_param_bulk_out_chunk(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    phase_label: &str,
+    chunk_idx: usize,
+    stream_offset: usize,
+    chunk: &[u8],
+) -> Result<(), Box<dyn Error>> {
+    if chunk.is_empty() {
+        return Ok(());
+    }
+
+    let mut sent = 0usize;
+    let mut attempts = 0usize;
+    let mut retries_left = config.param_submit_bulk_out_max_retries;
+    while sent < chunk.len() {
+        attempts += 1;
+        let lane_idx = chunk_idx + attempts;
+        let attempt_offset = stream_offset + sent;
+        let remaining = &chunk[sent..];
+        let stats = submit_param_bulk_out_once(
+            driver,
+            config,
+            phase_label,
+            lane_idx,
+            attempt_offset,
+            remaining,
+        )?;
+        let progressed = stats.bytes.min(remaining.len());
+
+        if progressed == remaining.len() {
+            sent += progressed;
+            continue;
+        }
+
+        if progressed > 0 && config.param_submit_bulk_out_accept_partial {
+            sent += progressed;
+            println!(
+                "      {}: bulk_out chunk {} partial progress at offset {} progressed={} remaining={} ({})",
+                phase_label,
+                chunk_idx,
+                attempt_offset,
+                progressed,
+                chunk.len() - sent,
+                stats.summary()
+            );
+            continue;
+        }
+
+        if progressed == 0 && retries_left > 0 {
+            retries_left -= 1;
+            println!(
+                "      {}: bulk_out chunk {} zero-progress retry at offset {} retries_left={} ({})",
+                phase_label,
+                chunk_idx,
+                attempt_offset,
+                retries_left,
+                stats.summary()
+            );
+            continue;
+        }
+
+        return Err(format!(
+            "{}: bulk_out chunk {} failed at offset {} expected_remaining={} accept_partial={} retries_left={} ({})",
+            phase_label,
+            chunk_idx,
+            attempt_offset,
+            remaining.len(),
+            config.param_submit_bulk_out_accept_partial,
+            retries_left,
+            stats.summary()
+        )
+        .into());
+    }
+
+    if attempts > 1 {
+        println!(
+            "      {}: bulk_out chunk {} converged via {} attempts total_bytes={}",
+            phase_label,
+            chunk_idx,
+            attempts,
+            chunk.len()
+        );
+    }
+
+    Ok(())
+}
+
+struct ParamBulkOutInFlight {
+    transfer: *mut libusb::libusb_transfer,
+    user_data: *mut ParamSubmitLaneUserData,
+    submitted: Arc<AtomicBool>,
+    counters: Arc<ParamSubmitLaneCounters>,
+    expected_len: usize,
+    chunk_idx: usize,
+    stream_offset: usize,
+    _buffer: Vec<u8>,
+}
+
+impl Drop for ParamBulkOutInFlight {
+    fn drop(&mut self) {
+        if self.submitted.load(Ordering::Relaxed) {
+            println!(
+                "      bulk_out inflight chunk {} still submitted during drop; leaking transfer for safety",
+                self.chunk_idx
+            );
+            return;
+        }
+        unsafe {
+            if !self.transfer.is_null() {
+                libusb::libusb_free_transfer(self.transfer);
+            }
+            if !self.user_data.is_null() {
+                let _ = Box::from_raw(self.user_data);
+            }
+        }
+    }
+}
+
+fn submit_param_bulk_out_inflight(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    phase_label: &str,
+    chunk_idx: usize,
+    stream_offset: usize,
+    chunk: &[u8],
+) -> Result<ParamBulkOutInFlight, Box<dyn Error>> {
+    let transfer = unsafe { libusb::libusb_alloc_transfer(0) };
+    if transfer.is_null() {
+        return Err("failed to allocate libusb transfer for inflight bulk_out chunk".into());
+    }
+
+    let mut buffer = chunk.to_vec();
+    let submitted = Arc::new(AtomicBool::new(false));
+    let counters = Arc::new(ParamSubmitLaneCounters::default());
+    let stop = Arc::new(AtomicBool::new(false));
+    let user_data = Box::new(ParamSubmitLaneUserData {
+        kind: ParamSubmitLaneKind::BulkOut,
+        lane_idx: chunk_idx + 1,
+        stop,
+        resubmit: false,
+        submitted: Arc::clone(&submitted),
+        counters: Arc::clone(&counters),
+        log_every: config.param_submit_log_every,
+    });
+    let user_data_ptr = Box::into_raw(user_data);
+
+    unsafe {
+        libusb::libusb_fill_bulk_transfer(
+            transfer,
+            driver.raw_libusb_handle(),
+            ParamSubmitLaneKind::BulkOut.endpoint(),
+            buffer.as_mut_ptr(),
+            buffer.len() as c_int,
+            param_submit_transfer_callback,
+            user_data_ptr as *mut _,
+            config.param_submit_timeout_ms.min(u32::MAX as u64) as u32,
+        );
+    }
+
+    let submit_rc = unsafe { libusb::libusb_submit_transfer(transfer) };
+    if submit_rc != 0 {
+        unsafe {
+            let _ = Box::from_raw(user_data_ptr);
+            libusb::libusb_free_transfer(transfer);
+        }
+        return Err(format!(
+            "{}: failed to submit inflight bulk_out chunk {} at offset {} ({} bytes): {} ({})",
+            phase_label,
+            chunk_idx,
+            stream_offset,
+            chunk.len(),
+            submit_rc,
+            libusb_error_name(submit_rc)
+        )
+        .into());
+    }
+    submitted.store(true, Ordering::Relaxed);
+
+    Ok(ParamBulkOutInFlight {
+        transfer,
+        user_data: user_data_ptr,
+        submitted,
+        counters,
+        expected_len: chunk.len(),
+        chunk_idx,
+        stream_offset,
+        _buffer: buffer,
+    })
+}
+
+fn finalize_param_bulk_out_inflight(
+    inflight: &ParamBulkOutInFlight,
+    config: &Config,
+    phase_label: &str,
+) -> Result<(), Box<dyn Error>> {
+    let settle_deadline = Instant::now()
+        + Duration::from_millis(config.param_submit_timeout_ms.saturating_mul(4).max(200));
+    while inflight.submitted.load(Ordering::Relaxed) && Instant::now() < settle_deadline {
+        std::thread::sleep(Duration::from_micros(200));
+    }
+    if inflight.submitted.load(Ordering::Relaxed) {
+        let cancel_rc = unsafe { libusb::libusb_cancel_transfer(inflight.transfer) };
+        let cancel_deadline = Instant::now()
+            + Duration::from_millis(config.param_submit_timeout_ms.saturating_mul(2).max(100));
+        while inflight.submitted.load(Ordering::Relaxed) && Instant::now() < cancel_deadline {
+            std::thread::sleep(Duration::from_micros(200));
+        }
+        if inflight.submitted.load(Ordering::Relaxed) {
+            return Err(format!(
+                "{}: inflight bulk_out chunk {} stuck after cancel at offset {} expected={} cancel_rc={} ({})",
+                phase_label,
+                inflight.chunk_idx,
+                inflight.stream_offset,
+                inflight.expected_len,
+                cancel_rc,
+                libusb_error_name(cancel_rc)
+            )
+            .into());
+        }
+    }
+
+    let stats = ParamBulkOutAttemptStats {
+        bytes: inflight.counters.bytes.load(Ordering::Relaxed),
+        completed: inflight.counters.completed.load(Ordering::Relaxed),
+        timed_out: inflight.counters.timed_out.load(Ordering::Relaxed),
+        cancelled: inflight.counters.cancelled.load(Ordering::Relaxed),
+        stalled: inflight.counters.stalled.load(Ordering::Relaxed),
+        no_device: inflight.counters.no_device.load(Ordering::Relaxed),
+        overflow: inflight.counters.overflow.load(Ordering::Relaxed),
+        errors: inflight.counters.errors.load(Ordering::Relaxed),
+        submit_errors: inflight.counters.submit_errors.load(Ordering::Relaxed),
+    };
+    let progressed = stats.bytes.min(inflight.expected_len);
+    if progressed == inflight.expected_len && stats.completed > 0 {
+        return Ok(());
+    }
+
+    Err(format!(
+        "{}: inflight bulk_out chunk {} failed at offset {} expected={} ({})",
+        phase_label,
+        inflight.chunk_idx,
+        inflight.stream_offset,
+        inflight.expected_len,
+        stats.summary()
+    )
+    .into())
+}
+
+fn cleanup_inflight_bulk_out_queue(
+    inflight_bulk_out: &mut VecDeque<ParamBulkOutInFlight>,
+    config: &Config,
+    phase_label: &str,
+) {
+    while let Some(inflight) = inflight_bulk_out.pop_front() {
+        if let Err(err) = finalize_param_bulk_out_inflight(&inflight, config, phase_label) {
+            println!(
+                "      {}: cleanup inflight bulk_out chunk {} offset {} failed: {}",
+                phase_label, inflight.chunk_idx, inflight.stream_offset, err
+            );
+        }
+    }
 }
 
 fn cancel_param_submit_lanes(lanes: &[ParamSubmitLane], phase_label: &str) {
@@ -1963,11 +2446,12 @@ fn print_param_submit_lane_stats(lanes: &[ParamSubmitLane], phase_label: &str) {
     for lane in lanes {
         let counters = &lane.counters;
         println!(
-            "      {}: async submit lane {}#{} callbacks={} completed={} timed_out={} cancelled={} stall={} no_device={} overflow={} errors={} submit_errors={} submitted={}",
+            "      {}: async submit lane {}#{} callbacks={} bytes={} completed={} timed_out={} cancelled={} stall={} no_device={} overflow={} errors={} submit_errors={} submitted={}",
             phase_label,
             lane.kind.as_str(),
             lane.lane_idx,
             counters.callbacks.load(Ordering::Relaxed),
+            counters.bytes.load(Ordering::Relaxed),
             counters.completed.load(Ordering::Relaxed),
             counters.timed_out.load(Ordering::Relaxed),
             counters.cancelled.load(Ordering::Relaxed),
@@ -1994,8 +2478,12 @@ fn stream_parameter_chunks_with_submit_lanes(
     interrupt_poll_timeout: Duration,
 ) -> Result<(), Box<dyn Error>> {
     println!(
-        "      {}: libusb submit lanes bulk_in={} event={} interrupt={} buffer_size={} transfer_timeout_ms={} event_poll_ms={} log_every={}",
+        "      {}: libusb submit lanes bulk_out={} bulk_out_accept_partial={} bulk_out_max_retries={} bulk_out_depth={} bulk_in={} event={} interrupt={} buffer_size={} transfer_timeout_ms={} event_poll_ms={} log_every={}",
         phase_label,
+        config.param_submit_bulk_out,
+        config.param_submit_bulk_out_accept_partial,
+        config.param_submit_bulk_out_max_retries,
+        config.param_submit_bulk_out_depth,
         config.param_submit_bulk_in_lanes,
         config.param_submit_event_lanes,
         config.param_submit_interrupt_lanes,
@@ -2075,7 +2563,10 @@ fn stream_parameter_chunks_with_submit_lanes(
         let settle_deadline = Instant::now()
             + Duration::from_millis(config.param_submit_timeout_ms.saturating_mul(4).max(200));
         while Instant::now() < settle_deadline {
-            if lanes.iter().all(|lane| !lane.submitted.load(Ordering::Relaxed)) {
+            if lanes
+                .iter()
+                .all(|lane| !lane.submitted.load(Ordering::Relaxed))
+            {
                 break;
             }
             std::thread::sleep(Duration::from_millis(2));
@@ -2096,6 +2587,108 @@ fn stream_parameter_chunks_with_submit_lanes(
     result
 }
 
+fn run_with_global_submit_lanes<F>(
+    driver: &EdgeTpuUsbDriver,
+    config: &Config,
+    phase_label: &str,
+    body: F,
+) -> Result<(), Box<dyn Error>>
+where
+    F: FnOnce() -> Result<(), Box<dyn Error>>,
+{
+    println!(
+        "Enabling global submit lanes: bulk_in={} event={} interrupt={} buffer_size={} transfer_timeout_ms={} event_poll_ms={} log_every={}",
+        config.param_submit_bulk_in_lanes,
+        config.param_submit_event_lanes,
+        config.param_submit_interrupt_lanes,
+        config.param_submit_buffer_size,
+        config.param_submit_timeout_ms,
+        config.param_submit_event_poll_ms,
+        config.param_submit_log_every
+    );
+
+    let stream_stop = Arc::new(AtomicBool::new(false));
+    let event_loop_stop = Arc::new(AtomicBool::new(false));
+    let event_loop_polls = Arc::new(AtomicUsize::new(0));
+    let event_loop_errors = Arc::new(AtomicUsize::new(0));
+    let mut lanes = Vec::new();
+
+    for lane_idx in 0..config.param_submit_bulk_in_lanes {
+        lanes.push(create_param_submit_lane(
+            driver,
+            config,
+            Arc::clone(&stream_stop),
+            ParamSubmitLaneKind::BulkIn,
+            lane_idx + 1,
+        )?);
+    }
+    for lane_idx in 0..config.param_submit_event_lanes {
+        lanes.push(create_param_submit_lane(
+            driver,
+            config,
+            Arc::clone(&stream_stop),
+            ParamSubmitLaneKind::Event,
+            lane_idx + 1,
+        )?);
+    }
+    for lane_idx in 0..config.param_submit_interrupt_lanes {
+        lanes.push(create_param_submit_lane(
+            driver,
+            config,
+            Arc::clone(&stream_stop),
+            ParamSubmitLaneKind::Interrupt,
+            lane_idx + 1,
+        )?);
+    }
+
+    let event_poll_timeout = Duration::from_millis(config.param_submit_event_poll_ms);
+    let result = std::thread::scope(|scope| -> Result<(), Box<dyn Error>> {
+        let event_loop_stop_for_thread = Arc::clone(&event_loop_stop);
+        let event_loop_polls_for_thread = Arc::clone(&event_loop_polls);
+        let event_loop_errors_for_thread = Arc::clone(&event_loop_errors);
+        let event_thread = scope.spawn(move || {
+            while !event_loop_stop_for_thread.load(Ordering::Relaxed) {
+                event_loop_polls_for_thread.fetch_add(1, Ordering::Relaxed);
+                if let Err(err) = driver.handle_events_timeout(Some(event_poll_timeout)) {
+                    event_loop_errors_for_thread.fetch_add(1, Ordering::Relaxed);
+                    if !matches!(err, CoralError::UsbError(rusb::Error::Timeout)) {
+                        println!("      global submit event loop error: {}", err);
+                    }
+                }
+            }
+        });
+
+        let body_result = body();
+
+        stream_stop.store(true, Ordering::Relaxed);
+        cancel_param_submit_lanes(&lanes, phase_label);
+
+        let settle_deadline = Instant::now()
+            + Duration::from_millis(config.param_submit_timeout_ms.saturating_mul(4).max(200));
+        while Instant::now() < settle_deadline {
+            if lanes
+                .iter()
+                .all(|lane| !lane.submitted.load(Ordering::Relaxed))
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+
+        event_loop_stop.store(true, Ordering::Relaxed);
+        let _ = event_thread.join();
+        body_result
+    });
+
+    println!(
+        "Global submit event loop polls={} errors={}",
+        event_loop_polls.load(Ordering::Relaxed),
+        event_loop_errors.load(Ordering::Relaxed)
+    );
+    print_param_submit_lane_stats(&lanes, phase_label);
+    result
+}
+
 fn run_param_async_lane_loop(
     driver: &EdgeTpuUsbDriver,
     config: &Config,
@@ -2109,7 +2702,9 @@ fn run_param_async_lane_loop(
         stats.reads += 1;
         match kind {
             ParamAsyncLaneKind::BulkIn => {
-                match driver.read_output_bytes_with_timeout(config.param_async_bulk_in_size, timeout) {
+                match driver
+                    .read_output_bytes_with_timeout(config.param_async_bulk_in_size, timeout)
+                {
                     Ok(_) => stats.ok += 1,
                     Err(CoralError::UsbError(rusb::Error::Timeout)) => stats.timeouts += 1,
                     Err(_) => stats.errors += 1,
@@ -2263,6 +2858,8 @@ fn stream_parameter_chunks(
     let admission_wait_every_chunks = config.param_admission_wait_every_chunks;
     let admission_wait_start = config.param_admission_wait_start_bytes.unwrap_or(0);
     let admission_wait_end = config.param_admission_wait_end_bytes.unwrap_or(usize::MAX);
+    let submit_bulk_out_depth = config.param_submit_bulk_out_depth.max(1);
+    let mut inflight_bulk_out: VecDeque<ParamBulkOutInFlight> = VecDeque::new();
     while global_offset < stream_len {
         let descriptor_end = (global_offset + descriptor_split_size).min(stream_len);
         let descriptor_len = if descriptor_idx == 0 {
@@ -2302,7 +2899,7 @@ fn stream_parameter_chunks(
                 &mut poison_probe_done,
             );
             if config.param_gate_placement.run_before() {
-                run_pending_known_good_gates(
+                if let Err(err) = run_pending_known_good_gates(
                     driver,
                     config,
                     phase_label,
@@ -2312,11 +2909,54 @@ fn stream_parameter_chunks(
                     window_gate,
                     &mut next_window_gate_offset,
                     &mut window_gate_count,
-                )?;
+                ) {
+                    cleanup_inflight_bulk_out_queue(&mut inflight_bulk_out, config, phase_label);
+                    return Err(err);
+                }
             }
             let end = (descriptor_offset + stream_chunk_size).min(descriptor_end);
             let chunk = &payload[descriptor_offset..end];
-            if let Err(err) = driver.write_bulk_out_chunk(chunk) {
+            let write_result = if config.param_submit_bulk_out && submit_bulk_out_depth > 1 {
+                while inflight_bulk_out.len() >= submit_bulk_out_depth {
+                    let completed = inflight_bulk_out
+                        .pop_front()
+                        .ok_or("inflight bulk_out queue bookkeeping failure")?;
+                    if let Err(err) =
+                        finalize_param_bulk_out_inflight(&completed, config, phase_label)
+                    {
+                        cleanup_inflight_bulk_out_queue(
+                            &mut inflight_bulk_out,
+                            config,
+                            phase_label,
+                        );
+                        return Err(err);
+                    }
+                }
+                let inflight = submit_param_bulk_out_inflight(
+                    driver,
+                    config,
+                    phase_label,
+                    global_chunk_idx,
+                    descriptor_offset,
+                    chunk,
+                )?;
+                inflight_bulk_out.push_back(inflight);
+                Ok(())
+            } else if config.param_submit_bulk_out {
+                submit_param_bulk_out_chunk(
+                    driver,
+                    config,
+                    phase_label,
+                    global_chunk_idx,
+                    descriptor_offset,
+                    chunk,
+                )
+            } else {
+                driver
+                    .write_bulk_out_chunk(chunk)
+                    .map_err(|err| -> Box<dyn Error> { Box::new(err) })
+            };
+            if let Err(err) = write_result {
                 if config.param_csr_snapshot_on_error {
                     capture_param_csr_snapshot(
                         driver,
@@ -2327,6 +2967,7 @@ fn stream_parameter_chunks(
                         param_bytes_written,
                     );
                 }
+                cleanup_inflight_bulk_out_queue(&mut inflight_bulk_out, config, phase_label);
                 return Err(format!(
                     "{}: parameter stream write failed at offset {} of {} bytes (chunk {}): {}",
                     phase_label, descriptor_offset, stream_len, global_chunk_idx, err
@@ -2355,7 +2996,7 @@ fn stream_parameter_chunks(
             );
 
             if config.param_gate_placement.run_after() {
-                run_pending_known_good_gates(
+                if let Err(err) = run_pending_known_good_gates(
                     driver,
                     config,
                     phase_label,
@@ -2365,14 +3006,17 @@ fn stream_parameter_chunks(
                     window_gate,
                     &mut next_window_gate_offset,
                     &mut window_gate_count,
-                )?;
+                ) {
+                    cleanup_inflight_bulk_out_queue(&mut inflight_bulk_out, config, phase_label);
+                    return Err(err);
+                }
             }
 
             if let Some(mode) = admission_mode {
-                let in_admission_window =
-                    param_bytes_written >= admission_wait_start && param_bytes_written < admission_wait_end;
+                let in_admission_window = param_bytes_written >= admission_wait_start
+                    && param_bytes_written < admission_wait_end;
                 if in_admission_window && (global_chunk_idx % admission_wait_every_chunks == 0) {
-                    let admission_ok = wait_for_param_admission(
+                    let admission_ok = match wait_for_param_admission(
                         driver,
                         phase_label,
                         mode,
@@ -2380,9 +3024,28 @@ fn stream_parameter_chunks(
                         param_bytes_written,
                         admission_wait_timeout,
                         admission_wait_poll,
-                    )?;
+                    ) {
+                        Ok(ok) => ok,
+                        Err(err) => {
+                            cleanup_inflight_bulk_out_queue(
+                                &mut inflight_bulk_out,
+                                config,
+                                phase_label,
+                            );
+                            return Err(format!(
+                                "{}: admission wait call failed at offset {} (chunk {}): {}",
+                                phase_label, param_bytes_written, global_chunk_idx, err
+                            )
+                            .into());
+                        }
+                    };
                     if !admission_ok {
                         if config.param_admission_wait_strict {
+                            cleanup_inflight_bulk_out_queue(
+                                &mut inflight_bulk_out,
+                                config,
+                                phase_label,
+                            );
                             return Err(format!(
                                 "{}: admission wait unsatisfied at offset {} (chunk {})",
                                 phase_label, param_bytes_written, global_chunk_idx
@@ -2440,6 +3103,17 @@ fn stream_parameter_chunks(
                 Err(CoralError::UsbError(rusb::Error::Timeout)) => {}
                 Err(err) => println!("      descriptor drain event error: {}", err),
             }
+        }
+    }
+
+    while let Some(completed) = inflight_bulk_out.pop_front() {
+        if let Err(err) = finalize_param_bulk_out_inflight(&completed, config, phase_label) {
+            cleanup_inflight_bulk_out_queue(&mut inflight_bulk_out, config, phase_label);
+            return Err(format!(
+                "{}: pending inflight bulk_out finalize failed after stream completion: {}",
+                phase_label, err
+            )
+            .into());
         }
     }
 
@@ -2604,7 +3278,10 @@ fn send_parameter_payload_with_instruction_interleave(
         let segment_end = (segment_start + interleave_window_bytes).min(payload.len());
         let segment_label = format!(
             "{} interleave-seg{} [{}..{})",
-            phase_label, segment_idx + 1, segment_start, segment_end
+            phase_label,
+            segment_idx + 1,
+            segment_start,
+            segment_end
         );
         send_parameter_payload(
             driver,
@@ -2694,12 +3371,14 @@ fn send_parameter_payload(
         stream_len
     };
     let stream_chunk_size = config.param_stream_chunk_size.unwrap_or(config.chunk_size);
-    let descriptor_split_size = config.param_descriptor_split_bytes.unwrap_or(stream_len.max(1));
+    let descriptor_split_size = config
+        .param_descriptor_split_bytes
+        .unwrap_or(stream_len.max(1));
     let poll_timeout = Duration::from_millis(config.param_event_timeout_ms);
     let interrupt_poll_timeout = Duration::from_millis(config.param_interrupt_timeout_ms);
 
     println!(
-        "    {}: streaming parameters len={} header_len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} csr_snapshot_start={:?} csr_snapshot_end={:?} csr_snapshot_every_chunks={} csr_snapshot_on_error={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} interleave_window={:?} interleave_require_event={} interleave_event_timeout_ms={} csr_probe_offsets={:?} poison_probe_offset={:?}",
+        "    {}: streaming parameters len={} header_len={} chunk={} desc_split={} event_poll_every={} intr_poll_every={} drain_desc_every={} sleep_us={} tag={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} csr_snapshot_start={:?} csr_snapshot_end={:?} csr_snapshot_every_chunks={} csr_snapshot_on_error={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_out={} submit_bulk_out_depth={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} interleave_window={:?} interleave_require_event={} interleave_event_timeout_ms={} csr_probe_offsets={:?} poison_probe_offset={:?}",
         phase_label,
         stream_len,
         header_total_len,
@@ -2741,6 +3420,8 @@ fn send_parameter_payload(
         config.param_async_event_lanes,
         config.param_async_interrupt_lanes,
         config.param_async_timeout_ms,
+        config.param_submit_bulk_out,
+        config.param_submit_bulk_out_depth,
         config.param_submit_bulk_in_lanes,
         config.param_submit_event_lanes,
         config.param_submit_interrupt_lanes,
@@ -2822,7 +3503,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         || has_param_admission_wait(&config)
     {
         println!(
-            "Parameter stream controls: chunk={:?} max_bytes={:?} force_full_header_len={} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} csr_snapshot_start={:?} csr_snapshot_end={:?} csr_snapshot_every_chunks={} csr_snapshot_on_error={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} require_post_instr_event={} post_instr_event_timeout_ms={} interleave_window={:?} interleave_require_event={} interleave_event_timeout_ms={} csr_probe_offsets={:?} poison_probe_offset={:?} script1={} script2={} script3={}",
+            "Parameter stream controls: chunk={:?} max_bytes={:?} force_full_header_len={} desc_split={:?} event_poll_every={} intr_poll_every={} drain_desc_every={} event_timeout_ms={} intr_timeout_ms={} sleep_us={} handshake={} a0d8_write=0x{:08x} gate_offsets={:?} gate_window_start={:?} gate_window_end={:?} gate_window_step={:?} gate_placement={} csr_snapshot_start={:?} csr_snapshot_end={:?} csr_snapshot_every_chunks={} csr_snapshot_on_error={} admission_mode={} admission_timeout_ms={} admission_poll_ms={} admission_start={:?} admission_end={:?} admission_every_chunks={} admission_strict={} prepost_bulk_reads={} prepost_bulk_size={} prepost_event_reads={} prepost_intr_reads={} prepost_timeout_ms={} async_bulk_lanes={} async_bulk_size={} async_event_lanes={} async_intr_lanes={} async_timeout_ms={} submit_bulk_out={} submit_bulk_out_depth={} submit_bulk_lanes={} submit_event_lanes={} submit_intr_lanes={} submit_buf_size={} submit_timeout_ms={} submit_event_poll_ms={} submit_log_every={} submit_global_lanes={} require_post_instr_event={} post_instr_event_timeout_ms={} interleave_window={:?} interleave_require_event={} interleave_event_timeout_ms={} csr_probe_offsets={:?} poison_probe_offset={:?} script1={} script2={} script3={}",
             config.param_stream_chunk_size,
             config.param_stream_max_bytes,
             config.param_force_full_header_len,
@@ -2864,6 +3545,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.param_async_event_lanes,
             config.param_async_interrupt_lanes,
             config.param_async_timeout_ms,
+            config.param_submit_bulk_out,
+            config.param_submit_bulk_out_depth,
             config.param_submit_bulk_in_lanes,
             config.param_submit_event_lanes,
             config.param_submit_interrupt_lanes,
@@ -2871,6 +3554,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.param_submit_timeout_ms,
             config.param_submit_event_poll_ms,
             config.param_submit_log_every,
+            config.param_submit_global_lanes,
             config.param_require_post_instr_event,
             config.param_post_instr_event_timeout_ms,
             config.param_interleave_window_bytes,
@@ -2965,17 +3649,28 @@ fn main() -> Result<(), Box<dyn Error>> {
     driver.claim_interface0()?;
 
     if config.setup {
-        let setup_steps: Vec<_> = if config.setup_include_reads {
-            EDGETPUXRAY_RUNTIME_SETUP_SEQUENCE.to_vec()
+        let base_sequence = if config.setup_libedgetpu {
+            LIBEDGETPU_KNOWN_GOOD_SETUP_SEQUENCE
         } else {
             EDGETPUXRAY_RUNTIME_SETUP_SEQUENCE
+        };
+        let setup_steps: Vec<_> = if config.setup_include_reads {
+            base_sequence.to_vec()
+        } else {
+            base_sequence
                 .iter()
                 .copied()
                 .filter(|step| step.direction == VendorDirection::Out)
                 .collect()
         };
+        let seq_name = if config.setup_libedgetpu {
+            "libedgetpu known-good"
+        } else {
+            "edgetpuxray"
+        };
         println!(
-            "Applying edgetpuxray runtime setup sequence ({} steps, include_reads={}, verify_reads={})",
+            "Applying {} runtime setup sequence ({} steps, include_reads={}, verify_reads={})",
+            seq_name,
             setup_steps.len(),
             config.setup_include_reads,
             config.verify_setup_reads
@@ -2985,165 +3680,194 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("Skipping setup sequence (--skip-setup)");
     }
 
-    if !config.skip_param_preload {
-        if !param_executables.is_empty() && run_exe.executable_type == 2 {
-            println!(
-                "Bootstrap phase: send EXECUTION_ONLY instruction chunks, then PARAMETER_CACHING streams"
-            );
-            for (idx, chunk) in run_exe.instruction_bitstreams.iter().enumerate() {
-                println!("  EXECUTION_ONLY chunk {} ({} bytes)", idx, chunk.len());
-                driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
-            }
-            for exe in &param_executables {
-                println!(
-                    "  PARAMETER_CACHING executable idx={} chunks={} params={} bytes",
-                    exe.executable_index,
-                    exe.instruction_bitstreams.len(),
-                    exe.parameters_stream.len()
-                );
-                for (idx, chunk) in exe.instruction_bitstreams.iter().enumerate() {
-                    println!("    instr chunk {} ({} bytes)", idx, chunk.len());
-                    driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
-                }
-                if config.param_require_post_instr_event {
-                    let timeout =
-                        Duration::from_millis(config.param_post_instr_event_timeout_ms);
-                    match driver.read_event_packet_with_timeout(timeout) {
-                        Ok(event) => println!(
-                            "    post-instr event (required): tag={} offset=0x{:016x} length={}",
-                            event.tag, event.offset, event.length
-                        ),
-                        Err(err) => {
-                            return Err(format!(
-                                "required post-instr event failed before parameter stream (exe idx={}): {}",
-                                exe.executable_index, err
-                            )
-                            .into())
-                        }
-                    }
-                }
-                if let Some(window_bytes) = config.param_interleave_window_bytes {
-                    let interleave_chunks: &[Vec<u8>] = if !exe.instruction_bitstreams.is_empty() {
-                        &exe.instruction_bitstreams
-                    } else {
-                        &run_exe.instruction_bitstreams
-                    };
-                    send_parameter_payload_with_instruction_interleave(
-                        &driver,
-                        &config,
-                        &exe.parameters_stream,
-                        "bootstrap param",
-                        window_bytes,
-                        interleave_chunks,
-                    )?;
-                } else {
-                    send_parameter_payload(&driver, &config, &exe.parameters_stream, "bootstrap param")?;
-                }
-            }
-            match driver.read_event_packet() {
-                Ok(event) => println!(
-                    "  Bootstrap event: tag={} offset=0x{:016x} length={}",
-                    event.tag, event.offset, event.length
-                ),
-                Err(err) => println!("  Bootstrap event read failed: {}", err),
-            }
-        } else {
-            for exe in &param_executables {
-                println!(
-                    "Preload PARAMETER_CACHING executable idx={} chunks={} params={} bytes",
-                    exe.executable_index,
-                    exe.instruction_bitstreams.len(),
-                    exe.parameters_stream.len()
-                );
-                for chunk in &exe.instruction_bitstreams {
-                    driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
-                }
-                if config.param_require_post_instr_event {
-                    let timeout =
-                        Duration::from_millis(config.param_post_instr_event_timeout_ms);
-                    match driver.read_event_packet_with_timeout(timeout) {
-                        Ok(event) => println!(
-                            "  post-instr event (required): tag={} offset=0x{:016x} length={}",
-                            event.tag, event.offset, event.length
-                        ),
-                        Err(err) => {
-                            return Err(format!(
-                                "required post-instr event failed before parameter stream (exe idx={}): {}",
-                                exe.executable_index, err
-                            )
-                            .into())
-                        }
-                    }
-                }
-                if let Some(window_bytes) = config.param_interleave_window_bytes {
-                    let interleave_chunks: &[Vec<u8>] = if !exe.instruction_bitstreams.is_empty() {
-                        &exe.instruction_bitstreams
-                    } else {
-                        &run_exe.instruction_bitstreams
-                    };
-                    send_parameter_payload_with_instruction_interleave(
-                        &driver,
-                        &config,
-                        &exe.parameters_stream,
-                        "preload param",
-                        window_bytes,
-                        interleave_chunks,
-                    )?;
-                } else {
-                    send_parameter_payload(&driver, &config, &exe.parameters_stream, "preload param")?;
-                }
-            }
-        }
-    } else {
-        println!("Skipping parameter preload (--skip-param-preload)");
+    let mut replay_config = config.clone();
+    if config.param_submit_global_lanes {
+        // Global lane mode preposts EP1/EP2/EP3 submit lanes before any Bo write.
+        // Per-parameter streaming still controls Bo submit behavior, so disable
+        // per-parameter read lane startup to avoid duplicate readers.
+        replay_config.param_submit_bulk_in_lanes = 0;
+        replay_config.param_submit_event_lanes = 0;
+        replay_config.param_submit_interrupt_lanes = 0;
     }
 
-    println!(
-        "Execution executable: idx={} type={}({}) payload={} bytes",
-        run_exe.executable_index,
-        run_exe.executable_type,
-        executable_type_name(run_exe.executable_type),
-        run_exe.payload.len()
-    );
-
-    for run in 0..config.runs {
-        println!("RUN {}", run + 1);
-        for (idx, chunk) in run_exe.instruction_bitstreams.iter().enumerate() {
-            println!("  run instr chunk {} ({} bytes)", idx, chunk.len());
-            driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
+    let run_replay = || -> Result<(), Box<dyn Error>> {
+        let config = &replay_config;
+        if !config.skip_param_preload {
+            if !param_executables.is_empty() && run_exe.executable_type == 2 {
+                println!(
+                    "Bootstrap phase: send EXECUTION_ONLY instruction chunks, then PARAMETER_CACHING streams"
+                );
+                for (idx, chunk) in run_exe.instruction_bitstreams.iter().enumerate() {
+                    println!("  EXECUTION_ONLY chunk {} ({} bytes)", idx, chunk.len());
+                    driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
+                }
+                for exe in &param_executables {
+                    println!(
+                        "  PARAMETER_CACHING executable idx={} chunks={} params={} bytes",
+                        exe.executable_index,
+                        exe.instruction_bitstreams.len(),
+                        exe.parameters_stream.len()
+                    );
+                    for (idx, chunk) in exe.instruction_bitstreams.iter().enumerate() {
+                        println!("    instr chunk {} ({} bytes)", idx, chunk.len());
+                        driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
+                    }
+                    if config.param_require_post_instr_event {
+                        let timeout = Duration::from_millis(config.param_post_instr_event_timeout_ms);
+                        match driver.read_event_packet_with_timeout(timeout) {
+                            Ok(event) => println!(
+                                "    post-instr event (required): tag={} offset=0x{:016x} length={}",
+                                event.tag, event.offset, event.length
+                            ),
+                            Err(err) => {
+                                return Err(format!(
+                                    "required post-instr event failed before parameter stream (exe idx={}): {}",
+                                    exe.executable_index, err
+                                )
+                                .into())
+                            }
+                        }
+                    }
+                    if let Some(window_bytes) = config.param_interleave_window_bytes {
+                        let interleave_chunks: &[Vec<u8>] = if !exe.instruction_bitstreams.is_empty() {
+                            &exe.instruction_bitstreams
+                        } else {
+                            &run_exe.instruction_bitstreams
+                        };
+                        send_parameter_payload_with_instruction_interleave(
+                            &driver,
+                            config,
+                            &exe.parameters_stream,
+                            "bootstrap param",
+                            window_bytes,
+                            interleave_chunks,
+                        )?;
+                    } else {
+                        send_parameter_payload(
+                            &driver,
+                            config,
+                            &exe.parameters_stream,
+                            "bootstrap param",
+                        )?;
+                    }
+                }
+                match driver.read_event_packet() {
+                    Ok(event) => println!(
+                        "  Bootstrap event: tag={} offset=0x{:016x} length={}",
+                        event.tag, event.offset, event.length
+                    ),
+                    Err(err) => println!("  Bootstrap event read failed: {}", err),
+                }
+            } else {
+                for exe in &param_executables {
+                    println!(
+                        "Preload PARAMETER_CACHING executable idx={} chunks={} params={} bytes",
+                        exe.executable_index,
+                        exe.instruction_bitstreams.len(),
+                        exe.parameters_stream.len()
+                    );
+                    for chunk in &exe.instruction_bitstreams {
+                        driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
+                    }
+                    if config.param_require_post_instr_event {
+                        let timeout = Duration::from_millis(config.param_post_instr_event_timeout_ms);
+                        match driver.read_event_packet_with_timeout(timeout) {
+                            Ok(event) => println!(
+                                "  post-instr event (required): tag={} offset=0x{:016x} length={}",
+                                event.tag, event.offset, event.length
+                            ),
+                            Err(err) => {
+                                return Err(format!(
+                                    "required post-instr event failed before parameter stream (exe idx={}): {}",
+                                    exe.executable_index, err
+                                )
+                                .into())
+                            }
+                        }
+                    }
+                    if let Some(window_bytes) = config.param_interleave_window_bytes {
+                        let interleave_chunks: &[Vec<u8>] = if !exe.instruction_bitstreams.is_empty() {
+                            &exe.instruction_bitstreams
+                        } else {
+                            &run_exe.instruction_bitstreams
+                        };
+                        send_parameter_payload_with_instruction_interleave(
+                            &driver,
+                            config,
+                            &exe.parameters_stream,
+                            "preload param",
+                            window_bytes,
+                            interleave_chunks,
+                        )?;
+                    } else {
+                        send_parameter_payload(
+                            &driver,
+                            config,
+                            &exe.parameters_stream,
+                            "preload param",
+                        )?;
+                    }
+                }
+            }
+        } else {
+            println!("Skipping parameter preload (--skip-param-preload)");
         }
-        if !run_exe.parameters_stream.is_empty() {
-            send_parameter_payload(&driver, &config, &run_exe.parameters_stream, "run param")?;
-        }
-        driver.send_descriptor_payload_raw(config.input_activations_tag, &input_bytes)?;
 
-        match driver.read_event_packet() {
-            Ok(event) => println!(
-                "  Event: tag={} offset=0x{:016x} length={}",
-                event.tag, event.offset, event.length
-            ),
-            Err(err) => println!("  Event read failed: {}", err),
-        }
-
-        let output = driver.read_output_bytes(config.output_bytes)?;
-        let head_len = output.len().min(16);
-        let output_hash = fnv1a64(&output);
         println!(
-            "  Output: bytes={} fnv1a64=0x{:016x} head={:02x?}",
-            output.len(),
-            output_hash,
-            &output[..head_len]
+            "Execution executable: idx={} type={}({}) payload={} bytes",
+            run_exe.executable_index,
+            run_exe.executable_type,
+            executable_type_name(run_exe.executable_type),
+            run_exe.payload.len()
         );
 
-        if config.read_interrupt {
-            match driver.read_interrupt_packet() {
-                Ok(pkt) => println!(
-                    "  Interrupt: raw=0x{:08x} fatal={} top_level_mask=0x{:08x}",
-                    pkt.raw, pkt.fatal, pkt.top_level_mask
+        for run in 0..config.runs {
+            println!("RUN {}", run + 1);
+            for (idx, chunk) in run_exe.instruction_bitstreams.iter().enumerate() {
+                println!("  run instr chunk {} ({} bytes)", idx, chunk.len());
+                driver.send_descriptor_payload_raw(config.instructions_tag, chunk)?;
+            }
+            if !run_exe.parameters_stream.is_empty() {
+                send_parameter_payload(&driver, config, &run_exe.parameters_stream, "run param")?;
+            }
+            driver.send_descriptor_payload_raw(config.input_activations_tag, &input_bytes)?;
+
+            match driver.read_event_packet() {
+                Ok(event) => println!(
+                    "  Event: tag={} offset=0x{:016x} length={}",
+                    event.tag, event.offset, event.length
                 ),
-                Err(err) => println!("  Interrupt read failed: {}", err),
+                Err(err) => println!("  Event read failed: {}", err),
+            }
+
+            let output = driver.read_output_bytes(config.output_bytes)?;
+            let head_len = output.len().min(16);
+            let output_hash = fnv1a64(&output);
+            println!(
+                "  Output: bytes={} fnv1a64=0x{:016x} head={:02x?}",
+                output.len(),
+                output_hash,
+                &output[..head_len]
+            );
+
+            if config.read_interrupt {
+                match driver.read_interrupt_packet() {
+                    Ok(pkt) => println!(
+                        "  Interrupt: raw=0x{:08x} fatal={} top_level_mask=0x{:08x}",
+                        pkt.raw, pkt.fatal, pkt.top_level_mask
+                    ),
+                    Err(err) => println!("  Interrupt read failed: {}", err),
+                }
             }
         }
+
+        Ok(())
+    };
+
+    if config.param_submit_global_lanes {
+        run_with_global_submit_lanes(&driver, &config, "global submit", run_replay)?;
+    } else {
+        run_replay()?;
     }
 
     Ok(())

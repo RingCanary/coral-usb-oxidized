@@ -16,7 +16,7 @@ pub use crate::clip::{
 };
 pub use crate::control_plane::{
     format_register, known_register_name, split_offset, VendorControlStep, VendorDirection,
-    VendorWidth, EDGETPUXRAY_RUNTIME_SETUP_SEQUENCE,
+    VendorWidth, EDGETPUXRAY_RUNTIME_SETUP_SEQUENCE, LIBEDGETPU_KNOWN_GOOD_SETUP_SEQUENCE,
 };
 pub use crate::delegate::{version, EdgeTPUDelegate};
 pub use crate::device::{is_device_connected, CoralDevice};

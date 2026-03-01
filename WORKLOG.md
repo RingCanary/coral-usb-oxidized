@@ -3089,3 +3089,491 @@ Script1 (`--script1-interleave`, window `32768`, max-bytes `131072`):
    quiescent reads before cliff, then abrupt unreadable state.
 3. poison state affects both bridge-domain and SCU-domain control reads at the
    same threshold.
+
+### 2026-02-25 - Submit-OUT partial-progress sliding retries (Pi5)
+
+#### Code changes
+
+`examples/rusb_serialized_exec_replay.rs`:
+1. Added submit-OUT recovery controls:
+   - `--param-submit-bulk-out-accept-partial`
+   - `--param-submit-bulk-out-max-retries`
+2. Reworked submit-OUT chunk path to support:
+   - per-attempt `actual_length` accounting
+   - retry loop for zero-progress timeouts
+   - partial-progress continuation semantics (`offset += actual_length`) when enabled
+3. Extended submit-lane startup log to include new controls.
+
+#### Pi5 runs
+
+All runs were done on `rpilm3.local` with usbmon capture (`tools/usbmon_capture.sh -b 4`) and `dense_2048x2048_quant_edgetpu.tflite`.
+
+1. Baseline (no partial accept), 16 KiB stream chunks:
+   - trace: `traces/usbmon-20260225T194139Z-bus4/usbmon-bus4-20260225T194139Z.log`
+   - first failure: parameter write at `offset=49152`.
+   - usbmon shows three successful 16 KiB Bo completions, then `C Bo ... -2 0`.
+
+2. Partial accept + retries (`--param-submit-bulk-out-accept-partial --param-submit-bulk-out-max-retries 8`), 16 KiB stream chunks:
+   - trace: `traces/usbmon-20260225T194331Z-bus4/usbmon-bus4-20260225T194331Z.log`
+   - still fails at `offset=49152`.
+   - every retry at that offset reports zero progress:
+     `actual=0 completed=0 timed_out=1`.
+
+3. Partial accept + retries, 8 KiB stream chunks:
+   - trace: `traces/usbmon-20260225T194426Z-bus4/usbmon-bus4-20260225T194426Z.log`
+   - still fails at `offset=49152`.
+   - six 8 KiB chunks succeed (`6 * 8192 = 49152`), then retries at same offset are zero-progress.
+
+#### Key signal
+
+1. The cliff is byte-total anchored at `49152`, not chunk-count anchored.
+2. Sliding retry semantics recover nothing past the wall (`actual_length` remains `0` once at boundary).
+3. Preposted submit lanes on EP `0x82/0x83` (`2/1` lanes) do not change admission at this boundary.
+
+#### Practical implication
+
+This strongly falsifies a pure host timeout/transfer-splitting explanation as the sole blocker. The dominant failure mode remains device-side admission/state progression after exactly 49,152 bytes in this phase.
+
+### 2026-02-25 - True in-flight bulk-out depth sweep (`N2`) + cleanup hardening (Pi5)
+
+#### Objective
+
+Validate whether the class-2 wall shifts when EP `0x01` uses true concurrent
+`libusb_submit_transfer` depth >1, and harden replay cleanup to avoid stale
+submitted transfers after failure.
+
+#### Pi5 usbmon runs
+
+All runs: `dense_2048x2048_quant_edgetpu.tflite`, parameter stream max
+`262144`, chunk `16384`, submit lanes event/interrupt `2/1`, retries enabled.
+
+1. Depth `1` baseline (clean boot-mode start):
+   - trace: `traces/usbmon-20260225T195737Z-bus4/usbmon-bus4-20260225T195737Z.log`
+   - result: fails at `offset=49152`.
+2. Depth `2` (clean rebooted start):
+   - trace: `traces/usbmon-20260225T200121Z-bus4/usbmon-bus4-20260225T200121Z.log`
+   - result: fails at `offset=49152`:
+     `inflight bulk_out chunk 3 failed at offset 49152`.
+3. Depth `4` (clean rebooted start):
+   - trace: `traces/usbmon-20260225T200228Z-bus4/usbmon-bus4-20260225T200228Z.log`
+   - result: fails at `offset=49152`:
+     `inflight bulk_out chunk 3 failed at offset 49152`.
+
+#### Code hardening
+
+`examples/rusb_serialized_exec_replay.rs`:
+1. Added deterministic cleanup for pending in-flight EP `0x01` submits on all
+   early-return paths in parameter streaming.
+2. Replaced prior drop-time leak behavior with explicit finalize/cancel attempts
+   and cleanup logging.
+3. Added cleanup on gate/admission error paths so failures do not silently leave
+   submitted transfers alive.
+
+Validation run (Pi5, direct) after patch:
+1. No `"still submitted during drop; leaking transfer for safety"` output.
+2. Cleanup now reports explicit failed retirements for queued post-wall chunks
+   (e.g. chunk offsets `65536`, `81920`, `98304`) while root failure remains
+   chunk at `49152`.
+
+#### Key conclusion
+
+1. `N2` is now closed: true in-flight submit depth (`1 -> 2 -> 4`) does not
+   move the `49152` wall.
+2. Root blocker remains device/runtime admission semantics, not host-side
+   transfer queue depth alone.
+3. Next highest-value work remains dynamic runtime semantic extraction from
+   known-good libedgetpu near-wall behavior (`N3`/`N4`).
+
+### 2026-02-25 - `N3` near-anchor topology alignment and 1 MiB replay
+
+#### Step 1: good-vs-bad near-anchor diff
+
+Ran:
+
+`tools/usbmon_param_handshake_probe.py` against
+1. good: `traces/usbmon-transition-fixed-20260225T082936Z-bus4/libedgetpu_known_good/post/usbmon-bus4-20260225T083453Z.log`
+2. bad: `traces/usbmon-20260225T200228Z-bus4/usbmon-bus4-20260225T200228Z.log`
+
+Key output:
+1. no near-anchor control tuple deltas.
+2. major topology delta:
+   - good parameter phase uses `Bo` payloads of `1048576`.
+   - bad run used `16384` chunking.
+
+#### Step 2: replay with libedgetpu-like 1 MiB payload topology
+
+Pi5 runs:
+
+1. Sync bulk path (`submit_bulk_out=false`), full class-2 header kept at 4 MiB:
+   - trace: `traces/usbmon-20260225T200806Z-bus4/usbmon-bus4-20260225T200806Z.log`
+   - args: `--param-stream-max-bytes 1048576 --param-force-full-header-len --param-stream-chunk-size 1048576`
+   - result: immediate timeout on first parameter write (`offset=0`).
+
+2. Submit path (`submit_bulk_out=true`, depth=1), same 1 MiB topology:
+   - trace: `traces/usbmon-20260225T200905Z-bus4/usbmon-bus4-20260225T200905Z.log`
+   - result: first submitted 1 MiB write reports partial progress exactly `49152`,
+     then zero-progress retries.
+   - callback stats: `actual=49152`, `timed_out=1`, then repeated `actual=0`.
+
+3. Submit path + preposted bulk-in lanes (`--param-submit-bulk-in-lanes 2`):
+   - trace: `traces/usbmon-20260225T201112Z-bus4/usbmon-bus4-20260225T201112Z.log`
+   - result: unchanged (`actual=49152`, then zero-progress retries).
+   - bulk-in lane stats: timeout/cancel callbacks only, no data completions.
+
+4. Submit path + long timeout (`--param-submit-timeout-ms 12000`):
+   - trace: `traces/usbmon-20260225T201223Z-bus4/usbmon-bus4-20260225T201223Z.log`
+   - result: unchanged (`actual=49152`, then zero additional progress).
+   - this falsifies a simple short-timeout explanation.
+
+#### Step 3: topology-matched good-vs-bad diff
+
+Ran handshake probe with bad=`usbmon-20260225T200905Z`.
+
+Key output:
+1. phase payload topology now matches (`Bo -115 1048576` bursts present in both).
+2. discriminant is completion semantics:
+   - good: `C Bo 0 1048576`
+   - bad: `C Bo -2 49152` then subsequent `C Bo -2 0` on retries.
+3. still no near-anchor control tuple differences.
+4. preposting bulk-in submit lanes does not provide the missing admission token.
+5. expanding submit timeout from 300ms to 12000ms does not move the wall.
+
+#### Interpretation update
+
+1. matching chunk topology alone is insufficient.
+2. host-visible EP0 control tuple differences are still absent at near-anchor.
+3. the wall remains a data-plane admission/progress issue where our path can
+   inject bytes up to `49152` but cannot trigger continued drain/completion.
+
+### 2026-02-25 - reboot-first validation (clean reruns for creative cases)
+
+To remove poisoned-runtime ambiguity, reran key creative cases with mandatory
+Pi reboot before each run.
+
+#### Case A: split framing (clean)
+
+Run:
+1. `--param-stream-max-bytes 1048576`
+2. `--param-descriptor-split-bytes 524288`
+3. `--param-stream-chunk-size 262144`
+4. submit-out retries enabled (`timeout=12000ms`)
+
+Artifact:
+1. `traces/usbmon-20260225T202800Z-bus4/usbmon-bus4-20260225T202800Z.log`
+
+Result:
+1. still progresses exactly `49152` bytes then stalls with zero progress retries.
+2. descriptor split/framing change does not bypass wall.
+
+#### Case B: hybrid gate/handshake (clean)
+
+Run:
+1. `chunk=1024`, `split=8192`
+2. `--param-a0d8-handshake`
+3. pre/post reads on bulk/event/interrupt per descriptor
+4. known-good gates at `32768` and `33792`
+5. submit-out depth `2`
+
+Artifact:
+1. `traces/usbmon-20260225T202926Z-bus4/usbmon-bus4-20260225T202926Z.log`
+
+Result:
+1. gate #1 at `32768` succeeds (`a0d4/a704/a33c/a0d8` readable).
+2. gate #2 at `33792` fails immediately on `a0d4` read timeout.
+3. this cleanly reaffirms control-plane poison cliff around 33KiB.
+
+#### Case C: dual-writer race (clean)
+
+Run:
+1. two `rusb_serialized_exec_replay` binaries launched 50ms apart under one
+   usbmon capture.
+2. writer A includes firmware upload path; writer B uses `--skip-setup`.
+
+Artifact:
+1. `traces/usbmon-20260225T203133Z-bus4/usbmon-bus4-20260225T203133Z.log`
+
+Result:
+1. writer A reaches canonical wall (`offset=49152` then timeout).
+2. writer B fails early in boot-mode race path (no firmware provided).
+3. no sign of admission bypass from dual-writer contention.
+
+### 2026-02-25 - `tmux` quantum-tunnel campaign (creative/DoS variants)
+
+#### Setup
+
+Ran on Pi5 in `tmux` with parallel watcher panes (dmesg + lsusb + latest traces)
+and matrix runner panes for replay/fuzz race cases.
+
+Matrix artifacts:
+1. `traces/quantum-tunnel-nopower-20260225T202242Z/`
+2. `traces/quantum-tunnel-batch2-20260225T202515Z/`
+
+#### Batch 1 (`quantum-tunnel-nopower-*`)
+
+1. `q1_topology_1m_submit`:
+   - reproduces wall under tmux/watcher load.
+   - first 1 MiB submit progresses exactly `49152`, then zero-progress retries.
+   - trace: `traces/usbmon-20260225T202242Z-bus4/usbmon-bus4-20260225T202242Z.log`
+2. `q2_topology_1m_split512k`:
+   - failed fast due CLI validation:
+     `--param-force-full-header-len currently requires no --param-descriptor-split-bytes`.
+3. `q3_fuzz_resetkick_dense`:
+   - failed at setup step 0 (`0x0001a30c` timeout) on runtime-state device.
+   - trace: `traces/usbmon-20260225T202335Z-bus4/usbmon-bus4-20260225T202335Z.log`
+4. `q4_dual_writer_dos`:
+   - two concurrent replay processes against one runtime device.
+   - results: one process `UsbError(Busy)`, other `Input/Output Error` on first bulk path.
+   - no admission bypass; only interface contention/early failure.
+
+#### Batch 2 (`quantum-tunnel-batch2-*`)
+
+1. `b2_split_framing_512k`:
+   - attempt: descriptor split (`524288`) with large submit chunks (`262144`).
+   - failed at setup step 0 timeout on runtime-state device.
+   - trace: `traces/usbmon-20260225T202515Z-bus4/usbmon-bus4-20260225T202515Z.log`
+2. `b2_hybrid_gate_async`:
+   - failed fast due intentional guardrail:
+     cannot mix thread-blocking async lanes (`--param-async-*`) with submit lanes (`--param-submit-*`) in one run.
+3. `b2_admission_strict`:
+   - strict admission window run failed at setup step 0 timeout on runtime-state device.
+   - trace: `traces/usbmon-20260225T202529Z-bus4/usbmon-bus4-20260225T202529Z.log`
+4. `b2_dual_writer_binary_race` (prebuilt binaries, no cargo lock):
+   - race result persisted: one process `Busy`, other setup step 0 timeout.
+   - trace: `traces/usbmon-20260225T202541Z-bus4/usbmon-bus4-20260225T202541Z.log`
+
+#### New operational signal
+
+1. Once runtime enters poisoned/wedged control-plane state, many follow-up cases
+   collapse immediately at setup step 0 (`0x0001a30c`) unless Pi is rebooted.
+2. For reliable comparatives, use reboot-first protocol per high-value case
+   rather than in-loop hub toggles.
+3. Creative dual-writer/DoS paths did not tunnel past `49152`; they only induce
+   `Busy`/I/O contention and accelerate poisoned-state entry.
+
+### 2026-02-25 - pyusb parity harness (rusb vs pyusb discriminator)
+
+Goal:
+1. determine whether the `49152` class-2 wall is specific to rusb wrapper behavior
+2. run same dense preload payload under pyusb/libusb with explicit per-write logging
+3. capture usbmon for apples-to-apples comparison with known-good and rusb bad runs
+
+Implementation:
+1. added `tools/pyusb_parity_harness.py`
+2. extracts `serialized_executable_*.bin` from compiled model via `extract_edgetpu_package.py`
+3. selects `EXECUTION_ONLY` + `PARAMETER_CACHING` executables
+4. applies edgetpuxray write-only setup sequence (38 writes)
+5. sends:
+   - tag0 run chunk (`9872`)
+   - tag0 param-exe instruction chunk (`2608`)
+   - tag2 parameter stream header (`4194304`) + payload chunks (`1 MiB`)
+6. logs actual `dev.write()` return values and USBError metadata (`errno`, backend code)
+
+Run A (initial pyusb parity):
+1. trace: `traces/usbmon-20260225T210652Z-bus4/usbmon-bus4-20260225T210652Z.log`
+2. result:
+   - first param write: `req=1048576 wrote=49152 elapsed_ms=12000`
+   - second param write: timeout (`USBTimeoutError errno=110 backend=-7`)
+3. reproduces canonical wall under pyusb.
+
+Run B (request-shape parity with rusb):
+1. patched harness to retry remaining bytes in same chunk window (`999424`)
+2. trace: `traces/usbmon-20260225T210852Z-bus4/usbmon-bus4-20260225T210852Z.log`
+3. result:
+   - first param write: `1048576 -> 49152`
+   - second param write: `999424 -> timeout`
+4. this exactly mirrors rusb submit semantics and failure point.
+
+Long-timeout pyusb sanity:
+1. direct run with `--timeout-ms 120000` (no usbmon)
+2. result:
+   - first param write: `1048576 -> 49152` after `120000ms`
+   - second param write: `999424 -> timeout` after `120000ms`
+3. confirms wall is not short-timeout tuning artifact in pyusb either.
+
+Conclusion:
+1. pyusb reproduces the same boundary and error morphology as rusb.
+2. hypothesis "rusb wrapper/transfer flags alone cause wall" is strongly weakened.
+3. remaining primary gap is protocol/runtime admission semantics during class-2 ingest (not simple binding choice).
+
+### 2026-02-25 - complete-transaction hypothesis checks (Pi5)
+
+Goal:
+1. test whether replay only fails because it does not submit a complete descriptor transaction.
+2. verify if forcing progression into later phases (run instruction + input) changes failure mode.
+3. cross-check libedgetpu USB transport behavior directly in source.
+
+Runs:
+1. Full preload baseline (`dense_2048x2048_quant_edgetpu.tflite`, `--setup-libedgetpu`,
+   submit bulk-out, `1MiB` chunks):
+   - first class-2 write progresses exactly `49152`.
+   - retries at same offset report zero progress and timeout.
+   - unchanged canonical wall.
+2. Capped preload (`--param-stream-max-bytes 32768 --param-stream-chunk-size 32768 --param-force-full-header-len`):
+   - preload write succeeds (below wall), replay proceeds into run phase.
+   - run instruction chunk is sent; input descriptor/payload path is reached.
+   - no completion event; output read times out.
+3. Zero-byte preload (`--param-stream-max-bytes 0 --param-force-full-header-len`):
+   - no class-2 bytes are streamed.
+   - replay still reaches run phase but completion event/output timeout remains.
+4. usbmon capture for capped case:
+   - `traces/usbmon-20260225T213320Z-bus4/usbmon-bus4-20260225T213320Z.log`
+   - confirms the run follows the capped-preload flow and still does not complete.
+
+Operational note:
+1. poisoned runtime state frequently causes immediate setup-step-0 timeout (`0x0001a30c`).
+2. reboot-first remains necessary before high-value A/B runs.
+
+libedgetpu source readout (local clone: `libedgetpu-src-20260225`):
+1. transport is explicitly async with in-flight clamped by `usb_max_num_async_transfers`
+   (default `3`), managed by `num_active_transfers` scheduler gating.
+2. queued bulk-in preposting is enabled by default (`usb_enable_queued_bulk_in_requests`),
+   with reusable bulk-in buffers and continuous re-submit behavior.
+3. descriptor-tag scheduling is endpoint-aware and uses per-tag credit/unsent state tracking;
+   interrupt completion handling is prioritized before new work dispatch.
+4. firmware DFU path explicitly handles final zero-length packet and waits for DFU idle state.
+
+Verdict update:
+1. "just send all phases" is not sufficient: capped/zero-byte runs can reach later phases but still do not complete.
+2. remaining discriminant is class-2 admission/drain semantics under libedgetpu-style async scheduling, not wrapper language choice.
+
+### 2026-02-25 - transport-level good vs replay delta (dense_2048, Pi5)
+
+Goal:
+1. compare known-good dense inference traffic against replay at transfer granularity.
+2. test a closer libedgetpu-like replay topology (`1MiB`, depth `3`, read submit lanes).
+
+Known-good capture:
+1. run: `gemm_int8_dynamic templates/dense_2048x2048_quant_edgetpu.tflite 2048 2048 identity ramp 1`
+2. capture: `traces/usbmon-20260225T214612Z-bus4/usbmon-bus4-20260225T214612Z.log`
+3. key sequence (device `003`):
+   - preposted reads before first Bo: `Bi(1024)x8`, `Bi(16)x1`, `Ii(4)x1`
+   - Bo headers/payloads:
+     - `tag0 len=2608` + 2608 bytes
+     - `tag2 len=4194304` + `1048576 x4`
+     - `tag0 len=9872` + 9872 bytes
+     - `tag1 len=2048` + 2048 bytes
+   - completions:
+     - `C Bo 0 1048576` x4
+     - event/output completions after payloads (`C Bi 0 16`, `C Bi 0 1024`).
+   - no EP0 control traffic in the class-2 window between first `S Bo 1048576`
+     and first `C Bo 1048576`.
+
+Replay topology attempt (`R20`):
+1. run:
+   - `rusb_serialized_exec_replay`
+   - `--param-stream-chunk-size 1048576`
+   - `--param-stream-max-bytes 4194304 --param-force-full-header-len`
+   - `--param-submit-bulk-out --param-submit-bulk-out-depth 3`
+   - `--param-submit-bulk-in-lanes 8 --param-submit-event-lanes 1 --param-submit-interrupt-lanes 1`
+2. capture: `traces/usbmon-20260225T214836Z-bus4/usbmon-bus4-20260225T214836Z.log`
+3. result:
+   - first class-2 completion: `C Bo -2 49152`
+   - queued class-2 chunks: `C Bo -2 0`, `C Bo -2 0`
+   - no bypass despite depth/lane matching attempt.
+
+Concrete delta summary:
+1. good path completes all `1MiB` class-2 URBs; replay never completes one.
+2. replay submits class-2 data but enters immediate timeout morphology
+   (`49152` then `0`) regardless of depth (`1` or `3`).
+3. this keeps focus on runtime scheduler/state progression semantics, not
+   wrapper language, not chunk size, and not simple in-flight count alone.
+
+### 2026-02-25 - reasoner A/B follow-up probes
+
+#### A: instruction-patch hypothesis sanity check
+
+1. Extracted instruction chunks from `templates/dense_2048x2048_quant_edgetpu.tflite`
+   and compared usbmon-visible prefixes.
+2. Prefixes match known-good on-wire submissions:
+   - run instr `9872`: `800f009c09000000000000000000000080f6ff0f00f0ff7f0080ff0100080000`
+   - param-caching instr `2608`: `800f008402000000000000000000000080f6ff0f00f8ff7f0080ff0100080000`
+   - params prefix: `ff80808080ff8080...`
+3. This does not prove full-payload identity (usbmon logs only a short payload
+   preview), but it rules out trivial first-word/header drift.
+
+#### B: async prepost semantics replication (global lanes)
+
+Code changes (`examples/rusb_serialized_exec_replay.rs`):
+1. Added `--param-submit-global-lanes`.
+2. New `run_with_global_submit_lanes(...)` wrapper:
+   - starts submit lanes before any Bo write and keeps them alive for whole replay.
+   - runs dedicated event loop via `handle_events_timeout`.
+3. Disabled per-parameter read lane startup when global mode is active to avoid
+   duplicate readers.
+4. Matched read lane buffer geometry to known-good:
+   - EP `0x81` bulk-in lane buffers: `1024`
+   - EP `0x82` event lane buffer: `16`
+   - EP `0x83` interrupt lane buffer: `4`
+
+Pi5 run (`R21`):
+1. trace: `traces/usbmon-20260225T220950Z-bus4/usbmon-bus4-20260225T220950Z.log`
+2. verified pre-first-Bo submissions now match known-good shape exactly:
+   - `Bi(1024) x8`, `Bi(16) x1`, `Ii(4) x1`
+3. outcome remains unchanged:
+   - first class-2 completion `C Bo -2 49152`
+   - queued class-2 completions `C Bo -2 0`
+
+Interpretation update:
+1. "missing preposted IN readers/geometry" is now effectively falsified as the
+   primary blocker.
+2. Remaining high-value discriminant is full instruction payload identity and/or
+   hidden runtime state transitions not visible in usbmon short previews.
+
+### 2026-02-25 - decisive `LD_PRELOAD` payload hash A/B (Pi5)
+
+Goal:
+1. settle whether known-good (`libedgetpu`) and replay submit byte-identical
+   instruction payloads.
+2. avoid usbmon payload-preview limits by hashing full user-space buffers at
+   `libusb_submit_transfer`/`libusb_bulk_transfer` call sites.
+
+Implementation:
+1. Added `tools/libusb_trace_interposer.c`:
+   - `LD_PRELOAD` hook for:
+     - `libusb_submit_transfer`
+     - `libusb_bulk_transfer`
+   - logs TSV rows with endpoint, direction, length, SHA-256, first/last 16
+     bytes, descriptor/header context (`hdr_len`, `hdr_tag`, `stream_tag`).
+2. Added `tools/libusb_trace_diff.py`:
+   - compares known-good vs replay logs
+   - reports decisive `len=2608` and `len=9872` payload hash matches/mismatches.
+
+Pi5 run notes:
+1. Initial interposer attempt hit a transient delegate failure state.
+2. `uhubctl` cycle produced bad re-enumeration (`error -62`); reboot restored
+   device health.
+3. Post-reboot baseline (`simple_delegate`) succeeded.
+
+A/B capture:
+1. output dir: `traces/libusb-preload-20260225T221846Z/`
+2. known-good:
+   - command: `gemm_int8_dynamic ... dense_2048 ...`
+   - log: `good.tsv`
+3. replay:
+   - command: `rusb_serialized_exec_replay` with R21 topology:
+     - `1MiB` class-2 chunks
+     - submit depth `3`
+     - global submit lanes `bulk-in=8/event=1/intr=1`
+   - log: `replay.tsv`
+   - replay still fails at canonical wall (`actual=49152`, then timeout).
+4. diff report:
+   - `diff.txt`
+
+Decisive result:
+1. `len=2608` (tag-0 instruction payload):
+   - known-good SHA-256: `75b1de4e36420716e8817641d6b49725ec1c05c877ae91ea792f2cf97af4546d`
+   - replay SHA-256: `926f6b848e237cf7298551e966aff9cbfc152ac83a41a98528838cb7e95ad6b0`
+   - mismatch.
+2. `len=9872` (tag-0 instruction payload):
+   - known-good SHA-256: `16e4aa55daf366783441564eb8fa80a0d8d7ccef3a4b2573b236c0b493a768fa`
+   - replay SHA-256: `62260393ef8b455bd41f27d5e9b1607522fc6e8f2d792ff21d5e69f403e67af8`
+   - mismatch.
+3. In both cases first/last 16 bytes match, so mutation is internal to payload
+   (not header framing drift).
+
+Conclusion update:
+1. The runtime path is not just transfer-topology different; known-good submits
+   different instruction bytes than replay for the same nominal chunks.
+2. Primary next target is locating exact patch offsets/fields within the 2608
+   and 9872 buffers, then replicating those mutations in replay before class-2
+   stream.
