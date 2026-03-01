@@ -1,0 +1,88 @@
+{
+  "milestone_id": "holdout-family-8976-2352-neutral-core-31b",
+  "validated_repo_commit": "6e94510a52643a99cf8b82a4a9b56b7878c55407",
+  "runtime_binary_commit": "b4407dfbd15b9256396b578819e0f0e840a856a9",
+  "hardware": {
+    "host": "rpilm3.local",
+    "device": "Coral USB"
+  },
+  "artifacts": {
+    "model": {
+      "local_path": "traces/dense-template-1792x1792-20260301T141847Z/dense_1792x1792_quant_edgetpu.tflite",
+      "remote_path": "/home/rpc/coral-usb-oxidized/dense_1792x1792_quant_edgetpu.tflite",
+      "sha256": "68f7a296ae82fb4033b46a9f77b153c2515f276ebfe5cc0a4bd6b0c02f01d0bc",
+      "bytes": 3252864
+    },
+    "firmware": {
+      "remote_path": "/home/rpc/coral-usb-oxidized-lab/apex_latest_single_ep.bin",
+      "sha256": "3b07311b174b81fd14fd2c887f40d646c0ebf2f140cc5ee5cf8befa0f3e3dc7f",
+      "bytes": 10783
+    },
+    "patchspecs": {
+      "eo_neutral2": {
+        "path": "traces/analysis/specv3-tiered-holdout-family8976-20260301T170035Z/eo_neutral_6723_6726.patchspec",
+        "sha256": "c001e86e9ff6d1dfa0702a57b2ee99cd655820164114b6b975eabfb38525434a",
+        "rule_count": 2
+      },
+      "pc_neutral29": {
+        "path": "traces/analysis/specv3-tiered-holdout-family8976-20260301T170035Z/pc_neutral_res42_plus_res2.patchspec",
+        "sha256": "016ad611230ae24c67027d0c4b6cbf1d5ea1799856750726a18415a3873270a2",
+        "rule_count": 29
+      },
+      "milestone31": {
+        "path": "traces/analysis/specv3-tiered-holdout-family8976-20260301T170035Z/milestone_candidate_baseline_equiv.patchspec",
+        "sha256": "6b0201b1aa3626baf642526df82674ece5ebbcc845983680b70816310458c013",
+        "rule_count": 31
+      }
+    }
+  },
+  "replay_protocol": {
+    "example": "rusb_serialized_exec_replay",
+    "bootstrap_known_good_order": true,
+    "chunk_size": 1048576,
+    "param_stream_max_bytes": 3211264,
+    "input_bytes": 1792,
+    "output_bytes": 1792
+  },
+  "expected_signature": {
+    "event_tag": 4,
+    "output_bytes": 1792,
+    "output_hash_fnv1a64": "0x67709fedfd103a2d",
+    "required_patterns": [
+      "Event: tag=4",
+      "Output: bytes=1792 fnv1a64=0x67709fedfd103a2d"
+    ],
+    "forbidden_patterns": [
+      "Error: UsbError(Timeout)",
+      "Event read failed",
+      "parameter stream write failed",
+      "DeviceNotFound"
+    ]
+  },
+  "m2": {
+    "matrix_cases": [
+      {
+        "name": "baseline",
+        "patchspec_key": null
+      },
+      {
+        "name": "eo_neutral2",
+        "patchspec_key": "eo_neutral2"
+      },
+      {
+        "name": "pc_neutral29",
+        "patchspec_key": "pc_neutral29"
+      },
+      {
+        "name": "milestone31",
+        "patchspec_key": "milestone31"
+      }
+    ],
+    "repeat5_patchspec_key": "milestone31",
+    "repeat5_runs": 5,
+    "validated_run_dirs": {
+      "matrix": "traces/analysis/specv3-milestone-candidate-matrix-20260301T173234Z",
+      "repeat5": "traces/analysis/specv3-milestone31-repeat5-20260301T173514Z"
+    }
+  }
+}
