@@ -83,6 +83,7 @@ impl ParamGatePlacement {
 struct Config {
     model_path: String,
     family_profile: Option<String>,
+    check_profile: bool,
     input_bytes: usize,
     output_bytes: usize,
     runs: usize,
@@ -195,6 +196,7 @@ fn usage(program: &str) {
     println!("Options:");
     println!("  --model PATH              Compiled *_edgetpu.tflite model (or anchor from --family-profile)");
     println!("  --family-profile PATH     Dense family profile JSON (anchor model + optional tiered instruction patches + stored weight shape)");
+    println!("  --check-profile           Validate resolved family-profile plan (model + patch sources + overlays) and exit before USB");
     println!("  --input-bytes N           Input activation bytes (default: 150528)");
     println!("  --output-bytes N          Output bytes to read from EP 0x81 (default: 1001)");
     println!("  --runs N                  Number of invoke attempts (default: 1)");
@@ -556,6 +558,46 @@ fn merge_instruction_patch_specs(paths: &[String]) -> Result<InstructionPatchSpe
     Ok(merged)
 }
 
+fn validate_instruction_patch_spec_against_executables(
+    spec: &InstructionPatchSpec,
+    executables: &[SerializedExecutableBlob],
+) -> Result<(), Box<dyn Error>> {
+    let mut available_chunk_lens: HashMap<usize, usize> = HashMap::new();
+    for exe in executables {
+        for chunk in &exe.instruction_bitstreams {
+            *available_chunk_lens.entry(chunk.len()).or_insert(0) += 1;
+        }
+    }
+
+    if available_chunk_lens.is_empty() && spec.rule_count() > 0 {
+        return Err("instruction patch spec provided but model has no instruction chunks".into());
+    }
+
+    let mut available: Vec<usize> = available_chunk_lens.keys().copied().collect();
+    available.sort_unstable();
+
+    for (payload_len, entries) in &spec.by_payload_len {
+        if !available_chunk_lens.contains_key(payload_len) {
+            return Err(format!(
+                "instruction patch payload_len={} not present in model instruction chunks {:?}",
+                payload_len, available
+            )
+            .into());
+        }
+        for (offset, _) in entries {
+            if *offset >= *payload_len {
+                return Err(format!(
+                    "instruction patch offset out of range: payload_len={} offset={}",
+                    payload_len, offset
+                )
+                .into());
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn descriptor_tag_name(tag: u32) -> &'static str {
     match tag {
         0 => "Instructions",
@@ -609,6 +651,7 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
     let mut config = Config {
         model_path: String::new(),
         family_profile: None,
+        check_profile: false,
         input_bytes: 150_528,
         output_bytes: 1001,
         runs: 1,
@@ -712,6 +755,9 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                         .ok_or("--family-profile requires value")?
                         .to_string(),
                 );
+            }
+            "--check-profile" => {
+                config.check_profile = true;
             }
             "--input-bytes" => {
                 i += 1;
@@ -1239,6 +1285,9 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
 
     if config.model_path.is_empty() && config.family_profile.is_none() {
         return Err("--model is required unless --family-profile provides anchor_model".into());
+    }
+    if config.check_profile && config.family_profile.is_none() {
+        return Err("--check-profile requires --family-profile".into());
     }
     if let Some(path) = config.family_profile.as_ref() {
         if !Path::new(path).is_file() {
@@ -4311,10 +4360,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                 last
             );
         }
+        validate_instruction_patch_spec_against_executables(&merged, &executables)?;
+        println!(
+            "Instruction patch compatibility: payload lengths validated against extracted executable chunks"
+        );
         Some(merged)
     } else {
         None
     };
+
+    if config.check_profile {
+        println!("Profile check mode: PASS (no USB operations executed; --check-profile)");
+        return Ok(());
+    }
 
     let mut driver =
         EdgeTpuUsbDriver::open_first_prefer_runtime(Duration::from_millis(config.timeout_ms))?;
