@@ -179,6 +179,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `tools/dense_template_pipeline.sh` (generate -> compile -> extract -> parse -> inspect pipeline)
 - `tools/conv_template_pipeline.sh` (Conv2D generate -> compile -> extract -> parse -> inspect pipeline)
 - `tools/multiop_template_pipeline.sh` (Conv2D->Dense generate -> compile -> extract -> parse -> inspect pipeline)
+- `scripts/m5_family_transition_map.sh` (Phase-2 M5 helper: derive EO/PC family transition map from compiled size table)
 - `tools/dense_layout_probe.py` (single-hot parameter-layout probe and offset mapping extractor)
 - `tools/conv_layout_probe.py` (single-hot Conv2D parameter-layout probe and offset candidate extraction)
 - `tools/dense_template_matrix_patch.py` (structured Dense matrix patcher using recovered layout map)
@@ -206,6 +207,7 @@ Detailed workflow and caveats are documented in `docs/usb_tracing.md`.
 Current reverse-engineering notes:
 
 - `WORKLOG.md`
+- `phase2-todo.md` (concise Phase-2 execution checklist)
 - `docs/usb_invoke_scaling_by_model.md`
 - `docs/next_usbmon_capture_matrix.md`
 - `docs/usb_register_map_candidates.md`
