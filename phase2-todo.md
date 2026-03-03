@@ -9,7 +9,8 @@
   - [x] tiered/profile JSON
   - [x] DUT matrix summary with strict signature gates
 - [x] M5: Cross-family table classifying offsets into hardware-constant / family-specific / dim-scaling.
-- [x] M5 Exit: 4 validated recurrent family profiles + documented transition function.
+- [x] M5 Exit: 4 recurrent family profiles validated at anchor dims + documented transition function.
+- [ ] M5.5: Cross-dim deployment proof (anchor->non-anchor) without EO oracle patches.
 
 - [x] M6: Controlled instruction probes on fixed dims (single-axis changes only).
   - [x] Quantization-axis probe (rep-range / rep-offset variants).

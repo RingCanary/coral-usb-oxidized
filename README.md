@@ -211,6 +211,7 @@ Current reverse-engineering notes:
 - `WORKLOG.md`
 - `phase2-todo.md` (concise Phase-2 execution checklist)
 - `docs/phase2_dense_m5_m7_2026-03-03.md`
+- `docs/phase2_claims_audit_2026-03-03.md`
 - `docs/usb_invoke_scaling_by_model.md`
 - `docs/next_usbmon_capture_matrix.md`
 - `docs/usb_register_map_candidates.md`
