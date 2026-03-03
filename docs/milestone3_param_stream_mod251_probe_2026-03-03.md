@@ -73,10 +73,42 @@ Pi5 + Coral run with compiled mod251 model:
 - result: PASS
 - output hash: `0x8d7854bd1eb9c1e2`
 
+### 5) Direct 1792x1792 confirmation
+Additional run root:
+- `traces/analysis/m3-param-permutation-1792-20260303T151750Z/`
+
+Result (`param_permutation.signed_reinterpret.report.json`):
+- `is_permutation=true`
+- `tile64_rowmajor_tiles_local_cr4`: `mismatch_count=0`
+- control `tile64_colmajor_tiles_local_rc4`: high mismatch (`3198440`)
+
+This directly confirms the same formula at `1792x1792` (not only via prefix inference).
+
+### 6) Rectangular check (`896x1792` model)
+Additional run root:
+- `traces/analysis/m3-param-permutation-rect-20260303T151814Z/`
+
+Notes:
+- TensorFlow export stores Dense weight tensor with shape `[1792, 896]` for this model.
+- Patch/probe operates on flattened tensor-buffer order and then validates against compiled stream.
+
+Rectangular formula check (`rect_formula_check.json`):
+- selected tensor shape formula mismatch: `0`
+- swapped-shape control mismatch: `1580544`
+
+Using rows/cols from the stored weight tensor shape (`rows=1792`, `cols=896`), the same packing form holds:
+
+`off = (r/64)*(cols/64*4096) + (c/64)*4096 + ((c%64)/4)*256 + (r%64)*4 + (c%4)`
+
+DUT run on compiled rectangular model:
+- log: `dut_mod251_896x1792.log`
+- result: PASS
+- output hash: `0xe0f607a60893b844`
+
 ## Conclusion
-This probe strongly supports that, for dense `896x896`:
+This probe now supports, across square and rectangular dense cases tested:
 1. parameter payload enters as signed int8 byte semantics,
 2. stream formation is deterministic tiled reordering,
-3. the concrete `64x64` tile + `c-group-of-4` local layout above exactly explains the compiled parameter stream.
+3. the concrete `64x64` tile + `c-group-of-4` local layout exactly explains compiled parameter streams when applied over the stored weight tensor shape.
 
 This is a major step toward M4 compilerless synthesis for dense GEMM parameter packing.

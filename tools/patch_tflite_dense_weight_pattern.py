@@ -65,11 +65,14 @@ def main() -> int:
 
     expected_len = args.input_dim * args.output_dim
 
+    direct_shape = [args.input_dim, args.output_dim]
+    transposed_shape = [args.output_dim, args.input_dim]
+
     candidates = []
     for tidx in range(subgraph.TensorsLength()):
         t = subgraph.Tensors(tidx)
         shape = [t.Shape(i) for i in range(t.ShapeLength())]
-        if shape != [args.input_dim, args.output_dim]:
+        if shape not in (direct_shape, transposed_shape):
             continue
         bidx = t.Buffer()
         b = model.Buffers(bidx)
@@ -77,11 +80,11 @@ def main() -> int:
         if dlen != expected_len:
             continue
         name = t.Name().decode("utf-8", errors="replace") if t.Name() else ""
-        candidates.append((tidx, name, bidx, dlen, b))
+        candidates.append((tidx, name, bidx, dlen, b, shape))
 
     if not candidates:
         raise RuntimeError(
-            f"no candidate weight tensor found with shape [{args.input_dim},{args.output_dim}] and buffer_size={expected_len}"
+            f"no candidate weight tensor found with shape {direct_shape} or {transposed_shape} and buffer_size={expected_len}"
         )
 
     pick = None
@@ -99,7 +102,7 @@ def main() -> int:
     if pick is None:
         pick = candidates[0]
 
-    tensor_index, tensor_name, buffer_index, data_len, buffer_obj = pick
+    tensor_index, tensor_name, buffer_index, data_len, buffer_obj, selected_shape = pick
 
     vec_field_off = buffer_obj._tab.Offset(4)
     if vec_field_off == 0:
@@ -144,7 +147,7 @@ def main() -> int:
             "tensor_index": tensor_index,
             "tensor_name": tensor_name,
             "buffer_index": buffer_index,
-            "tensor_shape": [args.input_dim, args.output_dim],
+            "tensor_shape": selected_shape,
             "buffer_data_len": data_len,
             "buffer_vector_start": vec_start,
             "buffer_vector_len": vec_len,
