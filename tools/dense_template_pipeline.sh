@@ -26,6 +26,9 @@ Options:
   --seed <n>             RNG seed (default: 1337)
   --rep-samples <n>      Representative dataset sample count (default: 256)
   --rep-range <f>        Representative sample value range (default: 1.0)
+  --rep-offset <f>       Representative sample mean offset (default: 0.0)
+  --activation <name>    Dense activation: none|relu|relu6 (default: none)
+  --use-bias             Enable Dense bias term
   --compiler <path>      Use explicit edgetpu_compiler path
   --patch-mode <mode>    none|zero|byte|ramp|xor|random (default: none)
   --patch-byte <0-255>   Byte value for patch mode byte/xor (default: 255)
@@ -66,6 +69,9 @@ DIAG_SCALE="1.0"
 SEED=1337
 REP_SAMPLES=256
 REP_RANGE="1.0"
+REP_OFFSET="0.0"
+ACTIVATION="none"
+USE_BIAS=0
 COMPILER_PATH=""
 PATCH_MODE="none"
 PATCH_BYTE=255
@@ -145,6 +151,20 @@ while (($# > 0)); do
       REP_RANGE="$2"
       shift 2
       ;;
+    --rep-offset)
+      [[ $# -ge 2 ]] || die "missing value for --rep-offset"
+      REP_OFFSET="$2"
+      shift 2
+      ;;
+    --activation)
+      [[ $# -ge 2 ]] || die "missing value for --activation"
+      ACTIVATION="$2"
+      shift 2
+      ;;
+    --use-bias)
+      USE_BIAS=1
+      shift
+      ;;
     --compiler)
       [[ $# -ge 2 ]] || die "missing value for --compiler"
       COMPILER_PATH="$2"
@@ -182,6 +202,11 @@ done
 case "${INIT_MODE}" in
   identity|permutation|ones|random_uniform) ;;
   *) die "invalid --init-mode '${INIT_MODE}'" ;;
+esac
+
+case "${ACTIVATION}" in
+  none|relu|relu6) ;;
+  *) die "invalid --activation '${ACTIVATION}'" ;;
 esac
 
 case "${PATCH_MODE}" in
@@ -256,20 +281,29 @@ PIPELINE_SUMMARY="${OUT_DIR}/PIPELINE_SUMMARY.txt"
 
 echo "[1/6] Generating dense quantized model via uv..."
 uv python install "${PYTHON_VERSION}" >/dev/null
+gen_args=(
+  --output "${QUANT_MODEL}"
+  --metadata-out "${DENSE_META}"
+  --batch-size "${BATCH_SIZE}"
+  --input-dim "${INPUT_DIM}"
+  --output-dim "${OUTPUT_DIM}"
+  --init-mode "${INIT_MODE}"
+  --diag-scale "${DIAG_SCALE}"
+  --activation "${ACTIVATION}"
+  --seed "${SEED}"
+  --rep-samples "${REP_SAMPLES}"
+  --rep-range "${REP_RANGE}"
+  --rep-offset "${REP_OFFSET}"
+)
+if ((USE_BIAS == 1)); then
+  gen_args+=(--use-bias)
+fi
+
 uv run --python "${PYTHON_VERSION}" \
   --with "${TF_PACKAGE}==${TF_VERSION}" \
   --with "numpy==${NUMPY_VERSION}" \
   tools/generate_dense_quant_tflite.py \
-  --output "${QUANT_MODEL}" \
-  --metadata-out "${DENSE_META}" \
-  --batch-size "${BATCH_SIZE}" \
-  --input-dim "${INPUT_DIM}" \
-  --output-dim "${OUTPUT_DIM}" \
-  --init-mode "${INIT_MODE}" \
-  --diag-scale "${DIAG_SCALE}" \
-  --seed "${SEED}" \
-  --rep-samples "${REP_SAMPLES}" \
-  --rep-range "${REP_RANGE}"
+  "${gen_args[@]}"
 
 if [[ -z "${COMPILER_PATH}" ]]; then
   if command -v edgetpu_compiler >/dev/null 2>&1; then
@@ -350,6 +384,9 @@ fi
   echo "tensorflow_version=${TF_VERSION}"
   echo "numpy_version=${NUMPY_VERSION}"
   echo "batch_size=${BATCH_SIZE}"
+  echo "activation=${ACTIVATION}"
+  echo "use_bias=${USE_BIAS}"
+  echo "rep_offset=${REP_OFFSET}"
   echo "extract_dir=${EXTRACT_DIR}"
   echo "parse_text=${PARSE_TXT}"
   echo "parse_json=${PARSE_JSON}"

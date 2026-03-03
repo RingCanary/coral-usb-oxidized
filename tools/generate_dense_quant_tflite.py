@@ -62,6 +62,7 @@ def _representative_dataset(
     input_dim: int,
     samples: int,
     value_range: float,
+    value_offset: float,
     seed: int,
 ) -> Iterator[List[np.ndarray]]:
     rng = np.random.default_rng(seed)
@@ -71,6 +72,8 @@ def _representative_dataset(
             value_range,
             size=(batch_size, input_dim),
         ).astype(np.float32)
+        if value_offset != 0.0:
+            batch = batch + np.float32(value_offset)
         yield [batch]
 
 
@@ -96,12 +99,24 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Diagonal/fill scale for identity/permutation/ones init.",
     )
     p.add_argument("--use-bias", action="store_true", help="Enable Dense bias.")
+    p.add_argument(
+        "--activation",
+        choices=["none", "relu", "relu6"],
+        default="none",
+        help="Dense activation function.",
+    )
     p.add_argument("--hot-row", type=int, default=0, help="Row index for --init-mode single_hot.")
     p.add_argument("--hot-col", type=int, default=0, help="Column index for --init-mode single_hot.")
     p.add_argument("--hot-value", type=float, default=1.0, help="Value for --init-mode single_hot.")
     p.add_argument("--seed", type=int, default=1337, help="RNG seed.")
     p.add_argument("--rep-samples", type=int, default=256)
     p.add_argument("--rep-range", type=float, default=1.0)
+    p.add_argument(
+        "--rep-offset",
+        type=float,
+        default=0.0,
+        help="Representative dataset mean offset (helps probe quant zero-point sensitivity).",
+    )
     return p
 
 
@@ -116,6 +131,12 @@ def main() -> int:
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    activation_fn = {
+        "none": None,
+        "relu": "relu",
+        "relu6": tf.nn.relu6,
+    }[args.activation]
+
     model = tf.keras.Sequential(
         [
             tf.keras.layers.InputLayer(
@@ -126,7 +147,7 @@ def main() -> int:
             ),
             tf.keras.layers.Dense(
                 args.output_dim,
-                activation=None,
+                activation=activation_fn,
                 use_bias=args.use_bias,
                 name="dense",
             ),
@@ -161,6 +182,7 @@ def main() -> int:
         batch_size=args.batch_size,
         samples=args.rep_samples,
         value_range=args.rep_range,
+        value_offset=args.rep_offset,
         seed=args.seed + 1,
     )
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
@@ -189,9 +211,11 @@ def main() -> int:
         "hot_col": args.hot_col,
         "hot_value": args.hot_value,
         "use_bias": args.use_bias,
+        "activation": args.activation,
         "seed": args.seed,
         "rep_samples": args.rep_samples,
         "rep_range": args.rep_range,
+        "rep_offset": args.rep_offset,
         "kernel_shape": list(kernel.shape),
         "kernel_sha256": _sha256_bytes(kernel.tobytes()),
         "kernel_min": float(kernel.min()),

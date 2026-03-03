@@ -1,33 +1,33 @@
 # Phase 2 TODO (M5-M8)
 
-- [ ] M5: Generate family transition map from size table and refresh on every new dim compile.
-- [ ] M5: Cover recurrent families with >=3 members where missing:
-  - [ ] EO/PC `9872/2608`: compile + profile a 3rd dim member.
-  - [ ] EO/PC `7056/1840`: compile + profile a 3rd dim member.
-- [ ] M5: For each recurrent family, produce:
-  - [ ] `safe_core` patchspec
-  - [ ] tiered profile JSON (`generic` + optional `overlays`)
-  - [ ] DUT matrix summary with strict signature gates
-- [ ] M5: Cross-family table classifying offsets into hardware-constant / family-specific / dim-scaling.
-- [ ] M5 Exit: 4 validated recurrent family profiles + documented transition function.
+- [x] M5: Generate family transition map from size table and refresh on every new dim compile.
+- [x] M5: Cover recurrent families with >=3 members where missing:
+  - [x] EO/PC `9872/2608`: compiled + profiled 3rd member (`3072x2048`).
+  - [x] EO/PC `7056/1840`: compiled + profiled 3rd member (`640x1280`, rectangular).
+- [x] M5: For each recurrent family, produce:
+  - [x] `safe_core` patchspec
+  - [x] tiered/profile JSON
+  - [x] DUT matrix summary with strict signature gates
+- [x] M5: Cross-family table classifying offsets into hardware-constant / family-specific / dim-scaling.
+- [x] M5 Exit: 4 validated recurrent family profiles + documented transition function.
 
-- [ ] M6: Controlled instruction probes on fixed dims (single-axis changes only).
-  - [ ] Quantization-axis probe (scale/zero-point variants).
-  - [ ] Activation-axis probe (none vs ReLU vs ReLU6).
-  - [ ] Bias-axis probe (with vs without bias).
-  - [ ] Input-axis refresh (existing dim sweep, same-family only).
-- [ ] M6: Emit per-byte semantic labels with evidence counts.
-- [ ] M6 Exit: semantic class map for at least one recurrent family.
+- [x] M6: Controlled instruction probes on fixed dims (single-axis changes only).
+  - [x] Quantization-axis probe (rep-range / rep-offset variants).
+  - [x] Activation-axis probe (none vs ReLU vs ReLU6).
+  - [x] Bias-axis probe (with vs without bias).
+  - [x] Input-axis refresh (same-family sweeps for `7056/1840`, `7952/2096`, `9872/2608`).
+- [x] M6: Emit per-byte semantic labels with evidence counts.
+- [x] M6 Exit: semantic class map for one recurrent family (`8976/2352`, fixed `1792x1792`).
 
-- [ ] M7: Quantify derivable vs opaque instruction bytes.
-- [ ] M7: Decide path:
-  - [ ] Parametric instruction generator (if derivable coverage is high), or
-  - [ ] Minimal instruction-template format (if opaque core remains).
-- [ ] M7 Exit: precise residual compiler-dependency report.
+- [x] M7: Quantify derivable vs opaque instruction bytes.
+- [x] M7: Decide path:
+  - [ ] Parametric instruction generator (not selected yet)
+  - [x] Minimal instruction-template path (selected now; EO remains opaque/toxic)
+- [x] M7 Exit: residual compiler-dependency report written.
 
 - [ ] M8: Start Conv2D family RE only after M5-M7 stabilize for Dense.
 
 ## Execution guardrails
-- [ ] Always run `--check-profile` before DUT replay.
-- [ ] Keep no-reboot recovery workflow (`--reset-before-claim`) for wedge recovery.
-- [ ] Log every checkpoint in `WORKLOG.md` and commit immediately after each milestone step.
+- [x] Always run `--check-profile` before DUT replay.
+- [x] Keep no-reboot recovery workflow (`--reset-before-claim`) for wedge recovery.
+- [x] Log every checkpoint in `WORKLOG.md` and commit immediately after each milestone step.
