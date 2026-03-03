@@ -50,7 +50,7 @@ ensure_debugfs_mounted() {
   fi
 
   local debugfs_mountpoint="${USBMON_DEBUGFS_MOUNTPOINT:-/sys/kernel/debug}"
-  if grep -qsE '[[:space:]]/sys/kernel/debug[[:space:]]+debugfs[[:space:]]' /proc/mounts; then
+  if grep -qsE "[[:space:]]${debugfs_mountpoint}([[:space:]]+debugfs[[:space:]]|/debugfs[[:space:]])" /proc/mounts; then
     return
   fi
 
@@ -258,7 +258,7 @@ elif [[ "$COMMAND_MODE" == "argv" ]]; then
   if [[ "$RUN_COMMAND_AS_INVOKING_USER" -eq 1 ]]; then
     sudo -u "$INVOKING_USER" \
       env HOME="$INVOKING_HOME" USER="$INVOKING_USER" LOGNAME="$INVOKING_USER" \
-      "${COMMAND_ARGS[@]}"
+      bash -lc 'exec "$0" "$@"' "${COMMAND_ARGS[@]}"
     COMMAND_EXIT=$?
   else
     "${COMMAND_ARGS[@]}"
