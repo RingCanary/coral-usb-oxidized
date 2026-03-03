@@ -10,7 +10,7 @@ The addresses you observed over `usbmon` correspond to DarwiNN's Beagle core CSR
 *   **`0xa30c`** maps to **`scu_ctrl_0`** (Base offset in Beagle: `0x1a30c`)
 
 ## 2. Host Queue & Doorbell Semantics
-The host queues in DarwiNN are managed through a unified descriptor structure mapped via [QueueCsrOffsets](file:///home/bhav/Documents/experiments/rngcnr-gh/coral-usb-oxidized/.research_tmp/libedgetpu/driver/config/queue_csr_offsets.h#29-45). Here is how the roles map to the CSRs (using Beagle's `InstructionQueue` as a concrete example):
+The host queues in DarwiNN are managed through a unified descriptor structure mapped via [QueueCsrOffsets](file://${HOME}/Documents/experiments/rngcnr-gh/coral-usb-oxidized/.research_tmp/libedgetpu/driver/config/queue_csr_offsets.h#29-45). Here is how the roles map to the CSRs (using Beagle's `InstructionQueue` as a concrete example):
 
 *   **Queue / Descriptor Base Pointer**: `queue_base` (e.g. `0x48590` for instruction stream)
 *   **Doorbell / Kick**: `queue_tail` (e.g. `0x485a8` for instruction stream)
@@ -26,7 +26,7 @@ Endpoint `0x83` is the main asynchronous interrupt IN endpoint (`kInterruptInEnd
     *   **Bits 1-31** (`raw_data >> 1`): Represents an array of boolean flags for top-level DarwiNN interrupts mapping to the execution pipeline (e.g., triggering the host-side completion handlers).
 
 ## 4. Decoding the 8-byte Control Words (`20720300...` and `004c0200...`)
-These invariant 8-byte control words are the [UsbMlCommands](file:///home/bhav/Documents/experiments/rngcnr-gh/coral-usb-oxidized/.research_tmp/libedgetpu/driver/usb/usb_ml_commands.h#82-85) **Packet Headers** sent over the bulk-out endpoint right before a stream payload during `EXECUTION_ONLY` bulk transfers.
+These invariant 8-byte control words are the [UsbMlCommands](file://${HOME}/Documents/experiments/rngcnr-gh/coral-usb-oxidized/.research_tmp/libedgetpu/driver/usb/usb_ml_commands.h#82-85) **Packet Headers** sent over the bulk-out endpoint right before a stream payload during `EXECUTION_ONLY` bulk transfers.
 
 **Structure**: `<32-bit little-endian length> <8-bit tag> <3 unused zero bytes>`
 *   **Bytes 0-3**: Payload length (Little-endian uint32).

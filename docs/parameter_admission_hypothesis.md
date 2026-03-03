@@ -37,7 +37,7 @@ Based on the `REGISTER_MAP` and standard ASIC design:
 ## 4. PARAMETER_CACHING Instruction Dependency
 > Determine whether PARAMETER_CACHING requires concurrent instruction progress tokens (or run-control edges) to consume params...
 
-**Yes, but "instructions-before-params" mapping alone is insufficient.** Replay traces demonstrate that instruction chunks *are* sent before parameters in both preload and bootstrap paths ([examples/rusb_serialized_exec_replay.rs](file:///home/bhav/Documents/experiments/rngcnr-gh/coral-usb-oxidized/examples/rusb_serialized_exec_replay.rs)), yet the stall still occurs. This indicates that simply queuing instructions into the Instruction SRAM is not enough to induce parameter consumption. The missing condition is likely the actual instruction *progress/completion* semantics (i.e. runtime state boundaries, execution triggering) rather than just the structural presence of the instruction bitstreams.
+**Yes, but "instructions-before-params" mapping alone is insufficient.** Replay traces demonstrate that instruction chunks *are* sent before parameters in both preload and bootstrap paths ([examples/rusb_serialized_exec_replay.rs](file://${HOME}/Documents/experiments/rngcnr-gh/coral-usb-oxidized/examples/rusb_serialized_exec_replay.rs)), yet the stall still occurs. This indicates that simply queuing instructions into the Instruction SRAM is not enough to induce parameter consumption. The missing condition is likely the actual instruction *progress/completion* semantics (i.e. runtime state boundaries, execution triggering) rather than just the structural presence of the instruction bitstreams.
 
 ---
 

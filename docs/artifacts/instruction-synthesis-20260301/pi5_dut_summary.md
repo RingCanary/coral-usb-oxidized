@@ -5,7 +5,7 @@ Model under test:
 
 Replay mode:
 - `--bootstrap-known-good-order`
-- firmware when needed: `/home/rpc/coral-usb-oxidized-lab/apex_latest_single_ep.bin`
+- firmware when needed: `${HOME}/coral-usb-oxidized-lab/apex_latest_single_ep.bin`
 
 ## Cases
 

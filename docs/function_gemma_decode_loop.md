@@ -103,7 +103,7 @@ Observations:
 
 Artifact root:
 
-- `/home/rpc/clip-traces/functiongemma-e2e-20260224T163033Z`
+- `${HOME}/clip-traces/functiongemma-e2e-20260224T163033Z`
 
 Key checks from one deterministic prompt (`2,2516,29901`):
 

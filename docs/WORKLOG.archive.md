@@ -49,7 +49,7 @@ Host: `rpilm3.local` (`Linux 6.12.62+rpt-rpi-2712`, aarch64)
 
 Runtime matrix artifact root:
 
-- `/home/rpc/clip-traces/functiongemma-runtime-matrix-20260224T155555Z`
+- `${HOME}/clip-traces/functiongemma-runtime-matrix-20260224T155555Z`
 
 Selected results:
 
@@ -84,7 +84,7 @@ Selected results:
 
 Capture root:
 
-- `/home/rpc/clip-traces/re-decode-lm-compare-20260224T1610Z`
+- `${HOME}/clip-traces/re-decode-lm-compare-20260224T1610Z`
 
 Produced:
 
@@ -113,7 +113,7 @@ Key diff (CPU LM-head vs Coral LM-head run):
 
 Artifact root:
 
-- `/home/rpc/clip-traces/functiongemma-e2e-20260224T163033Z`
+- `${HOME}/clip-traces/functiongemma-e2e-20260224T163033Z`
 
 Cases executed end-to-end (same prompt `2,2516,29901`):
 
@@ -251,18 +251,18 @@ Key outcomes:
 2. Extracted ordered control sequence from the runtime-side device ID stream
    (`device=016` in this capture):
    - artifacts:
-     - `/home/rpc/clip-traces/replay-seq-usbmon-20260224T182649Z-bus4/device016-seq.json`
-     - `/home/rpc/clip-traces/replay-seq-usbmon-20260224T182649Z-bus4/device016-seq.txt`
+     - `${HOME}/clip-traces/replay-seq-usbmon-20260224T182649Z-bus4/device016-seq.json`
+     - `${HOME}/clip-traces/replay-seq-usbmon-20260224T182649Z-bus4/device016-seq.txt`
    - `sequence_count=95` vendor ops
 3. Added replay-oriented sequence filters:
    - `--writes-only`
    - `--known-only`
 4. Replay candidate artifacts from same capture:
    - all writes:
-     - `/home/rpc/clip-traces/replay-seq-usbmon-20260224T182649Z-bus4/device016-writes.json`
+     - `${HOME}/clip-traces/replay-seq-usbmon-20260224T182649Z-bus4/device016-writes.json`
      - `count=73`
    - known-register writes only:
-     - `/home/rpc/clip-traces/replay-seq-usbmon-20260224T182649Z-bus4/device016-known-writes.json`
+     - `${HOME}/clip-traces/replay-seq-usbmon-20260224T182649Z-bus4/device016-known-writes.json`
      - `count=6`
      - sequence:
        - `scu_ctrl_0 <= 0x000f0059`
@@ -369,10 +369,10 @@ metrics.
      - `forward_ms=6358.528`
      - `total_ms=45910.767`
    - artifacts:
-     - `/home/rpc/clip-traces/clip-full-forward-20260222T130016Z/`
+     - `${HOME}/clip-traces/clip-full-forward-20260222T130016Z/`
 5. HF compare on same deterministic input tensor:
    - artifact:
-     - `/home/rpc/clip-traces/clip-full-forward-hf-compare-20260222T130159Z/`
+     - `${HOME}/clip-traces/clip-full-forward-hf-compare-20260222T130159Z/`
    - raw embedding: cosine `0.73293731`, MAE `0.26041435`, RMSE `0.34962000`
    - normalized embedding: cosine `0.73293731`, MAE `0.02508840`,
      RMSE `0.03229882`
@@ -388,10 +388,10 @@ metrics.
    - workaround used: compile templates on x86 workstation, copy to Pi5.
 3. Controlled CLIP full-forward sweep on Pi5 (same fixed input/reference as above):
    - base artifacts:
-     - `/home/rpc/clip-traces/clip-batch-sweep/runs-20260222T133711Z/`
-     - summary: `/home/rpc/clip-traces/clip-batch-sweep/runs-20260222T133711Z/SUMMARY.txt`
+     - `${HOME}/clip-traces/clip-batch-sweep/runs-20260222T133711Z/`
+     - summary: `${HOME}/clip-traces/clip-batch-sweep/runs-20260222T133711Z/SUMMARY.txt`
    - extra batch-5 confirmation:
-     - `/home/rpc/clip-traces/clip-batch-sweep/runs-extra-20260222T134351Z-b5/`
+     - `${HOME}/clip-traces/clip-batch-sweep/runs-extra-20260222T134351Z-b5/`
 4. Results (`forward_ms`, normalized cosine vs HF):
    - `batch=1`: `6486.240 ms`, `cos=0.73293728`
    - `batch=4`: `5902.632 ms`, `cos=0.73293728`
@@ -428,8 +428,8 @@ metrics.
    - `docs/function_gemma_layer_tpu_probe.md`
 5. Pi5 checkpoint + stage sweep:
    - model: `distil-labs/distil-home-assistant-functiongemma`
-   - local model path: `/home/rpc/functiongemma-models/model.safetensors`
-   - trace output: `/home/rpc/clip-traces/functiongemma-layer-probe-20260222T140422Z`
+   - local model path: `${HOME}/functiongemma-models/model.safetensors`
+   - trace output: `${HOME}/clip-traces/functiongemma-layer-probe-20260222T140422Z`
    - inferred dims:
      - `hidden=640`
      - `q_out=1024`
@@ -454,9 +454,9 @@ metrics.
    - `examples/function_gemma_lm_head_sanity.rs`
    - docs: `docs/function_gemma_lm_head_sanity.md`
 3. Pi5 run:
-   - output: `/home/rpc/clip-traces/functiongemma-lmhead-sanity-20260222T142358Z/run.log`
+   - output: `${HOME}/clip-traces/functiongemma-lmhead-sanity-20260222T142358Z/run.log`
    - command:
-     - `cargo run --example function_gemma_lm_head_sanity -- /home/rpc/functiongemma-models/model.safetensors 42 10`
+     - `cargo run --example function_gemma_lm_head_sanity -- ${HOME}/functiongemma-models/model.safetensors 42 10`
    - results:
      - `embedding_lookup_ms=2.887`
      - `lm_head_top10_ms=14213.630`
@@ -1648,9 +1648,9 @@ Validate CLIP-relevant rectangular Dense templates (`768x768`, `768x3072`,
 
 Template files on Pi:
 
-- `/home/rpc/clip-traces/clip-rect-templates/dense_768x768_quant_edgetpu.tflite`
-- `/home/rpc/clip-traces/clip-rect-templates/dense_768x3072_quant_edgetpu.tflite`
-- `/home/rpc/clip-traces/clip-rect-templates/dense_3072x768_quant_edgetpu.tflite`
+- `${HOME}/clip-traces/clip-rect-templates/dense_768x768_quant_edgetpu.tflite`
+- `${HOME}/clip-traces/clip-rect-templates/dense_768x3072_quant_edgetpu.tflite`
+- `${HOME}/clip-traces/clip-rect-templates/dense_3072x768_quant_edgetpu.tflite`
 
 Using `examples/gemm_int8_dynamic.rs`:
 
@@ -1672,7 +1672,7 @@ Approximate throughput (single-vector matvec):
 1. Downloaded real checkpoint on Pi:
    - `https://huggingface.co/Bingsu/clip-vit-base-patch32-ko/resolve/main/model.safetensors`
    - local path:
-     `/home/rpc/clip-models/clip-vit-base-patch32-ko-model.safetensors`
+     `${HOME}/clip-models/clip-vit-base-patch32-ko-model.safetensors`
    - size: `~578 MiB`
 2. SafeTensors parser preflight:
    - `Tensor count: 400`
@@ -1754,7 +1754,7 @@ eval "$(./tools/bootstrap_arch_stack.sh print-env)"
 ```
 
 Without this, the process may load an older system `libedgetpu` instead of the
-repo-managed runtime in `/home/rpc/.local/lib`.
+repo-managed runtime in `${HOME}/.local/lib`.
 
 ### Function Gemma full decode loop + Coral tiled LM-head
 
@@ -1803,7 +1803,7 @@ eval "$(./tools/bootstrap_arch_stack.sh print-env)"
 LM template generated on workstation and copied to Pi:
 
 - `/tmp/functiongemma-lm-template-20260222T145912Z/dense_640x2624_quant_edgetpu.tflite`
-- `/home/rpc/functiongemma-templates-b1/dense_640x2624_quant_edgetpu.tflite`
+- `${HOME}/functiongemma-templates-b1/dense_640x2624_quant_edgetpu.tflite`
 
 1. Baseline (CPU LM-head, 1 layer, 2 decode tokens):
    - artifact: `~/clip-traces/functiongemma-decode-cpu-20260222T145726Z`
