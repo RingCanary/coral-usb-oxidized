@@ -102,6 +102,7 @@ struct Config {
     input_activations_tag: u32,
     param_stream_chunk_size: Option<usize>,
     param_stream_max_bytes: Option<usize>,
+    param_stream_override_file: Option<String>,
     param_force_full_header_len: bool,
     param_read_event_every: usize,
     param_event_timeout_ms: u64,
@@ -222,6 +223,9 @@ fn usage(program: &str) {
     );
     println!("  --param-stream-chunk-size N  Override parameter stream chunk size");
     println!("  --param-stream-max-bytes N   Limit parameter stream bytes for probing");
+    println!(
+        "  --param-stream-override-file PATH  Replace extracted parameter stream bytes with raw file payload (length must match)"
+    );
     println!(
         "  --param-force-full-header-len  Keep descriptor header length at full parameter payload even when stream is capped"
     );
@@ -572,6 +576,7 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         input_activations_tag: DescriptorTag::InputActivations.as_u32(),
         param_stream_chunk_size: None,
         param_stream_max_bytes: None,
+        param_stream_override_file: None,
         param_force_full_header_len: false,
         param_read_event_every: 0,
         param_event_timeout_ms: 1,
@@ -737,6 +742,14 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                     args.get(i)
                         .ok_or("--param-stream-max-bytes requires value")?,
                 )?);
+            }
+            "--param-stream-override-file" => {
+                i += 1;
+                config.param_stream_override_file = Some(
+                    args.get(i)
+                        .ok_or("--param-stream-override-file requires value")?
+                        .to_string(),
+                );
             }
             "--param-force-full-header-len" => {
                 config.param_force_full_header_len = true;
@@ -1135,6 +1148,15 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
             return Err(format!(
                 "--instruction-patch-spec path does not exist or is not a file: {}",
                 spec_path
+            )
+            .into());
+        }
+    }
+    if let Some(path) = config.param_stream_override_file.as_ref() {
+        if !std::path::Path::new(path).is_file() {
+            return Err(format!(
+                "--param-stream-override-file path does not exist or is not a file: {}",
+                path
             )
             .into());
         }
@@ -3658,7 +3680,7 @@ fn describe_executable(exe: &SerializedExecutableBlob) -> String {
 fn main() -> Result<(), Box<dyn Error>> {
     let config = parse_args()?;
     let model_bytes = std::fs::read(&config.model_path)?;
-    let executables = extract_serialized_executables_from_tflite(&model_bytes)?;
+    let mut executables = extract_serialized_executables_from_tflite(&model_bytes)?;
 
     println!("Model: {}", config.model_path);
     println!(
@@ -3670,6 +3692,47 @@ fn main() -> Result<(), Box<dyn Error>> {
         config.input_activations_tag,
         descriptor_tag_name(config.input_activations_tag)
     );
+
+    if let Some(path) = config.param_stream_override_file.as_ref() {
+        let override_bytes = std::fs::read(path)?;
+        let override_hash = fnv1a64_hex(&override_bytes);
+        let mut replaced = 0usize;
+        for exe in executables
+            .iter_mut()
+            .filter(|exe| !exe.parameters_stream.is_empty())
+        {
+            if exe.parameters_stream.len() != override_bytes.len() {
+                return Err(format!(
+                    "--param-stream-override-file length mismatch for executable idx={}: expected {} bytes, got {} bytes from {}",
+                    exe.executable_index,
+                    exe.parameters_stream.len(),
+                    override_bytes.len(),
+                    path
+                )
+                .into());
+            }
+            let before_hash = fnv1a64_hex(&exe.parameters_stream);
+            exe.parameters_stream = override_bytes.clone();
+            let after_hash = fnv1a64_hex(&exe.parameters_stream);
+            println!(
+                "Parameter stream override: file={} exec_idx={} len={} file_fnv={} before_fnv={} after_fnv={}",
+                path,
+                exe.executable_index,
+                exe.parameters_stream.len(),
+                override_hash,
+                before_hash,
+                after_hash
+            );
+            replaced += 1;
+        }
+        if replaced == 0 {
+            return Err(format!(
+                "--param-stream-override-file provided but no executable had non-empty parameter stream: {}",
+                path
+            )
+            .into());
+        }
+    }
     if config.param_stream_chunk_size.is_some()
         || config.param_stream_max_bytes.is_some()
         || config.param_read_event_every > 0

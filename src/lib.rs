@@ -11,6 +11,7 @@ mod function_gemma;
 mod gemm;
 #[cfg(feature = "legacy-runtime")]
 mod interpreter;
+mod param_pack;
 mod toolchain;
 mod usb_driver;
 mod usb_ids;
@@ -45,6 +46,11 @@ pub use crate::gemm::{
 };
 #[cfg(feature = "legacy-runtime")]
 pub use crate::interpreter::CoralInterpreter;
+pub use crate::param_pack::{
+    dense_param_stream_len, dense_param_stream_offset, pack_dense_row_major_i8_to_stream,
+    pack_dense_row_major_u8_to_stream, unpack_dense_stream_to_row_major_i8,
+    unpack_dense_stream_to_row_major_u8, DenseParamPackError,
+};
 pub use crate::toolchain::{
     compile_dense_template_with_uv, DenseTemplateCompileArtifacts, DenseTemplateCompileRequest,
     ToolchainError,
