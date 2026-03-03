@@ -1,5 +1,6 @@
 use crate::device::is_device_connected;
 use crate::error::CoralError;
+use serde_json::{Map, Value};
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;
@@ -178,6 +179,42 @@ impl Clone for EdgeTPUDelegate {
     }
 }
 
+fn parse_delegate_option_cstrings(
+    options_str: &str,
+) -> Result<Vec<(CString, CString)>, CoralError> {
+    if options_str.is_empty() || options_str == "{}" {
+        return Ok(Vec::new());
+    }
+
+    let parsed: Map<String, Value> = serde_json::from_str(options_str).map_err(|err| {
+        CoralError::InvalidDelegateOptions(format!("failed to parse options JSON: {err}"))
+    })?;
+
+    let mut option_cstrings = Vec::with_capacity(parsed.len());
+    for (key, value) in parsed {
+        let value = value.as_str().ok_or_else(|| {
+            CoralError::InvalidDelegateOptions(format!(
+                "option '{key}' must have a string value, got {value}"
+            ))
+        })?;
+
+        let key_cstr = CString::new(key.clone()).map_err(|_| {
+            CoralError::InvalidDelegateOptions(format!(
+                "option key contains an embedded NUL byte: {key:?}"
+            ))
+        })?;
+        let value_cstr = CString::new(value).map_err(|_| {
+            CoralError::InvalidDelegateOptions(format!(
+                "option '{key}' value contains an embedded NUL byte"
+            ))
+        })?;
+
+        option_cstrings.push((key_cstr, value_cstr));
+    }
+
+    Ok(option_cstrings)
+}
+
 impl EdgeTPUDelegate {
     pub fn new() -> Result<Self, CoralError> {
         if !is_device_connected() {
@@ -212,30 +249,7 @@ impl EdgeTPUDelegate {
         }
 
         let mut options = Vec::new();
-        let mut option_cstrings = Vec::new();
-
-        if !options_str.is_empty() && options_str != "{}" {
-            let trimmed = options_str
-                .trim_start_matches('{')
-                .trim_end_matches('}')
-                .trim();
-            if !trimmed.is_empty() {
-                for pair in trimmed.split(',') {
-                    let parts: Vec<&str> = pair.split(':').collect();
-                    if parts.len() == 2 {
-                        let key = parts[0].trim().trim_matches('"');
-                        let value = parts[1].trim().trim_matches('"');
-
-                        let key_cstr =
-                            CString::new(key).map_err(|_| CoralError::DelegateCreationFailed)?;
-                        let value_cstr =
-                            CString::new(value).map_err(|_| CoralError::DelegateCreationFailed)?;
-
-                        option_cstrings.push((key_cstr, value_cstr));
-                    }
-                }
-            }
-        }
+        let option_cstrings = parse_delegate_option_cstrings(options_str)?;
 
         for (key, value) in &option_cstrings {
             options.push(EdgeTPUOption {
@@ -303,5 +317,57 @@ pub fn version() -> String {
             },
             Err(_) => "Unknown".to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_delegate_option_cstrings;
+    use crate::error::CoralError;
+
+    #[test]
+    fn parses_simple_map() {
+        let options = parse_delegate_option_cstrings(r#"{"device":"usb:0"}"#).unwrap();
+        assert_eq!(options.len(), 1);
+        assert_eq!(options[0].0.to_str().unwrap(), "device");
+        assert_eq!(options[0].1.to_str().unwrap(), "usb:0");
+    }
+
+    #[test]
+    fn parses_value_with_colon_and_comma() {
+        let options = parse_delegate_option_cstrings(r#"{"device":"usb:0,meta:port"}"#).unwrap();
+        assert_eq!(options.len(), 1);
+        assert_eq!(options[0].1.to_str().unwrap(), "usb:0,meta:port");
+    }
+
+    #[test]
+    fn rejects_malformed_json() {
+        let err = parse_delegate_option_cstrings(r#"{"device":"usb:0""#).unwrap_err();
+        assert!(matches!(err, CoralError::InvalidDelegateOptions(_)));
+        assert!(err.to_string().contains("failed to parse options JSON"));
+    }
+
+    #[test]
+    fn rejects_non_string_value() {
+        let err = parse_delegate_option_cstrings(r#"{"device":1}"#).unwrap_err();
+        assert!(matches!(err, CoralError::InvalidDelegateOptions(_)));
+        assert!(err
+            .to_string()
+            .contains("option 'device' must have a string value"));
+    }
+
+    #[test]
+    fn rejects_embedded_nul_in_key_or_value() {
+        let key_err = parse_delegate_option_cstrings(r#"{"bad\u0000key":"usb:0"}"#).unwrap_err();
+        assert!(matches!(key_err, CoralError::InvalidDelegateOptions(_)));
+        assert!(key_err
+            .to_string()
+            .contains("option key contains an embedded NUL byte"));
+
+        let value_err = parse_delegate_option_cstrings(r#"{"device":"usb\u0000:0"}"#).unwrap_err();
+        assert!(matches!(value_err, CoralError::InvalidDelegateOptions(_)));
+        assert!(value_err
+            .to_string()
+            .contains("value contains an embedded NUL byte"));
     }
 }
