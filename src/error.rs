@@ -12,6 +12,7 @@ pub enum CoralError {
     DelegateCreationFailed,
     LibraryNotFound,
     ProtocolError(String),
+    InvalidDelegateOptions(String),
 }
 
 impl fmt::Display for CoralError {
@@ -31,6 +32,9 @@ impl fmt::Display for CoralError {
             CoralError::DelegateCreationFailed => write!(f, "Failed to create EdgeTPU delegate"),
             CoralError::LibraryNotFound => write!(f, "EdgeTPU library not found or incompatible"),
             CoralError::ProtocolError(msg) => write!(f, "Protocol error: {}", msg),
+            CoralError::InvalidDelegateOptions(msg) => {
+                write!(f, "Invalid delegate options: {}", msg)
+            }
         }
     }
 }
