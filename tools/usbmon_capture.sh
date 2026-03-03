@@ -12,7 +12,9 @@ Options:
   -b, --bus <bus>          USB bus number (for example 1 from lsusb "Bus 001")
   -o, --out-dir <dir>      Output directory (default: ./traces/usbmon-<timestamp>-bus<bus>)
   -d, --duration <seconds> Capture duration in seconds when no command is provided
-  -c, --command <string>   Command string to run while capture is active
+  -c, --command <string>   Command string to run while capture is active (shell-evaluated)
+      --allow-shell-command-string
+                           Explicitly allow -c/--command shell string execution
   -h, --help               Show this help text
 
 Behavior:
@@ -21,13 +23,13 @@ Behavior:
   - Set `USBMON_RUN_COMMAND_AS_ROOT=1` to force running the traced command as root.
 
 Command forms:
-  - Preferred: -- command [args...]
-  - Alternative: -c "command string"
+  - Recommended: -- command [args...]
+  - Advanced: -c "command string" (requires --allow-shell-command-string and performs shell evaluation)
 
 Examples:
   sudo ./tools/usbmon_capture.sh -b 1 -d 15
   sudo ./tools/usbmon_capture.sh -b 1 -- cargo run --example delegate_usage
-  sudo ./tools/usbmon_capture.sh -b 2 -c "cargo run --example tflite_test"
+  sudo ./tools/usbmon_capture.sh -b 2 --allow-shell-command-string -c "cargo run --example tflite_test"
 USAGE
 }
 
@@ -43,17 +45,22 @@ require_root() {
 }
 
 ensure_debugfs_mounted() {
+  if [[ "${USBMON_SKIP_DEBUGFS_CHECK:-0}" == "1" ]]; then
+    return
+  fi
+
+  local debugfs_mountpoint="${USBMON_DEBUGFS_MOUNTPOINT:-/sys/kernel/debug}"
   if grep -qsE '[[:space:]]/sys/kernel/debug[[:space:]]+debugfs[[:space:]]' /proc/mounts; then
     return
   fi
 
-  echo "debugfs not mounted at /sys/kernel/debug; attempting to mount it"
-  mount -t debugfs debugfs /sys/kernel/debug \
-    || die "failed to mount debugfs at /sys/kernel/debug"
+  echo "debugfs not mounted at ${debugfs_mountpoint}; attempting to mount it"
+  mount -t debugfs debugfs "$debugfs_mountpoint" \
+    || die "failed to mount debugfs at ${debugfs_mountpoint}"
 }
 
 ensure_usbmon_available() {
-  local usbmon_dir="/sys/kernel/debug/usb/usbmon"
+  local usbmon_dir="${USBMON_BASE_DIR:-/sys/kernel/debug/usb/usbmon}"
   if [[ -d "$usbmon_dir" ]]; then
     return
   fi
@@ -80,6 +87,7 @@ BUS_RAW=""
 OUT_DIR=""
 DURATION=""
 COMMAND_STRING=""
+ALLOW_SHELL_COMMAND_STRING=0
 declare -a COMMAND_ARGS=()
 
 while (($# > 0)); do
@@ -103,6 +111,10 @@ while (($# > 0)); do
       [[ $# -ge 2 ]] || die "missing value for $1"
       COMMAND_STRING="$2"
       shift 2
+      ;;
+    --allow-shell-command-string)
+      ALLOW_SHELL_COMMAND_STRING=1
+      shift
       ;;
     --)
       shift
@@ -133,6 +145,10 @@ if [[ -n "$COMMAND_STRING" && ${#COMMAND_ARGS[@]} -gt 0 ]]; then
   die "use either -c/--command or -- command [args...], not both"
 fi
 
+if [[ -n "$COMMAND_STRING" && "$ALLOW_SHELL_COMMAND_STRING" -ne 1 ]]; then
+  die "-c/--command executes via shell evaluation. Re-run with --allow-shell-command-string to acknowledge this risk"
+fi
+
 require_root
 
 ensure_debugfs_mounted
@@ -149,7 +165,7 @@ if [[ -n "$INVOKING_USER" && "$INVOKING_USER" != "root" && "${USBMON_RUN_COMMAND
   RUN_COMMAND_AS_INVOKING_USER=1
 fi
 
-USBMON_DIR="/sys/kernel/debug/usb/usbmon"
+USBMON_DIR="${USBMON_BASE_DIR:-/sys/kernel/debug/usb/usbmon}"
 MON_FILE="${USBMON_DIR}/${BUS}u"
 
 if [[ ! -d "$USBMON_DIR" ]]; then
@@ -240,11 +256,9 @@ elif [[ "$COMMAND_MODE" == "argv" ]]; then
   fi
   set +e
   if [[ "$RUN_COMMAND_AS_INVOKING_USER" -eq 1 ]]; then
-    USER_COMMAND="$(printf '%q ' "${COMMAND_ARGS[@]}")"
-    USER_COMMAND="${USER_COMMAND% }"
     sudo -u "$INVOKING_USER" \
       env HOME="$INVOKING_HOME" USER="$INVOKING_USER" LOGNAME="$INVOKING_USER" \
-      bash -lc "$USER_COMMAND"
+      "${COMMAND_ARGS[@]}"
     COMMAND_EXIT=$?
   else
     "${COMMAND_ARGS[@]}"

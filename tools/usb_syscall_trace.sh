@@ -11,12 +11,18 @@ Trace user-space USB activity with strace (no root required for your own process
 
 Options:
   -o, --out-dir <dir>      Output directory (default: ./traces/usb-syscall-<timestamp>)
-  -c, --command <string>   Command string to run under strace
+  -c, --command <string>   Command string to run under strace (shell-evaluated)
+      --allow-shell-command-string
+                           Explicitly allow -c/--command shell string execution
   -h, --help               Show this help text
+
+Command forms:
+  - Recommended: -- command [args...]
+  - Advanced: -c "command string" (requires --allow-shell-command-string and performs shell evaluation)
 
 Examples:
   ./tools/usb_syscall_trace.sh -- cargo run --example verify_device
-  ./tools/usb_syscall_trace.sh -c "cargo run --example delegate_usage"
+  ./tools/usb_syscall_trace.sh --allow-shell-command-string -c "cargo run --example delegate_usage"
 USAGE
 }
 
@@ -32,6 +38,7 @@ ensure_dep() {
 
 OUT_DIR=""
 COMMAND_STRING=""
+ALLOW_SHELL_COMMAND_STRING=0
 declare -a COMMAND_ARGS=()
 
 while (($# > 0)); do
@@ -45,6 +52,10 @@ while (($# > 0)); do
       [[ $# -ge 2 ]] || die "missing value for $1"
       COMMAND_STRING="$2"
       shift 2
+      ;;
+    --allow-shell-command-string)
+      ALLOW_SHELL_COMMAND_STRING=1
+      shift
       ;;
     --)
       shift
@@ -65,6 +76,10 @@ done
 
 if [[ -n "$COMMAND_STRING" && ${#COMMAND_ARGS[@]} -gt 0 ]]; then
   die "use either -c/--command or -- command [args...], not both"
+fi
+
+if [[ -n "$COMMAND_STRING" && "$ALLOW_SHELL_COMMAND_STRING" -ne 1 ]]; then
+  die "-c/--command executes via shell evaluation. Re-run with --allow-shell-command-string to acknowledge this risk"
 fi
 
 if [[ -z "$COMMAND_STRING" && ${#COMMAND_ARGS[@]} -eq 0 ]]; then
