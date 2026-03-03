@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "profile_id": "holdout-family-8976-2352-anchor1792",
+  "anchor_model": "/abs/path/to/dense_1792x1792_quant_edgetpu.tflite",
+  "instruction_patch_spec": "/abs/path/to/milestone_candidate_baseline_equiv.patchspec",
+  "stored_weight_shape": [1792, 1792],
+  "expected_param_stream_len": 3211264,
+  "replay_defaults": {
+    "input_bytes": 1792,
+    "output_bytes": 1792,
+    "bootstrap_known_good_order": true
+  },
+  "notes": "Example dense family profile for M4 glue path. Use absolute or profile-relative paths."
+}

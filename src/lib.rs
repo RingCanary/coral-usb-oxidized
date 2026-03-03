@@ -5,6 +5,7 @@ mod delegate;
 #[cfg(feature = "legacy-runtime")]
 mod device;
 mod error;
+mod family_profile;
 mod flatbuffer;
 mod function_gemma;
 #[cfg(feature = "legacy-runtime")]
@@ -30,6 +31,9 @@ pub use crate::delegate::{version, EdgeTPUDelegate};
 #[cfg(feature = "legacy-runtime")]
 pub use crate::device::{is_device_connected, CoralDevice};
 pub use crate::error::{CoralError, DenseGemmError, TfLiteError};
+pub use crate::family_profile::{
+    DenseFamilyProfile, DenseFamilyProfileError, DenseFamilyReplayDefaults,
+};
 pub use crate::flatbuffer::{
     executable_type_name, extract_instruction_chunk_from_serialized_executable,
     extract_serialized_executables_from_tflite, SerializedExecutableBlob,

@@ -1,6 +1,7 @@
 use coral_usb_oxidized::{
-    executable_type_name, extract_serialized_executables_from_tflite, CoralError, DescriptorTag,
-    EdgeTpuUsbDriver, SerializedExecutableBlob, VendorDirection,
+    dense_param_stream_len, executable_type_name, extract_serialized_executables_from_tflite,
+    pack_dense_row_major_i8_to_stream, pack_dense_row_major_u8_to_stream, CoralError,
+    DenseFamilyProfile, DescriptorTag, EdgeTpuUsbDriver, SerializedExecutableBlob, VendorDirection,
     EDGETPUXRAY_RUNTIME_SETUP_SEQUENCE, LIBEDGETPU_KNOWN_GOOD_SETUP_SEQUENCE,
 };
 use rusb::ffi as libusb;
@@ -9,6 +10,7 @@ use std::env;
 use std::error::Error;
 use std::ffi::CStr;
 use std::os::raw::c_int;
+use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
@@ -80,6 +82,7 @@ impl ParamGatePlacement {
 #[derive(Debug, Clone)]
 struct Config {
     model_path: String,
+    family_profile: Option<String>,
     input_bytes: usize,
     output_bytes: usize,
     runs: usize,
@@ -93,6 +96,11 @@ struct Config {
     post_reset_sleep_ms: u64,
     firmware_path: Option<String>,
     input_file: Option<String>,
+    weights_row_major_u8_file: Option<String>,
+    weights_row_major_i8_file: Option<String>,
+    weights_pattern_index_mod: bool,
+    weights_pattern_modulus: usize,
+    weights_pattern_signed_reinterpret: bool,
     exec_index: Option<usize>,
     skip_param_preload: bool,
     read_interrupt: bool,
@@ -185,13 +193,19 @@ impl InstructionPatchSpec {
 fn usage(program: &str) {
     println!("Usage: {program} --model PATH [options]");
     println!("Options:");
-    println!("  --model PATH              Compiled *_edgetpu.tflite model");
+    println!("  --model PATH              Compiled *_edgetpu.tflite model (or anchor from --family-profile)");
+    println!("  --family-profile PATH     Dense family profile JSON (can provide anchor model + patch spec + stored weight shape)");
     println!("  --input-bytes N           Input activation bytes (default: 150528)");
     println!("  --output-bytes N          Output bytes to read from EP 0x81 (default: 1001)");
     println!("  --runs N                  Number of invoke attempts (default: 1)");
     println!("  --timeout-ms N            USB timeout ms (default: 6000)");
     println!("  --chunk-size N            Descriptor chunk size (default: 1048576)");
     println!("  --input-file PATH         Use raw input bytes from file instead of ramp");
+    println!("  --weights-row-major-u8-file PATH  Build parameter stream from row-major u8 weights using family profile shape");
+    println!("  --weights-row-major-i8-file PATH  Build parameter stream from row-major i8 weights using family profile shape");
+    println!("  --weights-pattern-index-mod       Build row-major synthetic weights value=i%modulus (requires --family-profile)");
+    println!("  --weights-pattern-modulus N       Modulus for --weights-pattern-index-mod (default: 251)");
+    println!("  --weights-pattern-signed-reinterpret  Use signed reinterpret pattern ((i%modulus)-128) mod 256");
     println!("  --exec-index N            Force executable index from extracted list");
     println!("  --skip-setup              Skip edgetpuxray runtime setup sequence");
     println!(
@@ -554,6 +568,7 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
 
     let mut config = Config {
         model_path: String::new(),
+        family_profile: None,
         input_bytes: 150_528,
         output_bytes: 1001,
         runs: 1,
@@ -567,6 +582,11 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         post_reset_sleep_ms: 600,
         firmware_path: None,
         input_file: None,
+        weights_row_major_u8_file: None,
+        weights_row_major_i8_file: None,
+        weights_pattern_index_mod: false,
+        weights_pattern_modulus: 251,
+        weights_pattern_signed_reinterpret: false,
         exec_index: None,
         skip_param_preload: false,
         read_interrupt: false,
@@ -645,6 +665,14 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                 i += 1;
                 config.model_path = args.get(i).ok_or("--model requires value")?.to_string();
             }
+            "--family-profile" => {
+                i += 1;
+                config.family_profile = Some(
+                    args.get(i)
+                        .ok_or("--family-profile requires value")?
+                        .to_string(),
+                );
+            }
             "--input-bytes" => {
                 i += 1;
                 config.input_bytes =
@@ -676,6 +704,35 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
                         .ok_or("--input-file requires value")?
                         .to_string(),
                 );
+            }
+            "--weights-row-major-u8-file" => {
+                i += 1;
+                config.weights_row_major_u8_file = Some(
+                    args.get(i)
+                        .ok_or("--weights-row-major-u8-file requires value")?
+                        .to_string(),
+                );
+            }
+            "--weights-row-major-i8-file" => {
+                i += 1;
+                config.weights_row_major_i8_file = Some(
+                    args.get(i)
+                        .ok_or("--weights-row-major-i8-file requires value")?
+                        .to_string(),
+                );
+            }
+            "--weights-pattern-index-mod" => {
+                config.weights_pattern_index_mod = true;
+            }
+            "--weights-pattern-modulus" => {
+                i += 1;
+                config.weights_pattern_modulus = parse_usize_auto(
+                    args.get(i)
+                        .ok_or("--weights-pattern-modulus requires value")?,
+                )?;
+            }
+            "--weights-pattern-signed-reinterpret" => {
+                config.weights_pattern_signed_reinterpret = true;
             }
             "--exec-index" => {
                 i += 1;
@@ -1140,11 +1197,20 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         }
     }
 
-    if config.model_path.is_empty() {
-        return Err("--model is required".into());
+    if config.model_path.is_empty() && config.family_profile.is_none() {
+        return Err("--model is required unless --family-profile provides anchor_model".into());
+    }
+    if let Some(path) = config.family_profile.as_ref() {
+        if !Path::new(path).is_file() {
+            return Err(format!(
+                "--family-profile path does not exist or is not a file: {}",
+                path
+            )
+            .into());
+        }
     }
     if let Some(spec_path) = config.instruction_patch_spec.as_ref() {
-        if !std::path::Path::new(spec_path).is_file() {
+        if !Path::new(spec_path).is_file() {
             return Err(format!(
                 "--instruction-patch-spec path does not exist or is not a file: {}",
                 spec_path
@@ -1153,13 +1219,52 @@ fn parse_args() -> Result<Config, Box<dyn Error>> {
         }
     }
     if let Some(path) = config.param_stream_override_file.as_ref() {
-        if !std::path::Path::new(path).is_file() {
+        if !Path::new(path).is_file() {
             return Err(format!(
                 "--param-stream-override-file path does not exist or is not a file: {}",
                 path
             )
             .into());
         }
+    }
+    if let Some(path) = config.weights_row_major_u8_file.as_ref() {
+        if !Path::new(path).is_file() {
+            return Err(format!(
+                "--weights-row-major-u8-file path does not exist or is not a file: {}",
+                path
+            )
+            .into());
+        }
+    }
+    if let Some(path) = config.weights_row_major_i8_file.as_ref() {
+        if !Path::new(path).is_file() {
+            return Err(format!(
+                "--weights-row-major-i8-file path does not exist or is not a file: {}",
+                path
+            )
+            .into());
+        }
+    }
+
+    let weight_source_count = (config.weights_row_major_u8_file.is_some() as usize)
+        + (config.weights_row_major_i8_file.is_some() as usize)
+        + (config.weights_pattern_index_mod as usize);
+    if weight_source_count > 1 {
+        return Err("choose only one weight source: --weights-row-major-u8-file | --weights-row-major-i8-file | --weights-pattern-index-mod".into());
+    }
+    if weight_source_count > 0 && config.family_profile.is_none() {
+        return Err("weight-source driven parameter generation requires --family-profile".into());
+    }
+    if weight_source_count > 0 && config.param_stream_override_file.is_some() {
+        return Err("cannot combine generated weight-source parameter stream with --param-stream-override-file".into());
+    }
+    if config.weights_pattern_modulus == 0 || config.weights_pattern_modulus > 256 {
+        return Err("--weights-pattern-modulus must be in [1,256]".into());
+    }
+    if (config.weights_pattern_signed_reinterpret || config.weights_pattern_modulus != 251)
+        && !config.weights_pattern_index_mod
+    {
+        return Err("--weights-pattern-modulus/--weights-pattern-signed-reinterpret require --weights-pattern-index-mod".into());
     }
     if config.runs == 0 {
         return Err("--runs must be >= 1".into());
@@ -1362,6 +1467,151 @@ fn fnv1a64(bytes: &[u8]) -> u64 {
 
 fn fnv1a64_hex(bytes: &[u8]) -> String {
     format!("{:016x}", fnv1a64(bytes))
+}
+
+fn apply_param_stream_override_bytes(
+    executables: &mut [SerializedExecutableBlob],
+    source_label: &str,
+    override_bytes: &[u8],
+) -> Result<(), Box<dyn Error>> {
+    let override_hash = fnv1a64_hex(override_bytes);
+    let mut replaced = 0usize;
+    for exe in executables
+        .iter_mut()
+        .filter(|exe| !exe.parameters_stream.is_empty())
+    {
+        if exe.parameters_stream.len() != override_bytes.len() {
+            return Err(format!(
+                "parameter stream override length mismatch for executable idx={}: expected {} bytes, got {} bytes from {}",
+                exe.executable_index,
+                exe.parameters_stream.len(),
+                override_bytes.len(),
+                source_label
+            )
+            .into());
+        }
+        let before_hash = fnv1a64_hex(&exe.parameters_stream);
+        exe.parameters_stream = override_bytes.to_vec();
+        let after_hash = fnv1a64_hex(&exe.parameters_stream);
+        println!(
+            "Parameter stream override: source={} exec_idx={} len={} source_fnv={} before_fnv={} after_fnv={}",
+            source_label,
+            exe.executable_index,
+            exe.parameters_stream.len(),
+            override_hash,
+            before_hash,
+            after_hash
+        );
+        replaced += 1;
+    }
+    if replaced == 0 {
+        return Err(format!(
+            "parameter stream override source had no target executable: {source_label}"
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn maybe_generate_param_stream_from_weights(
+    config: &Config,
+    profile: &DenseFamilyProfile,
+) -> Result<Option<(Vec<u8>, String)>, Box<dyn Error>> {
+    let rows = profile.stored_weight_rows();
+    let cols = profile.stored_weight_cols();
+    let expected_len = dense_param_stream_len(rows, cols)?;
+
+    if let Some(path) = config.weights_row_major_u8_file.as_ref() {
+        let row_major_u8 = std::fs::read(path)?;
+        if row_major_u8.len() != expected_len {
+            return Err(format!(
+                "--weights-row-major-u8-file length mismatch: expected {} bytes from profile shape [{}x{}], got {} bytes ({})",
+                expected_len,
+                rows,
+                cols,
+                row_major_u8.len(),
+                path
+            )
+            .into());
+        }
+        let stream = pack_dense_row_major_u8_to_stream(rows, cols, &row_major_u8)?;
+        println!(
+            "Generated parameter stream from u8 row-major weights: source={} shape={}x{} row_major_fnv=0x{} stream_fnv=0x{}",
+            path,
+            rows,
+            cols,
+            fnv1a64_hex(&row_major_u8),
+            fnv1a64_hex(&stream)
+        );
+        return Ok(Some((
+            stream,
+            format!("generated:u8:{}:{}x{}", path, rows, cols),
+        )));
+    }
+
+    if let Some(path) = config.weights_row_major_i8_file.as_ref() {
+        let row_major_i8_bytes = std::fs::read(path)?;
+        if row_major_i8_bytes.len() != expected_len {
+            return Err(format!(
+                "--weights-row-major-i8-file length mismatch: expected {} bytes from profile shape [{}x{}], got {} bytes ({})",
+                expected_len,
+                rows,
+                cols,
+                row_major_i8_bytes.len(),
+                path
+            )
+            .into());
+        }
+        let row_major_i8: Vec<i8> = row_major_i8_bytes.iter().map(|&v| v as i8).collect();
+        let stream = pack_dense_row_major_i8_to_stream(rows, cols, &row_major_i8)?;
+        println!(
+            "Generated parameter stream from i8 row-major weights: source={} shape={}x{} row_major_fnv=0x{} stream_fnv=0x{}",
+            path,
+            rows,
+            cols,
+            fnv1a64_hex(&row_major_i8_bytes),
+            fnv1a64_hex(&stream)
+        );
+        return Ok(Some((
+            stream,
+            format!("generated:i8:{}:{}x{}", path, rows, cols),
+        )));
+    }
+
+    if config.weights_pattern_index_mod {
+        let row_major_u8: Vec<u8> = (0..expected_len)
+            .map(|idx| {
+                let v = (idx % config.weights_pattern_modulus) as i16;
+                if config.weights_pattern_signed_reinterpret {
+                    ((v - 128).rem_euclid(256)) as u8
+                } else {
+                    (v % 256) as u8
+                }
+            })
+            .collect();
+        let stream = pack_dense_row_major_u8_to_stream(rows, cols, &row_major_u8)?;
+        println!(
+            "Generated parameter stream from synthetic pattern: mode=index_mod modulus={} signed_reinterpret={} shape={}x{} row_major_fnv=0x{} stream_fnv=0x{}",
+            config.weights_pattern_modulus,
+            config.weights_pattern_signed_reinterpret,
+            rows,
+            cols,
+            fnv1a64_hex(&row_major_u8),
+            fnv1a64_hex(&stream)
+        );
+        return Ok(Some((
+            stream,
+            format!(
+                "generated:pattern:index_mod:{}:signed={}:{}x{}",
+                config.weights_pattern_modulus,
+                config.weights_pattern_signed_reinterpret,
+                rows,
+                cols
+            ),
+        )));
+    }
+
+    Ok(None)
 }
 
 fn apply_instruction_patch_if_enabled(
@@ -3678,11 +3928,110 @@ fn describe_executable(exe: &SerializedExecutableBlob) -> String {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let config = parse_args()?;
-    let model_bytes = std::fs::read(&config.model_path)?;
+    let mut config = parse_args()?;
+
+    let mut family_profile_loaded: Option<(PathBuf, DenseFamilyProfile)> = None;
+    if let Some(profile_path_raw) = config.family_profile.as_ref() {
+        let profile_path = PathBuf::from(profile_path_raw);
+        let profile = DenseFamilyProfile::from_path(&profile_path)?;
+        let rows = profile.stored_weight_rows();
+        let cols = profile.stored_weight_cols();
+        let stream_len = profile.computed_param_stream_len()?;
+        println!(
+            "Family profile: path={} id={} schema={} stored_weight_shape=[{},{}] stream_len={} replay_defaults={:?}",
+            profile_path.display(),
+            profile.profile_id,
+            profile.schema_version,
+            rows,
+            cols,
+            stream_len,
+            profile.replay_defaults
+        );
+
+        let anchor_model = profile.resolve_anchor_model_path(&profile_path);
+        if config.model_path.is_empty() {
+            config.model_path = anchor_model.to_string_lossy().into_owned();
+            println!(
+                "Family profile default applied: model={} (anchor)",
+                config.model_path
+            );
+        } else {
+            println!(
+                "Family profile anchor available but keeping CLI model override: cli_model={} anchor_model={}",
+                config.model_path,
+                anchor_model.display()
+            );
+        }
+
+        if config.instruction_patch_spec.is_none() {
+            if let Some(spec_path) = profile.resolve_instruction_patch_spec_path(&profile_path) {
+                config.instruction_patch_spec = Some(spec_path.to_string_lossy().into_owned());
+                println!(
+                    "Family profile default applied: instruction_patch_spec={}",
+                    spec_path.display()
+                );
+            }
+        }
+
+        if !config.bootstrap_known_good_order
+            && profile.replay_defaults.bootstrap_known_good_order == Some(true)
+        {
+            config.bootstrap_known_good_order = true;
+            println!("Family profile default applied: bootstrap_known_good_order=true");
+        }
+
+        if config.input_bytes == 150_528 {
+            if let Some(input_bytes) = profile.replay_defaults.input_bytes {
+                config.input_bytes = input_bytes;
+                println!(
+                    "Family profile default applied: input_bytes={}",
+                    config.input_bytes
+                );
+            }
+        }
+
+        if config.output_bytes == 1001 {
+            if let Some(output_bytes) = profile.replay_defaults.output_bytes {
+                config.output_bytes = output_bytes;
+                println!(
+                    "Family profile default applied: output_bytes={}",
+                    config.output_bytes
+                );
+            }
+        }
+
+        family_profile_loaded = Some((profile_path, profile));
+    }
+
+    if config.model_path.is_empty() {
+        return Err(
+            "model path unresolved: provide --model or --family-profile with anchor_model".into(),
+        );
+    }
+
+    let model_path = PathBuf::from(&config.model_path);
+    if !model_path.is_file() {
+        return Err(format!(
+            "model path does not exist or is not a file: {}",
+            model_path.display()
+        )
+        .into());
+    }
+
+    if let Some(spec_path) = config.instruction_patch_spec.as_ref() {
+        if !Path::new(spec_path).is_file() {
+            return Err(format!(
+                "instruction patch spec path does not exist or is not a file: {}",
+                spec_path
+            )
+            .into());
+        }
+    }
+
+    let model_bytes = std::fs::read(&model_path)?;
     let mut executables = extract_serialized_executables_from_tflite(&model_bytes)?;
 
-    println!("Model: {}", config.model_path);
+    println!("Model: {}", model_path.display());
     println!(
         "Descriptor tags: instr={}({}), params={}({}), input={}({})",
         config.instructions_tag,
@@ -3693,45 +4042,21 @@ fn main() -> Result<(), Box<dyn Error>> {
         descriptor_tag_name(config.input_activations_tag)
     );
 
+    let generated_param_override = if let Some((_, profile)) = family_profile_loaded.as_ref() {
+        maybe_generate_param_stream_from_weights(&config, profile)?
+    } else {
+        None
+    };
+
     if let Some(path) = config.param_stream_override_file.as_ref() {
         let override_bytes = std::fs::read(path)?;
-        let override_hash = fnv1a64_hex(&override_bytes);
-        let mut replaced = 0usize;
-        for exe in executables
-            .iter_mut()
-            .filter(|exe| !exe.parameters_stream.is_empty())
-        {
-            if exe.parameters_stream.len() != override_bytes.len() {
-                return Err(format!(
-                    "--param-stream-override-file length mismatch for executable idx={}: expected {} bytes, got {} bytes from {}",
-                    exe.executable_index,
-                    exe.parameters_stream.len(),
-                    override_bytes.len(),
-                    path
-                )
-                .into());
-            }
-            let before_hash = fnv1a64_hex(&exe.parameters_stream);
-            exe.parameters_stream = override_bytes.clone();
-            let after_hash = fnv1a64_hex(&exe.parameters_stream);
-            println!(
-                "Parameter stream override: file={} exec_idx={} len={} file_fnv={} before_fnv={} after_fnv={}",
-                path,
-                exe.executable_index,
-                exe.parameters_stream.len(),
-                override_hash,
-                before_hash,
-                after_hash
-            );
-            replaced += 1;
-        }
-        if replaced == 0 {
-            return Err(format!(
-                "--param-stream-override-file provided but no executable had non-empty parameter stream: {}",
-                path
-            )
-            .into());
-        }
+        apply_param_stream_override_bytes(
+            &mut executables,
+            &format!("file:{}", path),
+            &override_bytes,
+        )?;
+    } else if let Some((override_bytes, source_label)) = generated_param_override {
+        apply_param_stream_override_bytes(&mut executables, &source_label, &override_bytes)?;
     }
     if config.param_stream_chunk_size.is_some()
         || config.param_stream_max_bytes.is_some()
