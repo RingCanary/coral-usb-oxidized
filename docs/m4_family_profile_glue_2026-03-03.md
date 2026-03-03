@@ -76,6 +76,26 @@ File:
 - Pattern controls require `--weights-pattern-index-mod`
 - Pattern modulus constrained to `[1, 256]`
 
+## DUT validation (Pi5 + Coral)
+Profile artifacts:
+- `traces/analysis/m4-family-profile-glue-20260303T161010Z/profile_896.json`
+- `traces/analysis/m4-family-profile-glue-20260303T161010Z/profile_1792.json`
+- `traces/analysis/m4-family-profile-glue-20260303T161010Z/profile_rect.json`
+
+Replay matrix run:
+- `traces/analysis/specv3-m4-family-profile-dut-matrix-20260303T161108Z/`
+- summary: `traces/analysis/specv3-m4-family-profile-dut-matrix-20260303T161108Z/SUMMARY.txt`
+
+Results (base vs profile-generated pattern stream):
+- `896`: base `0x8d7854bd1eb9c1e2` == profile `0x8d7854bd1eb9c1e2`
+- `1792`: base `0x394aa8758535e7e9` == profile `0x394aa8758535e7e9`
+- `rect (stored 1792x896)`: base `0xe0f607a60893b844` == profile `0xe0f607a60893b844`
+
+The profile path auto-applied:
+- anchor model path,
+- replay defaults (`input_bytes`, `output_bytes`, `bootstrap_known_good_order`),
+- compilerless param stream generation from `--weights-pattern-index-mod ...`.
+
 ## Build/test status
 - `cargo check --example rusb_serialized_exec_replay --bin dense_param_pack --lib` PASS
 - `cargo test --lib` PASS (includes new `family_profile` tests)
