@@ -64,6 +64,22 @@ From `SUMMARY.txt`:
 Best observed modes:
 - `best` and `threepoint` tie at `v2_mismatch=27` bytes.
 
+Mismatch breakdown artifact:
+- `traces/analysis/m3-unseen-predict-rect1792-20260303T163516Z/pc_best.mismatch_breakdown.txt`
+
+Breakdown summary:
+- total mismatches: `27`
+- covered by `discrete_flags`: `26`
+- covered by `safe_core`: `0`
+- uncovered: `1` (offset `1683`, latent boundary transition)
+
+Byte-residue histogram:
+- `{39:14, 18:6, 19:3, 57:2, 2:1, 4:1}`
+
+Notable overlap:
+- full overlap with known `res39` cluster (`14/14` bytes)
+- additional concentration in the `res18` band (+ neighboring high byte residue `19`)
+
 ### EO unseen boundary outcome
 EO target executable for `1344x1792` is not in the `8976` family:
 - base/training EO chunk size: `8976`

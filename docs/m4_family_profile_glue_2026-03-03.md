@@ -43,8 +43,11 @@ Key behavior:
 }
 ```
 
-Example profile:
-- `docs/artifacts/family_profiles/holdout_family8976_2352_anchor1792_v1.example.json`
+Example profiles:
+- Legacy single-spec style:
+  - `docs/artifacts/family_profiles/holdout_family8976_2352_anchor1792_v1.example.json`
+- Tiered style (`generic.safe_core` + per-dim overlays):
+  - `docs/artifacts/family_profiles/holdout_family8976_2352_tiered_v1.example.json`
 
 ## Replay integration
 File:
@@ -62,7 +65,9 @@ File:
 - If `--family-profile` is provided:
   - profile is loaded and validated,
   - `anchor_model` can populate `--model` when omitted,
-  - `instruction_patch_spec` can populate replay patch spec when omitted,
+  - legacy `instruction_patch_spec` can populate replay patch spec when omitted,
+  - tiered `instruction_patches` can auto-select generic + per-dim overlay patchspec paths,
+  - replay merges selected patchspec sources with conflict checks,
   - replay defaults can populate `input_bytes/output_bytes/bootstrap_known_good_order` when CLI values are unchanged defaults.
 - If a weight source option is used with `--family-profile`:
   - row-major weights are packed with `pack_dense_row_major_*_to_stream`,
@@ -95,6 +100,19 @@ The profile path auto-applied:
 - anchor model path,
 - replay defaults (`input_bytes`, `output_bytes`, `bootstrap_known_good_order`),
 - compilerless param stream generation from `--weights-pattern-index-mod ...`.
+
+## Tiered instruction patch DUT validation
+Additional run:
+- `traces/analysis/specv3-m4-tiered-profile-device-20260303T165658Z/`
+- summary: `.../SUMMARY.txt`
+
+Key outcomes:
+- profile with generic safe-core only (PC14) reproduces baseline hash,
+- profile with generic safe-core + per-dim overlay (EO nontoxic6) remains transport-stable and changes output hash as expected,
+- replay logs show patch source merge (`sources=2`, `rule_count=20`) and per-payload application.
+
+See detailed report:
+- `docs/m4_tiered_instruction_profile_device_validation_2026-03-03.md`
 
 ## Build/test status
 - `cargo check --example rusb_serialized_exec_replay --bin dense_param_pack --lib` PASS
