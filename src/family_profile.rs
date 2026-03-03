@@ -1,5 +1,6 @@
 use crate::dense_param_stream_len;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -19,6 +20,46 @@ pub struct DenseFamilyReplayDefaults {
     pub bootstrap_known_good_order: Option<bool>,
 }
 
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct DenseFamilyInstructionPatchGeneric {
+    #[serde(default)]
+    pub safe_core: Option<String>,
+    #[serde(default)]
+    pub full: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct DenseFamilyInstructionPatchDimMatch {
+    pub input_dim: usize,
+    pub output_dim: usize,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct DenseFamilyInstructionPatchOverlay {
+    #[serde(rename = "match")]
+    pub dim_match: DenseFamilyInstructionPatchDimMatch,
+    #[serde(default)]
+    pub discrete_flags: Option<String>,
+    #[serde(default)]
+    pub full: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct DenseFamilyInstructionPatches {
+    #[serde(default)]
+    pub generic: DenseFamilyInstructionPatchGeneric,
+    #[serde(default)]
+    pub overlays: Vec<DenseFamilyInstructionPatchOverlay>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DenseFamilyResolvedInstructionOverlayPaths {
+    pub input_dim: usize,
+    pub output_dim: usize,
+    pub discrete_flags: Option<PathBuf>,
+    pub full: Option<PathBuf>,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DenseFamilyProfile {
     #[serde(default = "default_schema_version")]
@@ -27,6 +68,8 @@ pub struct DenseFamilyProfile {
     pub anchor_model: String,
     #[serde(default)]
     pub instruction_patch_spec: Option<String>,
+    #[serde(default)]
+    pub instruction_patches: Option<DenseFamilyInstructionPatches>,
     pub stored_weight_shape: [usize; 2],
     #[serde(default)]
     pub expected_param_stream_len: Option<usize>,
@@ -111,6 +154,72 @@ impl DenseFamilyProfile {
                 reason: "if present, must be non-empty".to_string(),
             });
         }
+        if self.instruction_patch_spec.is_some() && self.instruction_patches.is_some() {
+            return Err(DenseFamilyProfileError::InvalidField {
+                field: "instruction_patch_spec",
+                reason: "cannot combine legacy instruction_patch_spec with instruction_patches; choose one schema style"
+                    .to_string(),
+            });
+        }
+
+        if let Some(patches) = self.instruction_patches.as_ref() {
+            if matches!(patches.generic.safe_core.as_deref(), Some("")) {
+                return Err(DenseFamilyProfileError::InvalidField {
+                    field: "instruction_patches.generic.safe_core",
+                    reason: "if present, must be non-empty".to_string(),
+                });
+            }
+            if matches!(patches.generic.full.as_deref(), Some("")) {
+                return Err(DenseFamilyProfileError::InvalidField {
+                    field: "instruction_patches.generic.full",
+                    reason: "if present, must be non-empty".to_string(),
+                });
+            }
+
+            let mut seen = HashSet::<(usize, usize)>::new();
+            for (idx, overlay) in patches.overlays.iter().enumerate() {
+                if overlay.dim_match.input_dim == 0 || overlay.dim_match.output_dim == 0 {
+                    return Err(DenseFamilyProfileError::InvalidField {
+                        field: "instruction_patches.overlays.match",
+                        reason: format!(
+                            "overlay[{idx}] dims must be >=1, got input_dim={} output_dim={}",
+                            overlay.dim_match.input_dim, overlay.dim_match.output_dim
+                        ),
+                    });
+                }
+                if !seen.insert((overlay.dim_match.input_dim, overlay.dim_match.output_dim)) {
+                    return Err(DenseFamilyProfileError::InvalidField {
+                        field: "instruction_patches.overlays.match",
+                        reason: format!(
+                            "duplicate overlay match for input_dim={} output_dim={}",
+                            overlay.dim_match.input_dim, overlay.dim_match.output_dim
+                        ),
+                    });
+                }
+                if matches!(overlay.discrete_flags.as_deref(), Some("")) {
+                    return Err(DenseFamilyProfileError::InvalidField {
+                        field: "instruction_patches.overlays.discrete_flags",
+                        reason: format!(
+                            "overlay[{idx}] discrete_flags must be non-empty when present"
+                        ),
+                    });
+                }
+                if matches!(overlay.full.as_deref(), Some("")) {
+                    return Err(DenseFamilyProfileError::InvalidField {
+                        field: "instruction_patches.overlays.full",
+                        reason: format!("overlay[{idx}] full must be non-empty when present"),
+                    });
+                }
+                if overlay.discrete_flags.is_none() && overlay.full.is_none() {
+                    return Err(DenseFamilyProfileError::InvalidField {
+                        field: "instruction_patches.overlays",
+                        reason: format!(
+                            "overlay[{idx}] must define at least one of discrete_flags/full"
+                        ),
+                    });
+                }
+            }
+        }
 
         let rows = self.stored_weight_rows();
         let cols = self.stored_weight_cols();
@@ -175,6 +284,53 @@ impl DenseFamilyProfile {
             .as_ref()
             .map(|v| resolve_path_relative_to_profile(profile_path, v))
     }
+
+    pub fn resolve_generic_safe_core_patch_path(&self, profile_path: &Path) -> Option<PathBuf> {
+        self.instruction_patches
+            .as_ref()?
+            .generic
+            .safe_core
+            .as_ref()
+            .map(|v| resolve_path_relative_to_profile(profile_path, v))
+    }
+
+    pub fn resolve_generic_full_patch_path(&self, profile_path: &Path) -> Option<PathBuf> {
+        self.instruction_patches
+            .as_ref()?
+            .generic
+            .full
+            .as_ref()
+            .map(|v| resolve_path_relative_to_profile(profile_path, v))
+    }
+
+    pub fn resolve_instruction_overlay_paths_for_dims(
+        &self,
+        profile_path: &Path,
+        input_dim: usize,
+        output_dim: usize,
+    ) -> Option<DenseFamilyResolvedInstructionOverlayPaths> {
+        let overlay = self
+            .instruction_patches
+            .as_ref()?
+            .overlays
+            .iter()
+            .find(|ov| {
+                ov.dim_match.input_dim == input_dim && ov.dim_match.output_dim == output_dim
+            })?;
+
+        Some(DenseFamilyResolvedInstructionOverlayPaths {
+            input_dim,
+            output_dim,
+            discrete_flags: overlay
+                .discrete_flags
+                .as_ref()
+                .map(|v| resolve_path_relative_to_profile(profile_path, v)),
+            full: overlay
+                .full
+                .as_ref()
+                .map(|v| resolve_path_relative_to_profile(profile_path, v)),
+        })
+    }
 }
 
 fn resolve_path_relative_to_profile(profile_path: &Path, value: &str) -> PathBuf {
@@ -199,6 +355,32 @@ mod tests {
   "profile_id": "holdout-family-8976-2352",
   "anchor_model": "anchors/dense_anchor_1792.tflite",
   "instruction_patch_spec": "patches/family_8976_2352.patchspec",
+  "stored_weight_shape": [1792, 1792],
+  "expected_param_stream_len": 3211264,
+  "replay_defaults": {
+    "input_bytes": 1792,
+    "output_bytes": 1792,
+    "bootstrap_known_good_order": true
+  }
+}"#
+    }
+
+    fn sample_profile_tiered_json() -> &'static str {
+        r#"{
+  "schema_version": 1,
+  "profile_id": "holdout-family-8976-2352-tiered",
+  "anchor_model": "anchors/dense_anchor_1792.tflite",
+  "instruction_patches": {
+    "generic": {
+      "safe_core": "patches/pc_safe.patchspec"
+    },
+    "overlays": [
+      {
+        "match": {"input_dim": 1792, "output_dim": 1792},
+        "discrete_flags": "patches/eo_discrete_1792.patchspec"
+      }
+    ]
+  },
   "stored_weight_shape": [1792, 1792],
   "expected_param_stream_len": 3211264,
   "replay_defaults": {
@@ -255,5 +437,45 @@ mod tests {
                 .unwrap(),
             Path::new("docs/artifacts/family_profiles/patches/family_8976_2352.patchspec")
         );
+    }
+
+    #[test]
+    fn reject_legacy_plus_tiered_patch_schema_mix() {
+        let text = sample_profile_tiered_json().replace(
+            "\"instruction_patches\": {",
+            "\"instruction_patch_spec\": \"patches/legacy.patchspec\",\n  \"instruction_patches\": {",
+        );
+        let err = DenseFamilyProfile::from_json_str(&text).unwrap_err();
+        match err {
+            DenseFamilyProfileError::InvalidField { field, reason } => {
+                assert_eq!(field, "instruction_patch_spec");
+                assert!(reason.contains("cannot combine legacy"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn resolve_tiered_patch_paths() {
+        let profile = DenseFamilyProfile::from_json_str(sample_profile_tiered_json()).unwrap();
+        let profile_path = Path::new("docs/artifacts/family_profiles/sample.json");
+
+        assert_eq!(
+            profile
+                .resolve_generic_safe_core_patch_path(profile_path)
+                .unwrap(),
+            Path::new("docs/artifacts/family_profiles/patches/pc_safe.patchspec")
+        );
+
+        let ov = profile
+            .resolve_instruction_overlay_paths_for_dims(profile_path, 1792, 1792)
+            .unwrap();
+        assert_eq!(
+            ov.discrete_flags.unwrap(),
+            Path::new("docs/artifacts/family_profiles/patches/eo_discrete_1792.patchspec")
+        );
+        assert!(profile
+            .resolve_instruction_overlay_paths_for_dims(profile_path, 896, 896)
+            .is_none());
     }
 }

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "profile_id": "holdout-family-8976-2352-tiered",
+  "anchor_model": "/abs/path/to/dense_1792x1792_quant_edgetpu.tflite",
+  "instruction_patches": {
+    "generic": {
+      "safe_core": "/abs/path/to/pc_strict.full.patchspec"
+    },
+    "overlays": [
+      {
+        "match": {
+          "input_dim": 1792,
+          "output_dim": 1792
+        },
+        "discrete_flags": "/abs/path/to/eo_nontoxic6.patchspec"
+      }
+    ]
+  },
+  "stored_weight_shape": [1792, 1792],
+  "expected_param_stream_len": 3211264,
+  "replay_defaults": {
+    "input_bytes": 1792,
+    "output_bytes": 1792,
+    "bootstrap_known_good_order": true
+  },
+  "notes": "Tiered example: apply generic safe_core for all in-family dims; optionally layer a per-dim discrete overlay."
+}

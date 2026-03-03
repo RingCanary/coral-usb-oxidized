@@ -194,7 +194,7 @@ fn usage(program: &str) {
     println!("Usage: {program} (--model PATH | --family-profile PATH) [options]");
     println!("Options:");
     println!("  --model PATH              Compiled *_edgetpu.tflite model (or anchor from --family-profile)");
-    println!("  --family-profile PATH     Dense family profile JSON (can provide anchor model + patch spec + stored weight shape)");
+    println!("  --family-profile PATH     Dense family profile JSON (anchor model + optional tiered instruction patches + stored weight shape)");
     println!("  --input-bytes N           Input activation bytes (default: 150528)");
     println!("  --output-bytes N          Output bytes to read from EP 0x81 (default: 1001)");
     println!("  --runs N                  Number of invoke attempts (default: 1)");
@@ -514,6 +514,46 @@ fn load_instruction_patch_spec(path: &str) -> Result<InstructionPatchSpec, Box<d
         spec.by_payload_len.insert(payload_len, entries);
     }
     Ok(spec)
+}
+
+fn merge_instruction_patch_specs(paths: &[String]) -> Result<InstructionPatchSpec, Box<dyn Error>> {
+    if paths.is_empty() {
+        return Err("merge_instruction_patch_specs called with empty paths".into());
+    }
+
+    let mut by_payload_len: HashMap<usize, HashMap<usize, u8>> = HashMap::new();
+
+    for path in paths {
+        let spec = load_instruction_patch_spec(path)?;
+        for (payload_len, entries) in spec.by_payload_len {
+            let table = by_payload_len.entry(payload_len).or_default();
+            for (offset, value) in entries {
+                if let Some(prev) = table.get(&offset).copied() {
+                    if prev != value {
+                        return Err(format!(
+                            "instruction patch conflict at payload_len={} offset={} existing=0x{:02x} new=0x{:02x} source={}",
+                            payload_len,
+                            offset,
+                            prev,
+                            value,
+                            path
+                        )
+                        .into());
+                    }
+                } else {
+                    table.insert(offset, value);
+                }
+            }
+        }
+    }
+
+    let mut merged = InstructionPatchSpec::default();
+    for (payload_len, offsets) in by_payload_len {
+        let mut entries: Vec<(usize, u8)> = offsets.into_iter().collect();
+        entries.sort_by_key(|(offset, _)| *offset);
+        merged.by_payload_len.insert(payload_len, entries);
+    }
+    Ok(merged)
 }
 
 fn descriptor_tag_name(tag: u32) -> &'static str {
@@ -3931,21 +3971,30 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut config = parse_args()?;
 
     let mut family_profile_loaded: Option<(PathBuf, DenseFamilyProfile)> = None;
+    let mut profile_instruction_patch_paths: Vec<String> = Vec::new();
+
     if let Some(profile_path_raw) = config.family_profile.as_ref() {
         let profile_path = PathBuf::from(profile_path_raw);
         let profile = DenseFamilyProfile::from_path(&profile_path)?;
         let rows = profile.stored_weight_rows();
         let cols = profile.stored_weight_cols();
         let stream_len = profile.computed_param_stream_len()?;
+        let tiered_overlays = profile
+            .instruction_patches
+            .as_ref()
+            .map(|p| p.overlays.len())
+            .unwrap_or(0);
         println!(
-            "Family profile: path={} id={} schema={} stored_weight_shape=[{},{}] stream_len={} replay_defaults={:?}",
+            "Family profile: path={} id={} schema={} stored_weight_shape=[{},{}] stream_len={} replay_defaults={:?} legacy_patch={} tiered_overlays={}",
             profile_path.display(),
             profile.profile_id,
             profile.schema_version,
             rows,
             cols,
             stream_len,
-            profile.replay_defaults
+            profile.replay_defaults,
+            profile.instruction_patch_spec.is_some(),
+            tiered_overlays,
         );
 
         let anchor_model = profile.resolve_anchor_model_path(&profile_path);
@@ -3961,16 +4010,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 config.model_path,
                 anchor_model.display()
             );
-        }
-
-        if config.instruction_patch_spec.is_none() {
-            if let Some(spec_path) = profile.resolve_instruction_patch_spec_path(&profile_path) {
-                config.instruction_patch_spec = Some(spec_path.to_string_lossy().into_owned());
-                println!(
-                    "Family profile default applied: instruction_patch_spec={}",
-                    spec_path.display()
-                );
-            }
         }
 
         if !config.bootstrap_known_good_order
@@ -4000,6 +4039,67 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
 
+        if config.instruction_patch_spec.is_none() {
+            if let Some(spec_path) = profile.resolve_instruction_patch_spec_path(&profile_path) {
+                config.instruction_patch_spec = Some(spec_path.to_string_lossy().into_owned());
+                println!(
+                    "Family profile default applied: instruction_patch_spec={} (legacy single-spec)",
+                    spec_path.display()
+                );
+            } else {
+                if let Some(full_path) = profile.resolve_generic_full_patch_path(&profile_path) {
+                    profile_instruction_patch_paths.push(full_path.to_string_lossy().into_owned());
+                    println!(
+                        "Family profile generic patch applied: full={}",
+                        full_path.display()
+                    );
+                } else if let Some(safe_core_path) =
+                    profile.resolve_generic_safe_core_patch_path(&profile_path)
+                {
+                    profile_instruction_patch_paths
+                        .push(safe_core_path.to_string_lossy().into_owned());
+                    println!(
+                        "Family profile generic patch applied: safe_core={}",
+                        safe_core_path.display()
+                    );
+                }
+
+                if let Some(overlay) = profile.resolve_instruction_overlay_paths_for_dims(
+                    &profile_path,
+                    config.input_bytes,
+                    config.output_bytes,
+                ) {
+                    if let Some(full) = overlay.full {
+                        profile_instruction_patch_paths.push(full.to_string_lossy().into_owned());
+                        println!(
+                            "Family profile overlay patch applied for dims {}x{}: full={}",
+                            overlay.input_dim,
+                            overlay.output_dim,
+                            full.display()
+                        );
+                    } else if let Some(discrete) = overlay.discrete_flags {
+                        profile_instruction_patch_paths
+                            .push(discrete.to_string_lossy().into_owned());
+                        println!(
+                            "Family profile overlay patch applied for dims {}x{}: discrete_flags={}",
+                            overlay.input_dim,
+                            overlay.output_dim,
+                            discrete.display()
+                        );
+                    }
+                } else if profile.instruction_patches.is_some() {
+                    println!(
+                        "Family profile overlay patch: no match for dims {}x{}",
+                        config.input_bytes, config.output_bytes
+                    );
+                }
+            }
+        } else if profile.instruction_patches.is_some() {
+            println!(
+                "Family profile tiered patches available but ignored because --instruction-patch-spec was explicitly set"
+            );
+        }
+
         family_profile_loaded = Some((profile_path, profile));
     }
 
@@ -4022,6 +4122,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         if !Path::new(spec_path).is_file() {
             return Err(format!(
                 "instruction patch spec path does not exist or is not a file: {}",
+                spec_path
+            )
+            .into());
+        }
+    }
+    for spec_path in &profile_instruction_patch_paths {
+        if !Path::new(spec_path).is_file() {
+            return Err(format!(
+                "family-profile instruction patch path does not exist or is not a file: {}",
                 spec_path
             )
             .into());
@@ -4155,26 +4264,54 @@ fn main() -> Result<(), Box<dyn Error>> {
     let run_exe = choose_execution_executable(&executables, config.exec_index)?;
 
     let input_bytes = load_input(&config)?;
-    let instruction_patch_spec = if let Some(spec_path) = config.instruction_patch_spec.as_ref() {
-        let spec = load_instruction_patch_spec(spec_path)?;
+
+    let mut instruction_patch_sources: Vec<String> = Vec::new();
+    if let Some(spec_path) = config.instruction_patch_spec.as_ref() {
+        instruction_patch_sources.push(spec_path.clone());
+    }
+    instruction_patch_sources.extend(profile_instruction_patch_paths.clone());
+
+    let instruction_patch_spec = if !instruction_patch_sources.is_empty() {
+        for spec_path in &instruction_patch_sources {
+            let spec = load_instruction_patch_spec(spec_path)?;
+            println!(
+                "Instruction patch source: path={} payload_lens={} rule_count={}",
+                spec_path,
+                spec.by_payload_len.len(),
+                spec.rule_count()
+            );
+            for (payload_len, entries) in &spec.by_payload_len {
+                let first = entries.first().copied();
+                let last = entries.last().copied();
+                println!(
+                    "  source patch len={} entries={} first={:?} last={:?}",
+                    payload_len,
+                    entries.len(),
+                    first,
+                    last
+                );
+            }
+        }
+
+        let merged = merge_instruction_patch_specs(&instruction_patch_sources)?;
         println!(
-            "Instruction patch spec: path={} payload_lens={} rule_count={}",
-            spec_path,
-            spec.by_payload_len.len(),
-            spec.rule_count()
+            "Instruction patch merged: sources={} payload_lens={} rule_count={}",
+            instruction_patch_sources.len(),
+            merged.by_payload_len.len(),
+            merged.rule_count()
         );
-        for (payload_len, entries) in &spec.by_payload_len {
+        for (payload_len, entries) in &merged.by_payload_len {
             let first = entries.first().copied();
             let last = entries.last().copied();
             println!(
-                "  patch len={} entries={} first={:?} last={:?}",
+                "  merged patch len={} entries={} first={:?} last={:?}",
                 payload_len,
                 entries.len(),
                 first,
                 last
             );
         }
-        Some(spec)
+        Some(merged)
     } else {
         None
     };

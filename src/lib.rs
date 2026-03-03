@@ -32,7 +32,9 @@ pub use crate::delegate::{version, EdgeTPUDelegate};
 pub use crate::device::{is_device_connected, CoralDevice};
 pub use crate::error::{CoralError, DenseGemmError, TfLiteError};
 pub use crate::family_profile::{
-    DenseFamilyProfile, DenseFamilyProfileError, DenseFamilyReplayDefaults,
+    DenseFamilyInstructionPatchDimMatch, DenseFamilyInstructionPatchGeneric,
+    DenseFamilyInstructionPatchOverlay, DenseFamilyInstructionPatches, DenseFamilyProfile,
+    DenseFamilyProfileError, DenseFamilyReplayDefaults, DenseFamilyResolvedInstructionOverlayPaths,
 };
 pub use crate::flatbuffer::{
     executable_type_name, extract_instruction_chunk_from_serialized_executable,
