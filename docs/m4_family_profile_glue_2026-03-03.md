@@ -55,6 +55,7 @@ File:
 
 ### New CLI options
 - `--family-profile PATH`
+- `--check-profile` (lint/resolve profile plan and exit before USB)
 - `--weights-row-major-u8-file PATH`
 - `--weights-row-major-i8-file PATH`
 - `--weights-pattern-index-mod`
@@ -68,7 +69,12 @@ File:
   - legacy `instruction_patch_spec` can populate replay patch spec when omitted,
   - tiered `instruction_patches` can auto-select generic + per-dim overlay patchspec paths,
   - replay merges selected patchspec sources with conflict checks,
+  - merged patch payload lengths are validated against extracted executable chunk lengths,
   - replay defaults can populate `input_bytes/output_bytes/bootstrap_known_good_order` when CLI values are unchanged defaults.
+- If `--check-profile` is set:
+  - replay resolves model + patch plan,
+  - validates referenced files and merged patch compatibility,
+  - exits before any USB open/claim/reset activity.
 - If a weight source option is used with `--family-profile`:
   - row-major weights are packed with `pack_dense_row_major_*_to_stream`,
   - resulting stream overrides extracted parameter stream before USB replay,
@@ -113,6 +119,10 @@ Key outcomes:
 
 See detailed report:
 - `docs/m4_tiered_instruction_profile_device_validation_2026-03-03.md`
+
+Profile lint/check example artifact:
+- `traces/analysis/m4-profile-check-local-20260303T171235Z/check_profile.log`
+  - confirms `Profile check mode: PASS` and no USB operations executed.
 
 ## Build/test status
 - `cargo check --example rusb_serialized_exec_replay --bin dense_param_pack --lib` PASS
