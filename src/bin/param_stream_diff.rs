@@ -101,11 +101,7 @@ Options:\n\
 
 fn parse_model_spec(raw: &str) -> Result<ModelSpec, DynError> {
     let mut parts = raw.splitn(2, '=');
-    let name = parts
-        .next()
-        .ok_or("missing model name")?
-        .trim()
-        .to_string();
+    let name = parts.next().ok_or("missing model name")?.trim().to_string();
     let path = parts
         .next()
         .ok_or("missing model path (expected NAME=PATH)")?
@@ -156,8 +152,12 @@ fn now_utc_rfc3339() -> String {
 fn load_model(spec: &ModelSpec) -> Result<LoadedModel, DynError> {
     let model_bytes = fs::read(&spec.path)
         .map_err(|e| format!("failed to read model {}: {e}", spec.path.display()))?;
-    let executables = extract_serialized_executables_from_tflite(&model_bytes)
-        .map_err(|e| format!("failed to extract executables from {}: {e}", spec.path.display()))?;
+    let executables = extract_serialized_executables_from_tflite(&model_bytes).map_err(|e| {
+        format!(
+            "failed to extract executables from {}: {e}",
+            spec.path.display()
+        )
+    })?;
 
     let selected = executables
         .iter()
