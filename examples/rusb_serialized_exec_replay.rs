@@ -191,7 +191,7 @@ impl InstructionPatchSpec {
 }
 
 fn usage(program: &str) {
-    println!("Usage: {program} --model PATH [options]");
+    println!("Usage: {program} (--model PATH | --family-profile PATH) [options]");
     println!("Options:");
     println!("  --model PATH              Compiled *_edgetpu.tflite model (or anchor from --family-profile)");
     println!("  --family-profile PATH     Dense family profile JSON (can provide anchor model + patch spec + stored weight shape)");
