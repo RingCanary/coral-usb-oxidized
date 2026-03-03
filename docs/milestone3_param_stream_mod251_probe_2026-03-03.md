@@ -84,6 +84,11 @@ Result (`param_permutation.signed_reinterpret.report.json`):
 
 This directly confirms the same formula at `1792x1792` (not only via prefix inference).
 
+DUT run on compiled `1792x1792` mod251 model:
+- log: `traces/analysis/m3-param-permutation-1792-20260303T151750Z/dut_mod251_1792.log`
+- result: PASS
+- output hash: `0x394aa8758535e7e9`
+
 ### 6) Rectangular check (`896x1792` model)
 Additional run root:
 - `traces/analysis/m3-param-permutation-rect-20260303T151814Z/`
