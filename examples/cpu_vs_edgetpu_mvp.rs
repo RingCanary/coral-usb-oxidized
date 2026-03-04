@@ -1,59 +1,14 @@
 use coral_usb_oxidized::{CoralDevice, EdgeTPUDelegate};
+#[path = "common/tflite_c.rs"]
+mod tflite_c;
+
 use std::env;
-use std::ffi::CString;
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::os::raw::{c_char, c_void};
 use std::path::Path;
 use std::ptr;
 use std::time::Instant;
-
-pub enum TfLiteModel {}
-pub enum TfLiteInterpreter {}
-pub enum TfLiteInterpreterOptions {}
-pub enum TfLiteTensor {}
-pub enum TfLiteDelegate {}
-
-extern "C" {
-    fn TfLiteModelCreateFromFile(model_path: *const c_char) -> *mut TfLiteModel;
-    fn TfLiteModelDelete(model: *mut TfLiteModel);
-
-    fn TfLiteInterpreterOptionsCreate() -> *mut TfLiteInterpreterOptions;
-    fn TfLiteInterpreterOptionsDelete(options: *mut TfLiteInterpreterOptions);
-    fn TfLiteInterpreterOptionsAddDelegate(
-        options: *mut TfLiteInterpreterOptions,
-        delegate: *mut TfLiteDelegate,
-    );
-
-    fn TfLiteInterpreterCreate(
-        model: *mut TfLiteModel,
-        options: *mut TfLiteInterpreterOptions,
-    ) -> *mut TfLiteInterpreter;
-    fn TfLiteInterpreterDelete(interpreter: *mut TfLiteInterpreter);
-    fn TfLiteInterpreterAllocateTensors(interpreter: *mut TfLiteInterpreter) -> i32;
-    fn TfLiteInterpreterInvoke(interpreter: *mut TfLiteInterpreter) -> i32;
-
-    fn TfLiteInterpreterGetInputTensor(
-        interpreter: *mut TfLiteInterpreter,
-        input_index: i32,
-    ) -> *mut TfLiteTensor;
-    fn TfLiteInterpreterGetOutputTensor(
-        interpreter: *mut TfLiteInterpreter,
-        output_index: i32,
-    ) -> *mut TfLiteTensor;
-
-    fn TfLiteTensorByteSize(tensor: *mut TfLiteTensor) -> usize;
-    fn TfLiteTensorCopyFromBuffer(
-        tensor: *mut TfLiteTensor,
-        input_data: *const c_void,
-        input_data_size: usize,
-    ) -> i32;
-    fn TfLiteTensorCopyToBuffer(
-        tensor: *mut TfLiteTensor,
-        output_data: *mut c_void,
-        output_data_size: usize,
-    ) -> i32;
-}
+use tflite_c::{Interpreter, InterpreterOptions, Model, Tensor, TfLiteDelegate};
 
 #[derive(Clone, Copy)]
 enum Backend {
@@ -109,104 +64,50 @@ struct CsvRow {
 }
 
 struct RawInterpreter {
-    model: *mut TfLiteModel,
-    interpreter: *mut TfLiteInterpreter,
+    _model: Model,
+    interpreter: Interpreter,
 }
 
 impl RawInterpreter {
     fn new(model_path: &str, delegate: *mut TfLiteDelegate) -> Result<Self, String> {
-        let c_model_path = CString::new(model_path)
-            .map_err(|_| format!("model path contains embedded NUL byte: {}", model_path))?;
-
-        let model = unsafe { TfLiteModelCreateFromFile(c_model_path.as_ptr()) };
-        if model.is_null() {
-            return Err(format!(
-                "TfLiteModelCreateFromFile failed for {}",
-                model_path
-            ));
-        }
-
-        let options = unsafe { TfLiteInterpreterOptionsCreate() };
-        if options.is_null() {
-            unsafe {
-                TfLiteModelDelete(model);
+        let model = Model::from_file(model_path).map_err(|err| {
+            if err.starts_with("model path contains embedded NUL byte") {
+                err
+            } else {
+                format!("TfLiteModelCreateFromFile failed for {}", model_path)
             }
-            return Err("TfLiteInterpreterOptionsCreate failed".to_string());
-        }
+        })?;
 
-        if !delegate.is_null() {
-            unsafe {
-                TfLiteInterpreterOptionsAddDelegate(options, delegate);
-            }
-        }
+        let options = InterpreterOptions::new()?;
+        options.add_delegate(delegate);
 
-        let interpreter = unsafe { TfLiteInterpreterCreate(model, options) };
-        unsafe {
-            TfLiteInterpreterOptionsDelete(options);
-        }
+        let interpreter = Interpreter::new(&model, &options)?;
+        interpreter
+            .allocate_tensors()
+            .map_err(|status| format!("TfLiteInterpreterAllocateTensors failed: {}", status))?;
 
-        if interpreter.is_null() {
-            unsafe {
-                TfLiteModelDelete(model);
-            }
-            return Err("TfLiteInterpreterCreate failed".to_string());
-        }
-
-        let status = unsafe { TfLiteInterpreterAllocateTensors(interpreter) };
-        if status != 0 {
-            unsafe {
-                TfLiteInterpreterDelete(interpreter);
-                TfLiteModelDelete(model);
-            }
-            return Err(format!(
-                "TfLiteInterpreterAllocateTensors failed: {}",
-                status
-            ));
-        }
-
-        Ok(Self { model, interpreter })
+        Ok(Self {
+            _model: model,
+            interpreter,
+        })
     }
 
-    fn input_tensor(&self, input_index: i32) -> Result<*mut TfLiteTensor, String> {
-        let tensor = unsafe { TfLiteInterpreterGetInputTensor(self.interpreter, input_index) };
-        if tensor.is_null() {
-            return Err(format!("input tensor {} not found", input_index));
-        }
-        Ok(tensor)
+    fn input_tensor(&self, input_index: i32) -> Result<Tensor, String> {
+        self.interpreter
+            .input_tensor(input_index)
+            .ok_or_else(|| format!("input tensor {} not found", input_index))
     }
 
-    fn output_tensor(&self, output_index: i32) -> Result<*mut TfLiteTensor, String> {
-        let tensor = unsafe { TfLiteInterpreterGetOutputTensor(self.interpreter, output_index) };
-        if tensor.is_null() {
-            return Err(format!("output tensor {} not found", output_index));
-        }
-        Ok(tensor)
+    fn output_tensor(&self, output_index: i32) -> Result<Tensor, String> {
+        self.interpreter
+            .output_tensor(output_index)
+            .ok_or_else(|| format!("output tensor {} not found", output_index))
     }
 
     fn invoke(&self) -> Result<(), String> {
-        let status = unsafe { TfLiteInterpreterInvoke(self.interpreter) };
-        if status != 0 {
-            return Err(format!("TfLiteInterpreterInvoke failed: {}", status));
-        }
-        Ok(())
-    }
-}
-
-impl Drop for RawInterpreter {
-    fn drop(&mut self) {
-        if !self.interpreter.is_null() {
-            unsafe {
-                TfLiteInterpreterDelete(self.interpreter);
-            }
-            self.interpreter = ptr::null_mut();
-        }
-
-        if !self.model.is_null() {
-            unsafe {
-                TfLiteModelDelete(self.model);
-            }
-            self.model = ptr::null_mut();
-        }
+        self.interpreter
+            .invoke()
+            .map_err(|status| format!("TfLiteInterpreterInvoke failed: {}", status))
     }
 }
 
@@ -356,44 +257,24 @@ fn deterministic_input(seed: u64, len: usize) -> Vec<u8> {
 
 fn run_iteration(
     interpreter: &RawInterpreter,
-    input_tensor: *mut TfLiteTensor,
-    output_tensor: *mut TfLiteTensor,
+    input_tensor: Tensor,
+    output_tensor: Tensor,
     input_data: &[u8],
     output_data: &mut [u8],
 ) -> Result<(f64, f64), String> {
     let e2e_start = Instant::now();
 
-    let copy_in_status = unsafe {
-        TfLiteTensorCopyFromBuffer(
-            input_tensor,
-            input_data.as_ptr() as *const c_void,
-            input_data.len(),
-        )
-    };
-    if copy_in_status != 0 {
-        return Err(format!(
-            "TfLiteTensorCopyFromBuffer failed: {}",
-            copy_in_status
-        ));
-    }
+    input_tensor
+        .copy_from(input_data)
+        .map_err(|status| format!("TfLiteTensorCopyFromBuffer failed: {}", status))?;
 
     let invoke_start = Instant::now();
     interpreter.invoke()?;
     let invoke_ms = invoke_start.elapsed().as_secs_f64() * 1000.0;
 
-    let copy_out_status = unsafe {
-        TfLiteTensorCopyToBuffer(
-            output_tensor,
-            output_data.as_mut_ptr() as *mut c_void,
-            output_data.len(),
-        )
-    };
-    if copy_out_status != 0 {
-        return Err(format!(
-            "TfLiteTensorCopyToBuffer failed: {}",
-            copy_out_status
-        ));
-    }
+    output_tensor
+        .copy_to(output_data)
+        .map_err(|status| format!("TfLiteTensorCopyToBuffer failed: {}", status))?;
 
     let e2e_ms = e2e_start.elapsed().as_secs_f64() * 1000.0;
     Ok((invoke_ms, e2e_ms))
@@ -427,12 +308,12 @@ fn run_scenario(
     let input_tensor = interpreter.input_tensor(0)?;
     let output_tensor = interpreter.output_tensor(0)?;
 
-    let input_len = unsafe { TfLiteTensorByteSize(input_tensor) };
+    let input_len = input_tensor.byte_size();
     if input_len == 0 {
         return Err("input tensor byte size is zero".to_string());
     }
 
-    let output_len = unsafe { TfLiteTensorByteSize(output_tensor) };
+    let output_len = output_tensor.byte_size();
     if output_len == 0 {
         return Err("output tensor byte size is zero".to_string());
     }
