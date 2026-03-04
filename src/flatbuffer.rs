@@ -162,7 +162,7 @@ fn parse_root_table<'a>(
 
     let vtable_len = read_u16(data, vtable_offset)? as usize;
     let object_len = read_u16(data, vtable_offset + 2)? as usize;
-    if vtable_len < 4 || vtable_len % 2 != 0 {
+    if vtable_len < 4 || !vtable_len.is_multiple_of(2) {
         return Err(invalid_template(format!(
             "invalid vtable length {}",
             vtable_len
@@ -225,7 +225,7 @@ fn parse_table_at(data: &[u8], table_offset: usize) -> Result<FlatTable<'_>, Den
 
     let vtable_len = read_u16(data, vtable_offset)? as usize;
     let object_len = read_u16(data, vtable_offset + 2)? as usize;
-    if vtable_len < 4 || vtable_len % 2 != 0 {
+    if vtable_len < 4 || !vtable_len.is_multiple_of(2) {
         return Err(invalid_template(format!(
             "invalid nested vtable length {}",
             vtable_len
