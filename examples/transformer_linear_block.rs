@@ -1,6 +1,14 @@
 use coral_usb_oxidized::{
     version, CoralDevice, DenseGemmError, DenseGemmTemplate, PreparedDenseGemm,
 };
+#[path = "common/mod.rs"]
+mod common;
+
+use common::affine::{fit_affine_map, verify_against_affine};
+use common::quant::{
+    cpu_accumulator_reference_seq_dmodel, quantize_symmetric_i8, symmetric_scale_for_qmax,
+};
+use common::rng::XorShift64;
 use std::env;
 use std::error::Error;
 use std::fs;
@@ -110,47 +118,6 @@ impl RunTiming {
 
     fn linear_ms(&self) -> f64 {
         self.q_ms + self.k_ms + self.v_ms + self.o_ms + self.up_ms + self.down_ms
-    }
-}
-
-#[derive(Clone, Copy)]
-struct AffineMap {
-    alpha: f64,
-    beta: f64,
-}
-
-#[derive(Default)]
-struct VerifyStats {
-    count: usize,
-    mae: f64,
-    rmse: f64,
-    max_abs_delta: i32,
-    mismatches_gt2: usize,
-    corr: f64,
-}
-
-struct XorShift64 {
-    state: u64,
-}
-
-impl XorShift64 {
-    fn new(seed: u64) -> Self {
-        let state = if seed == 0 { 0x9E3779B97F4A7C15 } else { seed };
-        Self { state }
-    }
-
-    fn next_u64(&mut self) -> u64 {
-        let mut x = self.state;
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        self.state = x;
-        x
-    }
-
-    fn next_f32(&mut self, low: f32, high: f32) -> f32 {
-        let unit = ((self.next_u64() >> 11) as f64) * (1.0 / ((1u64 << 53) as f64));
-        low + (high - low) * unit as f32
     }
 }
 
@@ -349,24 +316,6 @@ fn read_f32_le_file(path: &str, expected_count: usize) -> Result<Vec<f32>, Box<d
     Ok(out)
 }
 
-fn symmetric_scale_for_qmax(values: &[f32], qmax: i32) -> f32 {
-    let max_abs = values
-        .iter()
-        .fold(0.0f32, |acc, value| acc.max(value.abs()));
-    if max_abs < 1e-12 {
-        1.0
-    } else {
-        max_abs / qmax as f32
-    }
-}
-
-fn quantize_symmetric_i8(values: &[f32], scale: f32, qmax: i32) -> Vec<i8> {
-    values
-        .iter()
-        .map(|value| ((value / scale).round() as i32).clamp(-qmax, qmax) as i8)
-        .collect()
-}
-
 fn generate_stage_weights_f32(stage_index: usize, spec: StageSpec, seed: u64) -> Vec<f32> {
     let stage_mix = (stage_index as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15);
     let mut rng = XorShift64::new(seed ^ stage_mix);
@@ -444,7 +393,7 @@ fn build_prefill_input_f32(config: &Config) -> Result<(Vec<i8>, f32), Box<dyn Er
         out
     };
 
-    let input_scale = symmetric_scale_for_qmax(&input_f32, config.input_qmax);
+    let input_scale = symmetric_scale_for_qmax(&input_f32, config.input_qmax, 1e-12);
     let input_q = quantize_symmetric_i8(&input_f32, input_scale, config.input_qmax);
     Ok((input_q, input_scale))
 }
@@ -464,7 +413,7 @@ fn prepare_stage(
         }
         WeightSource::F32 => {
             let weights_f32 = load_or_generate_stage_weights_f32(config, stage_index, spec)?;
-            let scale = symmetric_scale_for_qmax(&weights_f32, config.weight_qmax);
+            let scale = symmetric_scale_for_qmax(&weights_f32, config.weight_qmax, 1e-12);
             let weights_q = quantize_symmetric_i8(&weights_f32, scale, config.weight_qmax);
             template.set_weights_from_slice(&weights_q)?;
             let source_label = if config.weights_dir.is_some() {
@@ -627,118 +576,6 @@ fn run_same_stage_baseline(
     Ok((current, started.elapsed().as_secs_f64() * 1000.0))
 }
 
-fn cpu_accumulator_reference(inputs_q: &[i8], weights_q: &[i8], seq_len: usize) -> Vec<i32> {
-    let mut out = vec![0i32; seq_len * D_MODEL];
-    for row in 0..seq_len {
-        let in_row = &inputs_q[row * D_MODEL..(row + 1) * D_MODEL];
-        let out_row = &mut out[row * D_MODEL..(row + 1) * D_MODEL];
-        for (k, &in_q) in in_row.iter().enumerate() {
-            let x = in_q as i32;
-            if x == 0 {
-                continue;
-            }
-            let w_row = &weights_q[k * D_MODEL..(k + 1) * D_MODEL];
-            for col in 0..D_MODEL {
-                out_row[col] += x * (w_row[col] as i32);
-            }
-        }
-    }
-    out
-}
-
-fn fit_affine_map(acc_i32: &[i32], tpu_q: &[i8]) -> Result<AffineMap, Box<dyn Error>> {
-    if acc_i32.len() != tpu_q.len() || acc_i32.is_empty() {
-        return Err("fit_affine_map expects equal non-empty slices".into());
-    }
-
-    let n = acc_i32.len() as f64;
-    let mut mean_x = 0.0f64;
-    let mut mean_y = 0.0f64;
-    for i in 0..acc_i32.len() {
-        mean_x += acc_i32[i] as f64;
-        mean_y += tpu_q[i] as f64;
-    }
-    mean_x /= n;
-    mean_y /= n;
-
-    let mut cov = 0.0f64;
-    let mut var_x = 0.0f64;
-    for i in 0..acc_i32.len() {
-        let dx = acc_i32[i] as f64 - mean_x;
-        let dy = tpu_q[i] as f64 - mean_y;
-        cov += dx * dy;
-        var_x += dx * dx;
-    }
-
-    let alpha = if var_x > 0.0 { cov / var_x } else { 0.0 };
-    let beta = mean_y - alpha * mean_x;
-    Ok(AffineMap { alpha, beta })
-}
-
-fn clamp_i8_from_f64(value: f64) -> i8 {
-    (value.round() as i32).clamp(i8::MIN as i32, i8::MAX as i32) as i8
-}
-
-fn verify_against_affine(acc_i32: &[i32], tpu_q: &[i8], map: AffineMap) -> VerifyStats {
-    if acc_i32.len() != tpu_q.len() || acc_i32.is_empty() {
-        return VerifyStats::default();
-    }
-
-    let n = acc_i32.len() as f64;
-    let mut abs_sum = 0.0f64;
-    let mut sq_sum = 0.0f64;
-    let mut max_abs_delta = 0i32;
-    let mut mismatches_gt2 = 0usize;
-
-    let mut mean_pred = 0.0f64;
-    let mut mean_tpu = 0.0f64;
-    for i in 0..acc_i32.len() {
-        let pred_q = clamp_i8_from_f64(map.alpha * acc_i32[i] as f64 + map.beta);
-        mean_pred += pred_q as f64;
-        mean_tpu += tpu_q[i] as f64;
-    }
-    mean_pred /= n;
-    mean_tpu /= n;
-
-    let mut cov = 0.0f64;
-    let mut var_pred = 0.0f64;
-    let mut var_tpu = 0.0f64;
-    for i in 0..acc_i32.len() {
-        let pred_q = clamp_i8_from_f64(map.alpha * acc_i32[i] as f64 + map.beta);
-        let delta = pred_q as i32 - tpu_q[i] as i32;
-        let abs_delta = delta.abs();
-        abs_sum += abs_delta as f64;
-        sq_sum += (delta * delta) as f64;
-        if abs_delta > max_abs_delta {
-            max_abs_delta = abs_delta;
-        }
-        if abs_delta > 2 {
-            mismatches_gt2 += 1;
-        }
-
-        let dp = pred_q as f64 - mean_pred;
-        let dt = tpu_q[i] as f64 - mean_tpu;
-        cov += dp * dt;
-        var_pred += dp * dp;
-        var_tpu += dt * dt;
-    }
-
-    let corr = if var_pred > 0.0 && var_tpu > 0.0 {
-        cov / (var_pred.sqrt() * var_tpu.sqrt())
-    } else {
-        0.0
-    };
-
-    VerifyStats {
-        count: acc_i32.len(),
-        mae: abs_sum / n,
-        rmse: (sq_sum / n).sqrt(),
-        max_abs_delta,
-        mismatches_gt2,
-        corr,
-    }
-}
-
 fn checksum_i64(values: &[i8]) -> i64 {
     values.iter().map(|value| *value as i64).sum()
 }
@@ -881,10 +718,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     if config.weight_source == WeightSource::F32 {
         let q_spec = STAGES[0];
         let q_weights_f32 = load_or_generate_stage_weights_f32(&config, 0, q_spec)?;
-        let q_weight_scale = symmetric_scale_for_qmax(&q_weights_f32, config.weight_qmax);
+        let q_weight_scale = symmetric_scale_for_qmax(&q_weights_f32, config.weight_qmax, 1e-12);
         let q_weights_q = quantize_symmetric_i8(&q_weights_f32, q_weight_scale, config.weight_qmax);
 
-        let acc_i32 = cpu_accumulator_reference(&input_rows, &q_weights_q, config.seq_len);
+        let acc_i32 = cpu_accumulator_reference_seq_dmodel(
+            &input_rows,
+            &q_weights_q,
+            config.seq_len,
+            D_MODEL,
+        );
         let cal_rows = config.verify_calibration_rows.min(config.seq_len);
         let cal_count = cal_rows * D_MODEL;
         let (acc_cal, acc_eval) = acc_i32.split_at(cal_count);
