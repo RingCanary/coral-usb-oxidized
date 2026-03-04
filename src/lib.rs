@@ -14,7 +14,7 @@ mod gemm;
 mod interpreter;
 mod param_pack;
 mod toolchain;
-mod usb_driver;
+mod usb;
 mod usb_ids;
 
 pub use crate::clip::{
@@ -61,7 +61,7 @@ pub use crate::toolchain::{
     compile_dense_template_with_uv, DenseTemplateCompileArtifacts, DenseTemplateCompileRequest,
     ToolchainError,
 };
-pub use crate::usb_driver::{
+pub use crate::usb::{
     CoralUsbDeviceInfo, DescriptorHeader, DescriptorTag, EdgeTpuUsbDriver, EventPacket,
     InterruptPacket, DEFAULT_DESCRIPTOR_CHUNK_SIZE, EP_BULK_IN, EP_BULK_OUT, EP_EVENT_IN,
     EP_INTERRUPT_IN,
