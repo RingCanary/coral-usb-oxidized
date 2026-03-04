@@ -3,6 +3,14 @@ use coral_usb_oxidized::{
     EdgeTPUDelegate, FunctionGemmaError, FunctionGemmaSafeTensorFile, LinearQuantConfig,
     PreparedDenseGemm,
 };
+#[path = "common/mod.rs"]
+mod common;
+
+use common::affine::fit_affine;
+use common::quant::{
+    cpu_accumulator_reference_batch, quantize_symmetric_i8, symmetric_scale_for_qmax,
+};
+use common::rng::build_calibration_input_q;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::env;
@@ -77,14 +85,6 @@ struct Config {
     lm_tile_out_dim: usize,
     lm_cache_capacity: usize,
     lm_shortlist_tiles: usize,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct AffineFit {
-    alpha: f64,
-    beta: f64,
-    corr: f64,
-    rmse: f64,
 }
 
 struct StageVerifyStats {
@@ -626,30 +626,6 @@ fn gqa_attention_single_step(
     Ok(out)
 }
 
-fn symmetric_scale_for_qmax(values: &[f32], qmax: i32) -> f32 {
-    let mut max_abs = 0.0f32;
-    for value in values {
-        let abs = value.abs();
-        if abs > max_abs {
-            max_abs = abs;
-        }
-    }
-    if max_abs > 0.0 {
-        max_abs / qmax as f32
-    } else {
-        1.0
-    }
-}
-
-fn quantize_symmetric_i8(values: &[f32], scale: f32, qmax: i32) -> Vec<i8> {
-    let mut out = Vec::with_capacity(values.len());
-    for value in values {
-        let q = (*value / scale).round() as i32;
-        out.push(q.clamp(-qmax, qmax) as i8);
-    }
-    out
-}
-
 struct QuantizedWeights {
     weights_q_row_major: Vec<i8>,
     weight_scale: WeightScale,
@@ -729,103 +705,6 @@ fn quantize_weights(
     }
 }
 
-fn build_calibration_input_q(rows: usize, input_dim: usize, qmax: i32, seed: u64) -> Vec<i8> {
-    let mut out = vec![0i8; rows * input_dim];
-    let mut state = if seed == 0 { 0x9E3779B97F4A7C15 } else { seed };
-    for value in &mut out {
-        state ^= state << 13;
-        state ^= state >> 7;
-        state ^= state << 17;
-        let sample = ((state >> 8) as i32 % (2 * qmax + 1)) - qmax;
-        *value = sample as i8;
-    }
-    out
-}
-
-fn cpu_accumulator_reference_batch(
-    inputs_q: &[i8],
-    weights_row_major_q: &[i8],
-    input_dim: usize,
-    output_dim: usize,
-) -> Result<Vec<i32>, Box<dyn Error>> {
-    if inputs_q.len() % input_dim != 0 {
-        return Err("inputs_q length mismatch for calibration".into());
-    }
-    if weights_row_major_q.len() != input_dim * output_dim {
-        return Err("weights length mismatch for calibration".into());
-    }
-
-    let rows = inputs_q.len() / input_dim;
-    let mut out = vec![0i32; rows * output_dim];
-
-    for row in 0..rows {
-        let x_row = &inputs_q[row * input_dim..(row + 1) * input_dim];
-        let y_row = &mut out[row * output_dim..(row + 1) * output_dim];
-        for in_idx in 0..input_dim {
-            let x = x_row[in_idx] as i32;
-            if x == 0 {
-                continue;
-            }
-            let w_row = &weights_row_major_q[in_idx * output_dim..(in_idx + 1) * output_dim];
-            for out_idx in 0..output_dim {
-                y_row[out_idx] += x * w_row[out_idx] as i32;
-            }
-        }
-    }
-
-    Ok(out)
-}
-
-fn fit_affine(cpu_acc: &[i32], tpu_q: &[i8]) -> Result<AffineFit, Box<dyn Error>> {
-    if cpu_acc.len() != tpu_q.len() || cpu_acc.is_empty() {
-        return Err("fit_affine expects equal non-empty slices".into());
-    }
-
-    let n = cpu_acc.len() as f64;
-    let mut sum_x = 0.0f64;
-    let mut sum_y = 0.0f64;
-    for idx in 0..cpu_acc.len() {
-        sum_x += cpu_acc[idx] as f64;
-        sum_y += tpu_q[idx] as f64;
-    }
-
-    let mean_x = sum_x / n;
-    let mean_y = sum_y / n;
-
-    let mut var_x = 0.0f64;
-    let mut var_y = 0.0f64;
-    let mut cov = 0.0f64;
-    for idx in 0..cpu_acc.len() {
-        let dx = cpu_acc[idx] as f64 - mean_x;
-        let dy = tpu_q[idx] as f64 - mean_y;
-        var_x += dx * dx;
-        var_y += dy * dy;
-        cov += dx * dy;
-    }
-
-    let alpha = if var_x > 0.0 { cov / var_x } else { 0.0 };
-    let beta = mean_y - alpha * mean_x;
-    let corr = if var_x > 0.0 && var_y > 0.0 {
-        cov / (var_x.sqrt() * var_y.sqrt())
-    } else {
-        0.0
-    };
-
-    let mut sum_sq = 0.0f64;
-    for idx in 0..cpu_acc.len() {
-        let pred = alpha * cpu_acc[idx] as f64 + beta;
-        let err = tpu_q[idx] as f64 - pred;
-        sum_sq += err * err;
-    }
-
-    Ok(AffineFit {
-        alpha,
-        beta,
-        corr,
-        rmse: (sum_sq / n).sqrt(),
-    })
-}
-
 fn cpu_linear_f32(
     input_f32: &[f32],
     weights_out_by_in_f32: &[f32],
@@ -901,7 +780,7 @@ impl CoralLinearStage {
             )
             .into());
         }
-        let input_scale = symmetric_scale_for_qmax(input_f32, act_qmax);
+        let input_scale = symmetric_scale_for_qmax(input_f32, act_qmax, 0.0);
         let input_q = quantize_symmetric_i8(input_f32, input_scale, act_qmax);
         self.forward_from_quantized(&input_q, input_scale)
     }
@@ -1342,7 +1221,7 @@ impl CoralTiledLmHead {
             return Err("hidden length mismatch in LM head".into());
         }
 
-        let input_scale = symmetric_scale_for_qmax(hidden_state, act_qmax);
+        let input_scale = symmetric_scale_for_qmax(hidden_state, act_qmax, 0.0);
         let input_q = quantize_symmetric_i8(hidden_state, input_scale, act_qmax);
 
         let mut best: Vec<(usize, f32)> = Vec::with_capacity(topk);
@@ -1555,7 +1434,7 @@ impl<'a> CoralLazyLmHead<'a> {
         if hidden_state.len() != self.hidden_dim {
             return Err("hidden length mismatch in LM head".into());
         }
-        let input_scale = symmetric_scale_for_qmax(hidden_state, act_qmax);
+        let input_scale = symmetric_scale_for_qmax(hidden_state, act_qmax, 0.0);
         let input_q = quantize_symmetric_i8(hidden_state, input_scale, act_qmax);
 
         let candidate_tiles = self.candidate_tiles(input_token);
