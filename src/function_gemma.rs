@@ -1,6 +1,10 @@
-use half::{bf16, f16};
 use memmap2::{Mmap, MmapOptions};
 use safetensors::{Dtype, SafeTensors};
+
+use crate::safetensor_utils::{
+    decode_to_f32, dtype_elem_size, ensure_exact_shape, ensure_rank, invalid_multiple_of_error,
+    tensor_from_parsed,
+};
 use std::fmt;
 use std::fs::File;
 use std::path::Path;
@@ -232,63 +236,61 @@ impl FunctionGemmaSafeTensorFile {
         Ok(parsed.names().into_iter().map(str::to_string).collect())
     }
 
-    fn tensor_from_parsed<'data>(
-        parsed: &SafeTensors<'data>,
-        name: &str,
-    ) -> Result<safetensors::tensor::TensorView<'data>, FunctionGemmaError> {
-        parsed
-            .tensor(name)
-            .map_err(|_| FunctionGemmaError::MissingTensor(name.to_string()))
-    }
-
     pub fn tensor_f32(&self, name: &str) -> Result<Vec<f32>, FunctionGemmaError> {
         let parsed = self.parsed()?;
-        let tensor = Self::tensor_from_parsed(&parsed, name)?;
+        let tensor = tensor_from_parsed(&parsed, name, FunctionGemmaError::MissingTensor)?;
         let data = tensor.data();
         match tensor.dtype() {
             Dtype::F32 => {
                 if data.len() % 4 != 0 {
-                    return Err(FunctionGemmaError::InvalidModel(format!(
-                        "f32 tensor {} has non-multiple-of-4 byte length {}",
+                    return Err(FunctionGemmaError::InvalidModel(invalid_multiple_of_error(
+                        "f32",
                         name,
-                        data.len()
+                        data.len(),
+                        4,
                     )));
                 }
-                let mut out = Vec::with_capacity(data.len() / 4);
-                for chunk in data.chunks_exact(4) {
-                    out.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
-                }
-                Ok(out)
+                decode_to_f32(
+                    data,
+                    Dtype::F32,
+                    data.len() / 4,
+                    FunctionGemmaError::InvalidModel,
+                    "tensor",
+                )
             }
             Dtype::F16 => {
                 if data.len() % 2 != 0 {
-                    return Err(FunctionGemmaError::InvalidModel(format!(
-                        "f16 tensor {} has non-multiple-of-2 byte length {}",
+                    return Err(FunctionGemmaError::InvalidModel(invalid_multiple_of_error(
+                        "f16",
                         name,
-                        data.len()
+                        data.len(),
+                        2,
                     )));
                 }
-                let mut out = Vec::with_capacity(data.len() / 2);
-                for chunk in data.chunks_exact(2) {
-                    let bits = u16::from_le_bytes([chunk[0], chunk[1]]);
-                    out.push(f16::from_bits(bits).to_f32());
-                }
-                Ok(out)
+                decode_to_f32(
+                    data,
+                    Dtype::F16,
+                    data.len() / 2,
+                    FunctionGemmaError::InvalidModel,
+                    "tensor",
+                )
             }
             Dtype::BF16 => {
                 if data.len() % 2 != 0 {
-                    return Err(FunctionGemmaError::InvalidModel(format!(
-                        "bf16 tensor {} has non-multiple-of-2 byte length {}",
+                    return Err(FunctionGemmaError::InvalidModel(invalid_multiple_of_error(
+                        "bf16",
                         name,
-                        data.len()
+                        data.len(),
+                        2,
                     )));
                 }
-                let mut out = Vec::with_capacity(data.len() / 2);
-                for chunk in data.chunks_exact(2) {
-                    let bits = u16::from_le_bytes([chunk[0], chunk[1]]);
-                    out.push(bf16::from_bits(bits).to_f32());
-                }
-                Ok(out)
+                decode_to_f32(
+                    data,
+                    Dtype::BF16,
+                    data.len() / 2,
+                    FunctionGemmaError::InvalidModel,
+                    "tensor",
+                )
             }
             other => Err(FunctionGemmaError::DtypeMismatch {
                 name: name.to_string(),
@@ -304,21 +306,22 @@ impl FunctionGemmaSafeTensorFile {
     ) -> Result<FunctionGemmaDims, FunctionGemmaError> {
         let names = FunctionGemmaLayerLinearNames::for_layer(layer_idx);
         let parsed = self.parsed()?;
-        let q = Self::tensor_from_parsed(&parsed, &names.q_proj)?;
-        let k = Self::tensor_from_parsed(&parsed, &names.k_proj)?;
-        let v = Self::tensor_from_parsed(&parsed, &names.v_proj)?;
-        let o = Self::tensor_from_parsed(&parsed, &names.o_proj)?;
-        let gate = Self::tensor_from_parsed(&parsed, &names.gate_proj)?;
-        let up = Self::tensor_from_parsed(&parsed, &names.up_proj)?;
-        let down = Self::tensor_from_parsed(&parsed, &names.down_proj)?;
+        let q = tensor_from_parsed(&parsed, &names.q_proj, FunctionGemmaError::MissingTensor)?;
+        let k = tensor_from_parsed(&parsed, &names.k_proj, FunctionGemmaError::MissingTensor)?;
+        let v = tensor_from_parsed(&parsed, &names.v_proj, FunctionGemmaError::MissingTensor)?;
+        let o = tensor_from_parsed(&parsed, &names.o_proj, FunctionGemmaError::MissingTensor)?;
+        let gate =
+            tensor_from_parsed(&parsed, &names.gate_proj, FunctionGemmaError::MissingTensor)?;
+        let up = tensor_from_parsed(&parsed, &names.up_proj, FunctionGemmaError::MissingTensor)?;
+        let down =
+            tensor_from_parsed(&parsed, &names.down_proj, FunctionGemmaError::MissingTensor)?;
 
-        if q.shape().len() != 2 {
-            return Err(FunctionGemmaError::InvalidModel(format!(
-                "expected {} to be rank-2, got {:?}",
-                names.q_proj,
-                q.shape()
-            )));
-        }
+        ensure_rank(
+            q.shape(),
+            2,
+            FunctionGemmaError::InvalidModel,
+            &names.q_proj,
+        )?;
         let q_out = q.shape()[0];
         let hidden = q.shape()[1];
         let kv_out = expect_shape_2d(k.shape(), &names.k_proj, hidden)?;
@@ -398,25 +401,33 @@ impl FunctionGemmaSafeTensorFile {
 
     pub fn embedding_dims(&self) -> Result<(usize, usize), FunctionGemmaError> {
         let parsed = self.parsed()?;
-        let tensor = Self::tensor_from_parsed(&parsed, "model.embed_tokens.weight")?;
-        if tensor.shape().len() != 2 {
-            return Err(FunctionGemmaError::InvalidModel(format!(
-                "expected model.embed_tokens.weight to be rank-2, got {:?}",
-                tensor.shape()
-            )));
-        }
+        let tensor = tensor_from_parsed(
+            &parsed,
+            "model.embed_tokens.weight",
+            FunctionGemmaError::MissingTensor,
+        )?;
+        ensure_rank(
+            tensor.shape(),
+            2,
+            FunctionGemmaError::InvalidModel,
+            "model.embed_tokens.weight",
+        )?;
         Ok((tensor.shape()[0], tensor.shape()[1]))
     }
 
     pub fn token_embedding_row_f32(&self, token_id: usize) -> Result<Vec<f32>, FunctionGemmaError> {
         let parsed = self.parsed()?;
-        let tensor = Self::tensor_from_parsed(&parsed, "model.embed_tokens.weight")?;
-        if tensor.shape().len() != 2 {
-            return Err(FunctionGemmaError::InvalidModel(format!(
-                "expected model.embed_tokens.weight to be rank-2, got {:?}",
-                tensor.shape()
-            )));
-        }
+        let tensor = tensor_from_parsed(
+            &parsed,
+            "model.embed_tokens.weight",
+            FunctionGemmaError::MissingTensor,
+        )?;
+        ensure_rank(
+            tensor.shape(),
+            2,
+            FunctionGemmaError::InvalidModel,
+            "model.embed_tokens.weight",
+        )?;
         let vocab = tensor.shape()[0];
         let hidden = tensor.shape()[1];
         if token_id >= vocab {
@@ -426,7 +437,12 @@ impl FunctionGemmaSafeTensorFile {
             )));
         }
         let stride = hidden
-            .checked_mul(dtype_elem_size(tensor.dtype())?)
+            .checked_mul(dtype_elem_size(tensor.dtype()).ok_or_else(|| {
+                FunctionGemmaError::InvalidModel(format!(
+                    "unsupported embedding dtype: {:?}",
+                    tensor.dtype()
+                ))
+            })?)
             .ok_or_else(|| {
                 FunctionGemmaError::InvalidModel("embedding stride overflow".to_string())
             })?;
@@ -456,13 +472,17 @@ impl FunctionGemmaSafeTensorFile {
         }
 
         let parsed = self.parsed()?;
-        let tensor = Self::tensor_from_parsed(&parsed, "model.embed_tokens.weight")?;
-        if tensor.shape().len() != 2 {
-            return Err(FunctionGemmaError::InvalidModel(format!(
-                "expected model.embed_tokens.weight to be rank-2, got {:?}",
-                tensor.shape()
-            )));
-        }
+        let tensor = tensor_from_parsed(
+            &parsed,
+            "model.embed_tokens.weight",
+            FunctionGemmaError::MissingTensor,
+        )?;
+        ensure_rank(
+            tensor.shape(),
+            2,
+            FunctionGemmaError::InvalidModel,
+            "model.embed_tokens.weight",
+        )?;
         let vocab = tensor.shape()[0];
         let hidden = tensor.shape()[1];
         if token_start >= vocab {
@@ -482,7 +502,12 @@ impl FunctionGemmaSafeTensorFile {
         }
 
         let stride = hidden
-            .checked_mul(dtype_elem_size(tensor.dtype())?)
+            .checked_mul(dtype_elem_size(tensor.dtype()).ok_or_else(|| {
+                FunctionGemmaError::InvalidModel(format!(
+                    "unsupported embedding dtype: {:?}",
+                    tensor.dtype()
+                ))
+            })?)
             .ok_or_else(|| {
                 FunctionGemmaError::InvalidModel("embedding stride overflow".to_string())
             })?;
@@ -516,13 +541,17 @@ impl FunctionGemmaSafeTensorFile {
         }
 
         let parsed = self.parsed()?;
-        let tensor = Self::tensor_from_parsed(&parsed, "model.embed_tokens.weight")?;
-        if tensor.shape().len() != 2 {
-            return Err(FunctionGemmaError::InvalidModel(format!(
-                "expected model.embed_tokens.weight to be rank-2, got {:?}",
-                tensor.shape()
-            )));
-        }
+        let tensor = tensor_from_parsed(
+            &parsed,
+            "model.embed_tokens.weight",
+            FunctionGemmaError::MissingTensor,
+        )?;
+        ensure_rank(
+            tensor.shape(),
+            2,
+            FunctionGemmaError::InvalidModel,
+            "model.embed_tokens.weight",
+        )?;
         let vocab = tensor.shape()[0];
         let hidden = tensor.shape()[1];
         if hidden_state.len() != hidden {
@@ -533,7 +562,12 @@ impl FunctionGemmaSafeTensorFile {
             )));
         }
 
-        let elem_size = dtype_elem_size(tensor.dtype())?;
+        let elem_size = dtype_elem_size(tensor.dtype()).ok_or_else(|| {
+            FunctionGemmaError::InvalidModel(format!(
+                "unsupported embedding dtype: {:?}",
+                tensor.dtype()
+            ))
+        })?;
         let row_stride = hidden
             .checked_mul(elem_size)
             .ok_or_else(|| FunctionGemmaError::InvalidModel("row stride overflow".to_string()))?;
@@ -566,12 +600,7 @@ fn expect_shape_2d(
     name: &str,
     expected_dim1: usize,
 ) -> Result<usize, FunctionGemmaError> {
-    if actual.len() != 2 {
-        return Err(FunctionGemmaError::InvalidModel(format!(
-            "expected {} to be rank-2, got {:?}",
-            name, actual
-        )));
-    }
+    ensure_rank(actual, 2, FunctionGemmaError::InvalidModel, name)?;
     if actual[1] != expected_dim1 {
         return Err(FunctionGemmaError::ShapeMismatch {
             name: name.to_string(),
@@ -587,25 +616,13 @@ fn expect_exact_shape(
     expected: &[usize],
     name: &str,
 ) -> Result<(), FunctionGemmaError> {
-    if actual != expected {
-        return Err(FunctionGemmaError::ShapeMismatch {
-            name: name.to_string(),
-            expected: expected.to_vec(),
-            actual: actual.to_vec(),
-        });
-    }
-    Ok(())
-}
-
-fn dtype_elem_size(dtype: Dtype) -> Result<usize, FunctionGemmaError> {
-    match dtype {
-        Dtype::F32 => Ok(4),
-        Dtype::F16 | Dtype::BF16 => Ok(2),
-        other => Err(FunctionGemmaError::InvalidModel(format!(
-            "unsupported embedding dtype: {:?}",
-            other
-        ))),
-    }
+    ensure_exact_shape(actual, expected, name, |name, expected, actual| {
+        FunctionGemmaError::ShapeMismatch {
+            name,
+            expected,
+            actual,
+        }
+    })
 }
 
 fn decode_row_to_f32(
@@ -621,54 +638,13 @@ fn decode_slice_to_f32(
     dtype: Dtype,
     expected_values: usize,
 ) -> Result<Vec<f32>, FunctionGemmaError> {
-    let mut out = Vec::with_capacity(expected_values);
-    match dtype {
-        Dtype::F32 => {
-            if data.len() != expected_values * 4 {
-                return Err(FunctionGemmaError::InvalidModel(format!(
-                    "f32 row byte length mismatch: expected {}, got {}",
-                    expected_values * 4,
-                    data.len()
-                )));
-            }
-            for chunk in data.chunks_exact(4) {
-                out.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
-            }
-        }
-        Dtype::F16 => {
-            if data.len() != expected_values * 2 {
-                return Err(FunctionGemmaError::InvalidModel(format!(
-                    "f16 row byte length mismatch: expected {}, got {}",
-                    expected_values * 2,
-                    data.len()
-                )));
-            }
-            for chunk in data.chunks_exact(2) {
-                let bits = u16::from_le_bytes([chunk[0], chunk[1]]);
-                out.push(f16::from_bits(bits).to_f32());
-            }
-        }
-        Dtype::BF16 => {
-            if data.len() != expected_values * 2 {
-                return Err(FunctionGemmaError::InvalidModel(format!(
-                    "bf16 row byte length mismatch: expected {}, got {}",
-                    expected_values * 2,
-                    data.len()
-                )));
-            }
-            for chunk in data.chunks_exact(2) {
-                let bits = u16::from_le_bytes([chunk[0], chunk[1]]);
-                out.push(bf16::from_bits(bits).to_f32());
-            }
-        }
-        other => {
-            return Err(FunctionGemmaError::InvalidModel(format!(
-                "unsupported row dtype: {:?}",
-                other
-            )));
-        }
-    }
-    Ok(out)
+    decode_to_f32(
+        data,
+        dtype,
+        expected_values,
+        FunctionGemmaError::InvalidModel,
+        "row",
+    )
 }
 
 fn dot_decoded_row(
@@ -677,57 +653,12 @@ fn dot_decoded_row(
     dtype: Dtype,
     hidden: usize,
 ) -> Result<f32, FunctionGemmaError> {
-    let mut sum = 0.0f32;
-    match dtype {
-        Dtype::F32 => {
-            if row_bytes.len() != hidden * 4 {
-                return Err(FunctionGemmaError::InvalidModel(format!(
-                    "f32 row byte length mismatch: expected {}, got {}",
-                    hidden * 4,
-                    row_bytes.len()
-                )));
-            }
-            for (idx, chunk) in row_bytes.chunks_exact(4).enumerate() {
-                let w = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                sum += hidden_state[idx] * w;
-            }
-        }
-        Dtype::F16 => {
-            if row_bytes.len() != hidden * 2 {
-                return Err(FunctionGemmaError::InvalidModel(format!(
-                    "f16 row byte length mismatch: expected {}, got {}",
-                    hidden * 2,
-                    row_bytes.len()
-                )));
-            }
-            for (idx, chunk) in row_bytes.chunks_exact(2).enumerate() {
-                let bits = u16::from_le_bytes([chunk[0], chunk[1]]);
-                let w = f16::from_bits(bits).to_f32();
-                sum += hidden_state[idx] * w;
-            }
-        }
-        Dtype::BF16 => {
-            if row_bytes.len() != hidden * 2 {
-                return Err(FunctionGemmaError::InvalidModel(format!(
-                    "bf16 row byte length mismatch: expected {}, got {}",
-                    hidden * 2,
-                    row_bytes.len()
-                )));
-            }
-            for (idx, chunk) in row_bytes.chunks_exact(2).enumerate() {
-                let bits = u16::from_le_bytes([chunk[0], chunk[1]]);
-                let w = bf16::from_bits(bits).to_f32();
-                sum += hidden_state[idx] * w;
-            }
-        }
-        other => {
-            return Err(FunctionGemmaError::InvalidModel(format!(
-                "unsupported row dtype: {:?}",
-                other
-            )));
-        }
-    }
-    Ok(sum)
+    let decoded = decode_slice_to_f32(row_bytes, dtype, hidden)?;
+    Ok(hidden_state
+        .iter()
+        .zip(decoded.iter())
+        .map(|(h, w)| h * w)
+        .sum())
 }
 
 fn push_topk(best: &mut Vec<(usize, f32)>, candidate: (usize, f32), topk: usize) {

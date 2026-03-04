@@ -13,6 +13,7 @@ mod gemm;
 #[cfg(feature = "legacy-runtime")]
 mod interpreter;
 mod param_pack;
+mod safetensor_utils;
 mod toolchain;
 mod usb_driver;
 mod usb_ids;

@@ -1,4 +1,8 @@
 use safetensors::{Dtype, SafeTensors};
+
+use crate::safetensor_utils::{
+    decode_to_f32, ensure_dtype, ensure_exact_shape, invalid_multiple_of_error, tensor_from_parsed,
+};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt;
@@ -256,9 +260,7 @@ impl ClipSafeTensorFile {
 
     pub fn tensor_info(&self, name: &str) -> Result<ClipTensorInfo, ClipError> {
         let parsed = self.parsed()?;
-        let tensor = parsed
-            .tensor(name)
-            .map_err(|_| ClipError::MissingTensor(name.to_string()))?;
+        let tensor = tensor_from_parsed(&parsed, name, ClipError::MissingTensor)?;
         Ok(ClipTensorInfo {
             name: name.to_string(),
             dtype: tensor.dtype(),
@@ -271,9 +273,7 @@ impl ClipSafeTensorFile {
         let parsed = self.parsed()?;
         let mut infos = Vec::with_capacity(parsed.names().len());
         for name in parsed.names() {
-            let tensor = parsed
-                .tensor(name)
-                .map_err(|_| ClipError::MissingTensor(name.to_string()))?;
+            let tensor = tensor_from_parsed(&parsed, name, ClipError::MissingTensor)?;
             infos.push(ClipTensorInfo {
                 name: name.to_string(),
                 dtype: tensor.dtype(),
@@ -287,31 +287,35 @@ impl ClipSafeTensorFile {
 
     pub fn tensor_f32(&self, name: &str) -> Result<Vec<f32>, ClipError> {
         let parsed = self.parsed()?;
-        let tensor = parsed
-            .tensor(name)
-            .map_err(|_| ClipError::MissingTensor(name.to_string()))?;
-        if tensor.dtype() != Dtype::F32 {
-            return Err(ClipError::DtypeMismatch {
-                name: name.to_string(),
-                expected: Dtype::F32,
-                actual: tensor.dtype(),
-            });
-        }
+        let tensor = tensor_from_parsed(&parsed, name, ClipError::MissingTensor)?;
+        ensure_dtype(
+            name,
+            tensor.dtype(),
+            Dtype::F32,
+            |name, expected, actual| ClipError::DtypeMismatch {
+                name,
+                expected,
+                actual,
+            },
+        )?;
 
         let data = tensor.data();
         if data.len() % 4 != 0 {
-            return Err(ClipError::InvalidModel(format!(
-                "f32 tensor {} has non-multiple-of-4 byte length {}",
+            return Err(ClipError::InvalidModel(invalid_multiple_of_error(
+                "f32",
                 name,
-                data.len()
+                data.len(),
+                4,
             )));
         }
 
-        let mut out = Vec::with_capacity(data.len() / 4);
-        for chunk in data.chunks_exact(4) {
-            out.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
-        }
-        Ok(out)
+        decode_to_f32(
+            data,
+            Dtype::F32,
+            data.len() / 4,
+            ClipError::InvalidModel,
+            "tensor",
+        )
     }
 
     pub fn discover_clip_vit_encoder_layers(&self) -> Result<Vec<usize>, ClipError> {
@@ -355,20 +359,26 @@ impl ClipSafeTensorFile {
 
         for (name, expected_shape) in expected {
             let info = self.tensor_info(name)?;
-            if info.dtype != Dtype::F32 {
-                return Err(ClipError::DtypeMismatch {
-                    name: info.name,
-                    expected: Dtype::F32,
-                    actual: info.dtype,
-                });
-            }
-            if info.shape != expected_shape {
-                return Err(ClipError::ShapeMismatch {
-                    name: info.name,
-                    expected: expected_shape,
-                    actual: info.shape,
-                });
-            }
+            ensure_dtype(
+                &info.name,
+                info.dtype,
+                Dtype::F32,
+                |name, expected, actual| ClipError::DtypeMismatch {
+                    name,
+                    expected,
+                    actual,
+                },
+            )?;
+            ensure_exact_shape(
+                &info.shape,
+                &expected_shape,
+                &info.name,
+                |name, expected, actual| ClipError::ShapeMismatch {
+                    name,
+                    expected,
+                    actual,
+                },
+            )?;
         }
 
         Ok(names)
