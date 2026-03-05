@@ -24,3 +24,87 @@ cc = "1.2.16"
 [features]
 default = []
 legacy-runtime = []
+
+[[example]]
+name = "basic_usage"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "cpu_vs_edgetpu_mvp"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "delegate_usage"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "gemm_csr_perturb_probe"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "gemm_int8"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "gemm_int8_bundled"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "gemm_int8_dynamic"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "gemm_tiled_rows"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "gemm_weight_load_verify"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "inference_benchmark"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "inference_dump"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "simple_delegate"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "tflite_test"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "verify_device"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "clip_vit_block_tpu_pipeline"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "clip_vit_full_forward"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "clip_vit_layer_tpu_probe"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "function_gemma_decode_loop"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "function_gemma_layer_tpu_probe"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "tflite_standard_example"
+required-features = ["legacy-runtime"]
+
+[[example]]
+name = "transformer_linear_block"
+required-features = ["legacy-runtime"]
