@@ -124,6 +124,21 @@ Targeted refinement then sharpened those critical regions further:
 
 So the next useful recursion target is no longer “EO in general”, but these much smaller transport-critical subwindows.
 
+Rule-level refinement inside only the compact fatal subwindows then sharpened the boundary one step further:
+- run:
+  - `traces/analysis/m5-eo-rule-refine-probe-20260306T122419Z/`
+- strongest shared result:
+  - removing EO offset `338` is individually transport-fatal in all three studied families/classes (`f7056`, `f8976`, `f9872`)
+- strongest family-specific compact fatal offsets:
+  - `f7056`: `338`, `5658`
+  - `f8976`: `338`, `7194`
+  - `f9872`: `338`, `1357`, `1359`, `1415`
+- nearby bytes often separate cleanly into neutral or semantic-only roles, e.g.:
+  - `340` is removable without hash drift in all three studied families
+  - `f7056:5657`, `f8976:{503,504,7193,7253}`, `f9872:1394` are transport-safe but semantic
+
+This does **not** yet produce a generator, but it tightens the residual dependency from broad EO windows to a small set of individually critical bytes plus still-dense fully-critical blocks.
+
 ## 7) Safe-core rule-count variance
 
 Rule-count differences (`14` vs `36/60/69`) are real and should not be interpreted as equal confidence.

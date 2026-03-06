@@ -24,12 +24,14 @@
 - [x] M7: EO oracle ablation on `7056/8976/9872` (8/16-way; representative 32-way on `7056/9872`) to separate transport-critical vs transport-safe blocks.
 - [x] M7: Reverse-direction cross-check of candidate neutral EO windows (`f7056`,`f9872`) — most are context-local; only `f9872:2862..3206` survived.
 - [x] M7: Targeted refinement of transport-critical EO windows (`7056/8976/9872`) to compact fatal subwindows + dense fully-critical blocks.
+- [x] M7: Rule-level refinement of compact fatal EO windows; strongest shared fatal offset is `338`.
 - [x] M7: Decide path:
-  - [ ] Parametric instruction generator (not selected yet)
-  - [x] Minimal instruction-template path (selected now; EO remains opaque/toxic)
+  - [ ] Parametric instruction generator (not selected)
+  - [x] Minimal instruction-template path (selected; EO target-state remains unsolved for unseen dims)
 - [x] M7 Exit: residual compiler-dependency report written.
+- [x] Phase 2 Dense Exit: closeout written; Dense boundary now stated precisely.
 
-- [ ] M8: Start Conv2D family RE only after M5-M7 stabilize for Dense.
+- [ ] Next phase: start Conv2D family RE only after Dense closeout (deferred, separate scope).
 
 ## Execution guardrails
 - [x] Always run `--check-profile` before DUT replay.
