@@ -96,8 +96,19 @@ Follow-up DUT ablations on non-degenerate cross-dim oracle EO patchsets:
 What this adds:
 - EO oracle bytes are not uniformly opaque; removable blocks exist.
 - `7056` and `8976` continue to show the same topology class under finer refinement: early prefix + tail-critical structure, with middle transport-safe semantic regions.
-- Representative 1/32 refinement for `7056` (`traces/analysis/m5-eo-oracle-group-probe-20260306T112056Z/`) exposed multiple hash-neutral removable windows (`1208..1448`, `4258..4476`, `5137..5204`).
-- `9872` remains a distinct topology class: stale EO is transport-safe but wrong-hash, and 1/32 refinement exposes both a transport-critical prefix and several hash-neutral removable windows (`2862..3548`, `5090..5660`).
+- Representative 1/32 refinement for `7056` (`traces/analysis/m5-eo-oracle-group-probe-20260306T112056Z/`) exposed multiple *candidate* hash-neutral removable windows (`1208..1448`, `4258..4476`, `5137..5204`).
+- `9872` remains a distinct topology class: stale EO is transport-safe but wrong-hash, and 1/32 refinement exposes both a transport-critical prefix and several *candidate* hash-neutral removable windows (`2862..3548`, `5090..5660`).
+
+Reverse-direction cross-check then tightened the interpretation:
+- doc:
+  - `docs/phase2_dense_eo_neutral_window_crosscheck_2026-03-06.md`
+- run:
+  - `traces/analysis/m5-eo-neutral-window-crosscheck-20260306T114730Z/`
+- result:
+  - `f7056`: none of the forward candidate windows remained reverse-direction neutral
+  - `f9872`: only `2862..3206` survived reverse-direction neutral-window validation
+
+So most discovered “neutral windows” are currently best treated as **context-local**, not yet family-level neutral invariants.
 
 This is still not a generator, but it materially narrows where deeper EO minimization should focus.
 

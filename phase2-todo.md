@@ -22,6 +22,7 @@
 
 - [x] M7: Quantify derivable vs opaque instruction bytes.
 - [x] M7: EO oracle ablation on `7056/8976/9872` (8/16-way; representative 32-way on `7056/9872`) to separate transport-critical vs transport-safe blocks.
+- [x] M7: Reverse-direction cross-check of candidate neutral EO windows (`f7056`,`f9872`) — most are context-local; only `f9872:2862..3206` survived.
 - [x] M7: Decide path:
   - [ ] Parametric instruction generator (not selected yet)
   - [x] Minimal instruction-template path (selected now; EO remains opaque/toxic)

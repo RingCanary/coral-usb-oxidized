@@ -183,6 +183,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `scripts/m5_build_family_patchspecs.sh` (Phase-2 M5 helper: build strict safe/discrete patchspec artifacts for recurrent dense families)
 - `scripts/m5_crossdim_oracle_matrix.sh` (Phase-2 M5.5 helper: family-wide same-product transpose cross-dim oracle matrix on Pi)
 - `scripts/m5_eo_oracle_group_probe.sh` (Phase-2 follow-up helper: coarse EO oracle block ablation on Pi)
+- `scripts/m5_eo_neutral_window_crosscheck.sh` (Phase-2 follow-up helper: reverse-direction validation of candidate EO neutral windows)
 - `scripts/m6_instruction_axis_probe.sh` (Phase-2 M6 helper: quant/activation/bias instruction-axis differential probe)
 - `tools/dense_layout_probe.py` (single-hot parameter-layout probe and offset mapping extractor)
 - `tools/conv_layout_probe.py` (single-hot Conv2D parameter-layout probe and offset candidate extraction)
@@ -215,6 +216,7 @@ Current reverse-engineering notes:
 - `docs/phase2_dense_m5_m7_2026-03-03.md`
 - `docs/phase2_dense_m55_crossdim_oracle_matrix_2026-03-06.md`
 - `docs/phase2_dense_eo_group_ablation_2026-03-06.md`
+- `docs/phase2_dense_eo_neutral_window_crosscheck_2026-03-06.md`
 - `docs/phase2_claims_audit_2026-03-03.md`
 - `docs/usb_invoke_scaling_by_model.md`
 - `docs/next_usbmon_capture_matrix.md`

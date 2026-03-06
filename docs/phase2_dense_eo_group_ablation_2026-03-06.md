@@ -114,9 +114,13 @@ Interpretation:
 2. Transport-critical EO bytes are **structured and partially localizable**.
 3. `f7056` and `f8976` continue to look like one topology class.
 4. `f9872` remains a distinct topology class with more semantic-only removals.
+5. The “hash-neutral windows” above are only **candidate** neutral windows until they survive a second-move cross-check.
+
+See the follow-up reverse-direction validation:
+- `docs/phase2_dense_eo_neutral_window_crosscheck_2026-03-06.md`
 
 ## Next step
 Refine only the transport-critical windows, not the whole EO stream:
 - `f7056/f8976`: recurse on the early prefix + tail-critical windows
 - `f9872`: recurse on the critical prefix only
-- preserve discovered hash-neutral windows as candidate removable EO subsets for later synthesis attempts
+- treat discovered hash-neutral windows as provisional until they survive multi-move validation
