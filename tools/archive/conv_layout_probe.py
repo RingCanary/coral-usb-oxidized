@@ -174,7 +174,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = _build_parser().parse_args()
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent
     out_dir = Path(args.out_dir) if args.out_dir else repo_root / "traces" / f"conv-layout-probe-{_utc_stamp()}"
     out_dir.mkdir(parents=True, exist_ok=True)
 

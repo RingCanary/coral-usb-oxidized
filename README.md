@@ -186,6 +186,7 @@ For protocol-level and syscall-level capture helpers, use:
 - `scripts/m5_eo_neutral_window_crosscheck.sh` (Phase-2 follow-up helper: reverse-direction validation of candidate EO neutral windows)
 - `scripts/m5_eo_window_refine_probe.sh` (Phase-2 follow-up helper: recurse only inside currently transport-critical EO windows)
 - `scripts/m5_eo_rule_refine_probe.sh` (Phase-2 follow-up helper: rule-level refinement inside compact fatal EO windows)
+- `scripts/phase3_conv2d_family_bootstrap.sh` (Phase-3 kickoff helper: small local 1x1 Conv2D family/size bootstrap scan)
 - `scripts/m6_instruction_axis_probe.sh` (Phase-2 M6 helper: quant/activation/bias instruction-axis differential probe)
 - `tools/dense_layout_probe.py` (single-hot parameter-layout probe and offset mapping extractor)
 - `tools/conv_layout_probe.py` (single-hot Conv2D parameter-layout probe and offset candidate extraction)
@@ -214,13 +215,15 @@ Detailed workflow and caveats are documented in `docs/usb_tracing.md`.
 Current reverse-engineering notes:
 
 - `WORKLOG.md`
-- `phase2-todo.md` (concise Phase-2 execution checklist)
+- `phase2-todo.md` (closed Dense Phase-2 checklist)
+- `phase3-conv2d-todo.md` (active Conv2D Phase-3 checklist)
 - `docs/phase2_dense_m5_m7_2026-03-03.md`
 - `docs/phase2_dense_m55_crossdim_oracle_matrix_2026-03-06.md`
 - `docs/phase2_dense_eo_group_ablation_2026-03-06.md`
 - `docs/phase2_dense_eo_neutral_window_crosscheck_2026-03-06.md`
 - `docs/phase2_dense_eo_transport_window_refine_2026-03-06.md`
 - `docs/phase2_dense_completion_2026-03-06.md`
+- `docs/phase3_conv2d_kickoff_2026-03-06.md`
 - `docs/phase2_claims_audit_2026-03-03.md`
 - `docs/usb_invoke_scaling_by_model.md`
 - `docs/next_usbmon_capture_matrix.md`
