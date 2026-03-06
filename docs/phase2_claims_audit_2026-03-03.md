@@ -94,9 +94,10 @@ Follow-up DUT ablations on non-degenerate cross-dim oracle EO patchsets:
   - `traces/analysis/m5-eo-oracle-group-probe-20260306T110121Z/`
 
 What this adds:
-- EO oracle bytes are not uniformly opaque; coarse removable blocks exist.
-- `7056` and `8976` show similar transport-critical topology at 1/8 granularity (`g00,g01,g02,g07` critical; middle blocks removable but semantically active).
-- `9872` is less transport-fragile and already transport-safe with stale EO, but still semantically wrong; its coarse critical set is smaller (`g00,g01`).
+- EO oracle bytes are not uniformly opaque; removable blocks exist.
+- `7056` and `8976` continue to show the same topology class under finer refinement: early prefix + tail-critical structure, with middle transport-safe semantic regions.
+- Representative 1/32 refinement for `7056` (`traces/analysis/m5-eo-oracle-group-probe-20260306T112056Z/`) exposed multiple hash-neutral removable windows (`1208..1448`, `4258..4476`, `5137..5204`).
+- `9872` remains a distinct topology class: stale EO is transport-safe but wrong-hash, and 1/32 refinement exposes both a transport-critical prefix and several hash-neutral removable windows (`2862..3548`, `5090..5660`).
 
 This is still not a generator, but it materially narrows where deeper EO minimization should focus.
 
