@@ -112,6 +112,18 @@ So most discovered “neutral windows” are currently best treated as **context
 
 This is still not a generator, but it materially narrows where deeper EO minimization should focus.
 
+Targeted refinement then sharpened those critical regions further:
+- doc:
+  - `docs/phase2_dense_eo_transport_window_refine_2026-03-06.md`
+- run:
+  - `traces/analysis/m5-eo-window-refine-probe-20260306T115811Z/`
+- notable outputs:
+  - `f7056`: compact fatal subwindows at `338..340` and `5518..5658`, plus dense fully-critical `902..1176`
+  - `f8976`: compact fatal subwindows at `338..504` and `7042..7253`, plus dense fully-critical `902..1784`
+  - `f9872`: compact fatal subwindows at `338..442` and `1336..1432`, plus dense fully-critical `872..1304`
+
+So the next useful recursion target is no longer “EO in general”, but these much smaller transport-critical subwindows.
+
 ## 7) Safe-core rule-count variance
 
 Rule-count differences (`14` vs `36/60/69`) are real and should not be interpreted as equal confidence.
