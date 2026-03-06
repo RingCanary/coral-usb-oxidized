@@ -21,6 +21,7 @@
 - [x] M6 Exit: semantic class map for one recurrent family (`8976/2352`, fixed `1792x1792`).
 
 - [x] M7: Quantify derivable vs opaque instruction bytes.
+- [x] M7: Coarse EO oracle ablation on `7056/8976/9872` (8-way grouping) to separate transport-critical vs transport-safe blocks.
 - [x] M7: Decide path:
   - [ ] Parametric instruction generator (not selected yet)
   - [x] Minimal instruction-template path (selected now; EO remains opaque/toxic)

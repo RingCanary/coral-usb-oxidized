@@ -83,7 +83,24 @@ Conclusion:
 - Cross-dim target-equivalent replay was **never** achieved without EO target bytes.
 - In these same-product transpose probes, EO exact target bytes were already sufficient; PC exact target bytes were not required for target-equivalent replay.
 
-## 6) Safe-core rule-count variance
+## 6) Coarse EO block structure is now evidenced
+
+Follow-up DUT ablations on non-degenerate cross-dim oracle EO patchsets:
+- `docs/phase2_dense_eo_group_ablation_2026-03-06.md`
+- runs:
+  - `traces/analysis/m5-eo-oracle-group-probe-20260306T105020Z/`
+  - `traces/analysis/m5-eo-oracle-group-probe-20260306T105435Z/`
+  - `traces/analysis/m5-eo-oracle-group-probe-20260306T105801Z/`
+  - `traces/analysis/m5-eo-oracle-group-probe-20260306T110121Z/`
+
+What this adds:
+- EO oracle bytes are not uniformly opaque; coarse removable blocks exist.
+- `7056` and `8976` show similar transport-critical topology at 1/8 granularity (`g00,g01,g02,g07` critical; middle blocks removable but semantically active).
+- `9872` is less transport-fragile and already transport-safe with stale EO, but still semantically wrong; its coarse critical set is smaller (`g00,g01`).
+
+This is still not a generator, but it materially narrows where deeper EO minimization should focus.
+
+## 7) Safe-core rule-count variance
 
 Rule-count differences (`14` vs `36/60/69`) are real and should not be interpreted as equal confidence.
 - `8976` safe subset is heavily DUT-vetted (historical toxic-byte isolation).
