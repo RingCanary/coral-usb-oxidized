@@ -50,27 +50,38 @@ Current status:
 
 ## 5) Cross-dim anchor deployment reality check (critical)
 
-Performed direct DUT experiment to test whether EO can stay anchored while changing dimension geometry.
+### Early single-family check
+Initial DUT experiment:
+- prep artifact:
+  - `traces/analysis/m5-crossdim-anchor-vs-target-20260303T193705Z/`
+- DUT matrix:
+  - `traces/analysis/specv3-m5-crossdim-anchor-vs-target-20260303T193705Z-dut-20260303T193737Z/SUMMARY.txt`
 
-Prep artifact:
-- `traces/analysis/m5-crossdim-anchor-vs-target-20260303T193705Z/`
-  - anchor: `640x1280`
-  - target: `1280x640`
-  - same family `7056/1840`, same parameter length (`819200`)
-  - direct diffs: EO changed `311` bytes, PC changed `50` bytes
+That run established the first failure mode:
+- stale anchor instructions are not generally transport-safe across dims.
 
-DUT matrix:
-- `traces/analysis/specv3-m5-crossdim-anchor-vs-target-20260303T193705Z-dut-20260303T193737Z/SUMMARY.txt`
+### Stronger family-wide check (superseding the earlier shorthand)
+We then ran a non-degenerate family-wide matrix using random-uniform weights and same-family transpose pairs with equal parameter-stream length:
+- doc:
+  - `docs/phase2_dense_m55_crossdim_oracle_matrix_2026-03-06.md`
+- main artifact:
+  - `traces/analysis/m5-crossdim-oracle-matrix-20260306T103420Z/`
+- DUT logs:
+  - `traces/analysis/specv3-m5-crossdim-oracle-matrix-20260306T103420Z-dut/`
 
-Results:
-- `target_baseline`: PASS
-- `anchor_baseline`: FAIL `UsbError(Overflow)`
-- `anchor_pc_oracle` (PC exact target diff only): FAIL `UsbError(Overflow)`
-- `anchor_eopc_oracle` (EO+PC exact target diffs): PASS and hash == target baseline
+Per-family result:
+- `target_override`: PASS + hash==target baseline in all 4 families
+- `anchor_param_only` (stale EO+PC):
+  - `7056/7952/8976`: FAIL `UsbError(Overflow)`
+  - `9872`: PASS but hash drift
+- `anchor_pc_oracle` (exact PC target bytes only): never reaches target-equivalent replay
+- `anchor_eo_oracle` (exact EO target bytes only): PASS + hash==target baseline in all 4 families
+- `anchor_eopc_oracle`: same hash as `anchor_eo_oracle`
 
 Conclusion:
-- EO cannot be treated as a fixed anchor when crossing dimensions (even within same EO/PC length family).
-- PC-only geometry patching is insufficient for cross-dim execution.
+- EO cannot be treated as a fixed anchor when crossing dimensions (even within same EO/PC-length family).
+- Cross-dim target-equivalent replay was **never** achieved without EO target bytes.
+- In these same-product transpose probes, EO exact target bytes were already sufficient; PC exact target bytes were not required for target-equivalent replay.
 
 ## 6) Safe-core rule-count variance
 

@@ -65,7 +65,7 @@ fn validate_dims(rows: usize, cols: usize) -> Result<(), DenseParamPackError> {
             reason: "rows/cols must be >= 1",
         });
     }
-    if !rows.is_multiple_of(64) || !cols.is_multiple_of(64) {
+    if (rows % 64) != 0 || (cols % 64) != 0 {
         return Err(DenseParamPackError::InvalidDims {
             rows,
             cols,
