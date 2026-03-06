@@ -39,7 +39,8 @@ pub use crate::family_profile::{
 };
 pub use crate::flatbuffer::{
     executable_type_name, extract_instruction_chunk_from_serialized_executable,
-    extract_serialized_executables_from_tflite, SerializedExecutableBlob,
+    extract_serialized_executables_from_tflite, extract_tflite_conv1x1_quant_params,
+    Conv1x1QuantParams, SerializedExecutableBlob,
 };
 pub use crate::function_gemma::{
     FunctionGemmaDims, FunctionGemmaError, FunctionGemmaLayerLinearNames, FunctionGemmaLinearStage,
@@ -54,9 +55,12 @@ pub use crate::gemm::{
 #[cfg(feature = "legacy-runtime")]
 pub use crate::interpreter::CoralInterpreter;
 pub use crate::param_pack::{
-    conv1x1_param_stream_len, conv1x1_param_stream_offset, conv1x1_param_stream_prefix_len,
-    dense_param_stream_len, dense_param_stream_offset, pack_conv1x1_row_major_i8_to_stream,
-    pack_conv1x1_row_major_u8_to_stream, pack_dense_row_major_i8_to_stream,
+    conv1x1_effective_scales_from_quant_params, conv1x1_param_stream_len,
+    conv1x1_param_stream_offset, conv1x1_param_stream_prefix_len,
+    conv1x1_stored_zero_points_from_quant_params, dense_param_stream_len,
+    dense_param_stream_offset, pack_conv1x1_row_major_i8_to_stream,
+    pack_conv1x1_row_major_i8_to_stream_with_quant_params, pack_conv1x1_row_major_u8_to_stream,
+    pack_conv1x1_row_major_u8_to_stream_with_quant_params, pack_dense_row_major_i8_to_stream,
     pack_dense_row_major_u8_to_stream, unpack_conv1x1_stream_to_row_major_i8,
     unpack_conv1x1_stream_to_row_major_u8, unpack_dense_stream_to_row_major_i8,
     unpack_dense_stream_to_row_major_u8, Conv1x1ParamPackError, DenseParamPackError,

@@ -242,6 +242,8 @@ pub enum Conv1x1ParamPackError {
         in_channels: usize,
         out_channels: usize,
     },
+    InvalidQuantization(&'static str),
+    StoredZeroPointOutOfRange(i64),
     Overflow(&'static str),
 }
 
@@ -276,6 +278,12 @@ impl fmt::Display for Conv1x1ParamPackError {
                 "index out of range in_channel={} out_channel={} for in_channels={} out_channels={}",
                 in_channel, out_channel, in_channels, out_channels
             ),
+            Conv1x1ParamPackError::InvalidQuantization(reason) => {
+                write!(f, "invalid conv1x1 quantization: {}", reason)
+            }
+            Conv1x1ParamPackError::StoredZeroPointOutOfRange(value) => {
+                write!(f, "stored zero point out of range after +128 bias: {}", value)
+            }
             Conv1x1ParamPackError::Overflow(what) => {
                 write!(f, "overflow while computing {}", what)
             }
@@ -362,6 +370,155 @@ fn conv1x1_block_widths(out_channels: usize) -> Result<Vec<usize>, Conv1x1ParamP
     }
     blocks.push(remaining);
     Ok(blocks)
+}
+
+fn expand_conv1x1_weight_scales(
+    out_channels: usize,
+    weight_scales: &[f32],
+) -> Result<Vec<f32>, Conv1x1ParamPackError> {
+    if weight_scales.len() == out_channels {
+        return Ok(weight_scales.to_vec());
+    }
+    if weight_scales.len() == 1 {
+        return Ok(vec![weight_scales[0]; out_channels]);
+    }
+    Err(Conv1x1ParamPackError::LengthMismatch {
+        expected: out_channels,
+        actual: weight_scales.len(),
+        what: "weight_scales (must have len 1 or out_channels)",
+    })
+}
+
+fn expand_conv1x1_weight_zero_points(
+    out_channels: usize,
+    weight_zero_points: &[i64],
+) -> Result<Vec<i64>, Conv1x1ParamPackError> {
+    if weight_zero_points.is_empty() {
+        return Ok(vec![0; out_channels]);
+    }
+    if weight_zero_points.len() == out_channels {
+        return Ok(weight_zero_points.to_vec());
+    }
+    if weight_zero_points.len() == 1 {
+        return Ok(vec![weight_zero_points[0]; out_channels]);
+    }
+    Err(Conv1x1ParamPackError::LengthMismatch {
+        expected: out_channels,
+        actual: weight_zero_points.len(),
+        what: "weight_zero_points (must have len 0, 1, or out_channels)",
+    })
+}
+
+fn fill_conv1x1_quant_prefix(
+    in_channels: usize,
+    out_channels: usize,
+    effective_scales: &[f32],
+    stored_zero_points: &[u32],
+    out: &mut [u8],
+) -> Result<(), Conv1x1ParamPackError> {
+    validate_conv1x1_dims(in_channels, out_channels)?;
+    if effective_scales.len() != out_channels {
+        return Err(Conv1x1ParamPackError::LengthMismatch {
+            expected: out_channels,
+            actual: effective_scales.len(),
+            what: "effective_scales",
+        });
+    }
+    if stored_zero_points.len() != out_channels {
+        return Err(Conv1x1ParamPackError::LengthMismatch {
+            expected: out_channels,
+            actual: stored_zero_points.len(),
+            what: "stored_zero_points",
+        });
+    }
+    if out.len() != conv1x1_param_stream_len(in_channels, out_channels)? {
+        return Err(Conv1x1ParamPackError::LengthMismatch {
+            expected: conv1x1_param_stream_len(in_channels, out_channels)?,
+            actual: out.len(),
+            what: "out stream",
+        });
+    }
+
+    let blocks = conv1x1_block_widths(out_channels)?;
+    let mut block_stream_start = 0usize;
+    let mut oc_base = 0usize;
+    for bw in blocks {
+        for local_oc in 0..bw {
+            let scale_off = block_stream_start
+                .checked_add(
+                    local_oc
+                        .checked_mul(4)
+                        .ok_or(Conv1x1ParamPackError::Overflow("local_oc*4 scale_off"))?,
+                )
+                .ok_or(Conv1x1ParamPackError::Overflow("scale_off accumulation"))?;
+            out[scale_off..scale_off + 4]
+                .copy_from_slice(&effective_scales[oc_base + local_oc].to_le_bytes());
+        }
+        let zp_start = block_stream_start
+            .checked_add(
+                bw.checked_mul(4)
+                    .ok_or(Conv1x1ParamPackError::Overflow("bw*4 zp_start"))?,
+            )
+            .ok_or(Conv1x1ParamPackError::Overflow("zp_start accumulation"))?;
+        for local_oc in 0..bw {
+            let zp_off = zp_start
+                .checked_add(
+                    local_oc
+                        .checked_mul(4)
+                        .ok_or(Conv1x1ParamPackError::Overflow("local_oc*4 zp_off"))?,
+                )
+                .ok_or(Conv1x1ParamPackError::Overflow("zp_off accumulation"))?;
+            out[zp_off..zp_off + 4]
+                .copy_from_slice(&stored_zero_points[oc_base + local_oc].to_le_bytes());
+        }
+        let block_stride =
+            bw.checked_mul(8 + in_channels)
+                .ok_or(Conv1x1ParamPackError::Overflow(
+                    "bw*(8+in_channels) block_stride",
+                ))?;
+        block_stream_start =
+            block_stream_start
+                .checked_add(block_stride)
+                .ok_or(Conv1x1ParamPackError::Overflow(
+                    "block_stream_start accumulation",
+                ))?;
+        oc_base += bw;
+    }
+    Ok(())
+}
+
+pub fn conv1x1_effective_scales_from_quant_params(
+    out_channels: usize,
+    input_scale: f32,
+    output_scale: f32,
+    weight_scales: &[f32],
+) -> Result<Vec<f32>, Conv1x1ParamPackError> {
+    if output_scale == 0.0 {
+        return Err(Conv1x1ParamPackError::InvalidQuantization(
+            "output_scale must be non-zero",
+        ));
+    }
+    let output_recip = 1.0f32 / output_scale;
+    let expanded = expand_conv1x1_weight_scales(out_channels, weight_scales)?;
+    Ok(expanded
+        .into_iter()
+        .map(|ws| (input_scale * ws) * output_recip)
+        .collect())
+}
+
+pub fn conv1x1_stored_zero_points_from_quant_params(
+    out_channels: usize,
+    weight_zero_points: &[i64],
+) -> Result<Vec<u32>, Conv1x1ParamPackError> {
+    let expanded = expand_conv1x1_weight_zero_points(out_channels, weight_zero_points)?;
+    expanded
+        .into_iter()
+        .map(|zp| {
+            let stored = zp + 128;
+            u32::try_from(stored)
+                .map_err(|_| Conv1x1ParamPackError::StoredZeroPointOutOfRange(stored))
+        })
+        .collect()
 }
 
 /// Compute packed parameter stream offset for 1x1 Conv2D stored weight coordinates
@@ -509,6 +666,62 @@ pub fn pack_conv1x1_row_major_i8_to_stream(
     Ok(out)
 }
 
+pub fn pack_conv1x1_row_major_u8_to_stream_with_quant_params(
+    in_channels: usize,
+    out_channels: usize,
+    row_major_u8: &[u8],
+    input_scale: f32,
+    output_scale: f32,
+    weight_scales: &[f32],
+    weight_zero_points: &[i64],
+) -> Result<Vec<u8>, Conv1x1ParamPackError> {
+    let mut out = pack_conv1x1_row_major_u8_to_stream(in_channels, out_channels, row_major_u8)?;
+    let effective_scales = conv1x1_effective_scales_from_quant_params(
+        out_channels,
+        input_scale,
+        output_scale,
+        weight_scales,
+    )?;
+    let stored_zero_points =
+        conv1x1_stored_zero_points_from_quant_params(out_channels, weight_zero_points)?;
+    fill_conv1x1_quant_prefix(
+        in_channels,
+        out_channels,
+        &effective_scales,
+        &stored_zero_points,
+        &mut out,
+    )?;
+    Ok(out)
+}
+
+pub fn pack_conv1x1_row_major_i8_to_stream_with_quant_params(
+    in_channels: usize,
+    out_channels: usize,
+    row_major_i8: &[i8],
+    input_scale: f32,
+    output_scale: f32,
+    weight_scales: &[f32],
+    weight_zero_points: &[i64],
+) -> Result<Vec<u8>, Conv1x1ParamPackError> {
+    let mut out = pack_conv1x1_row_major_i8_to_stream(in_channels, out_channels, row_major_i8)?;
+    let effective_scales = conv1x1_effective_scales_from_quant_params(
+        out_channels,
+        input_scale,
+        output_scale,
+        weight_scales,
+    )?;
+    let stored_zero_points =
+        conv1x1_stored_zero_points_from_quant_params(out_channels, weight_zero_points)?;
+    fill_conv1x1_quant_prefix(
+        in_channels,
+        out_channels,
+        &effective_scales,
+        &stored_zero_points,
+        &mut out,
+    )?;
+    Ok(out)
+}
+
 pub fn unpack_conv1x1_stream_to_row_major_u8(
     in_channels: usize,
     out_channels: usize,
@@ -551,8 +764,9 @@ pub fn unpack_conv1x1_stream_to_row_major_i8(
 #[cfg(test)]
 mod tests {
     use super::{
-        conv1x1_param_stream_len, conv1x1_param_stream_offset, dense_param_stream_len,
-        dense_param_stream_offset, pack_conv1x1_row_major_i8_to_stream,
+        conv1x1_effective_scales_from_quant_params, conv1x1_param_stream_len,
+        conv1x1_param_stream_offset, dense_param_stream_len, dense_param_stream_offset,
+        pack_conv1x1_row_major_i8_to_stream, pack_conv1x1_row_major_i8_to_stream_with_quant_params,
         pack_conv1x1_row_major_u8_to_stream, pack_dense_row_major_i8_to_stream,
         pack_dense_row_major_u8_to_stream, unpack_conv1x1_stream_to_row_major_i8,
         unpack_conv1x1_stream_to_row_major_u8, unpack_dense_stream_to_row_major_i8,
@@ -704,6 +918,67 @@ mod tests {
         let restored =
             unpack_conv1x1_stream_to_row_major_i8(in_channels, out_channels, &stream).unwrap();
         assert_eq!(src_i8, restored);
+    }
+
+    #[test]
+    fn conv1x1_quant_prefix_matches_blockwise_layout() {
+        let in_channels = 64usize;
+        let out_channels = 128usize;
+        let len = in_channels * out_channels;
+        let weights: Vec<i8> = (0..len).map(|i| ((i % 251) as i16 - 128) as i8).collect();
+        let weight_scales: Vec<f32> = (0..out_channels)
+            .map(|oc| 0.25f32 + (oc as f32) * 0.001f32)
+            .collect();
+        let zero_points = vec![0i64; out_channels];
+        let input_scale = 0.125f32;
+        let output_scale = 0.5f32;
+        let effective = conv1x1_effective_scales_from_quant_params(
+            out_channels,
+            input_scale,
+            output_scale,
+            &weight_scales,
+        )
+        .unwrap();
+        let stream = pack_conv1x1_row_major_i8_to_stream_with_quant_params(
+            in_channels,
+            out_channels,
+            &weights,
+            input_scale,
+            output_scale,
+            &weight_scales,
+            &zero_points,
+        )
+        .unwrap();
+
+        assert_eq!(
+            f32::from_le_bytes(stream[0..4].try_into().unwrap()),
+            effective[0]
+        );
+        assert_eq!(
+            f32::from_le_bytes(stream[252..256].try_into().unwrap()),
+            effective[63]
+        );
+        assert_eq!(
+            u32::from_le_bytes(stream[256..260].try_into().unwrap()),
+            128
+        );
+        assert_eq!(
+            u32::from_le_bytes(stream[508..512].try_into().unwrap()),
+            128
+        );
+        assert_eq!(
+            f32::from_le_bytes(stream[4608..4612].try_into().unwrap()),
+            effective[64]
+        );
+        assert_eq!(
+            u32::from_le_bytes(stream[4864..4868].try_into().unwrap()),
+            128
+        );
+
+        let off0 = conv1x1_param_stream_offset(in_channels, out_channels, 0, 0).unwrap();
+        let off1 = conv1x1_param_stream_offset(in_channels, out_channels, 63, 127).unwrap();
+        assert_eq!(stream[off0], ((weights[0] as i16) + 128) as u8);
+        assert_eq!(stream[off1], ((weights[len - 1] as i16) + 128) as u8);
     }
 
     #[test]

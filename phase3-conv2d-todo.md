@@ -13,8 +13,9 @@
 - [x] C2: Decide the current tested rule: blockwise output-channel packing + per-block prefix, not a single global prefix.
 
 - [x] C3: Add compilerless 1x1 Conv2D parameter packing in Rust.
-- [x] C3: Prove exact local equivalence for the **weight region** against compiled parameter streams.
-- [x] C3: Prove negative result for full-stream compilerless params at anchor dims: stale/zero prefix stays transport-safe but changes DUT hash.
+- [x] C3: Decode the Conv2D prefix as blockwise `f32 effective_scale[out]` + `u32 stored_zero_point[out]`, where `effective_scale = (input_scale * weight_scale) * f32(1/output_scale)`.
+- [x] C3: Prove full local byte-equivalence against compiled parameter streams.
+- [x] C3: Prove DUT hash-equivalence with full-stream parameter override at anchor dims.
 
 - [x] C4: Critically decide whether Conv2D family-profile glue is needed for Phase-3 boundary-setting.
 - [x] C4: Defer profile glue; not required to state the residual dependency precisely for single-op `1x1` Conv2D.

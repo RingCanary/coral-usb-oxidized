@@ -1,6 +1,7 @@
 use crate::error::DenseGemmError;
 
 const DWN1_IDENTIFIER: &[u8; 4] = b"DWN1";
+const TFL3_IDENTIFIER: &[u8; 4] = b"TFL3";
 const EXECUTABLE_TYPE_STAND_ALONE: i16 = 0;
 const EXECUTABLE_TYPE_PARAMETER_CACHING: i16 = 1;
 const EXECUTABLE_TYPE_EXECUTION_ONLY: i16 = 2;
@@ -72,6 +73,19 @@ pub struct SerializedExecutableBlob {
     pub parameter_region: Option<(usize, usize)>,
 }
 
+#[derive(Debug, Clone)]
+pub struct Conv1x1QuantParams {
+    pub subgraph_index: usize,
+    pub weight_tensor_index: usize,
+    pub weight_buffer_index: usize,
+    pub stored_shape: Vec<i32>,
+    pub quantized_dimension: i32,
+    pub input_scale: f32,
+    pub output_scale: f32,
+    pub weight_scales: Vec<f32>,
+    pub weight_zero_points: Vec<i64>,
+}
+
 #[derive(Debug)]
 pub(crate) struct PackageView {
     executables: Vec<ExecutableView>,
@@ -120,6 +134,18 @@ fn read_u32(data: &[u8], offset: usize) -> Result<u32, DenseGemmError> {
 fn read_i32(data: &[u8], offset: usize) -> Result<i32, DenseGemmError> {
     let bytes = checked_slice(data, offset, 4, "i32 read")?;
     Ok(i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+fn read_i64(data: &[u8], offset: usize) -> Result<i64, DenseGemmError> {
+    let bytes = checked_slice(data, offset, 8, "i64 read")?;
+    Ok(i64::from_le_bytes([
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+    ]))
+}
+
+fn read_f32(data: &[u8], offset: usize) -> Result<f32, DenseGemmError> {
+    let bytes = checked_slice(data, offset, 4, "f32 read")?;
+    Ok(f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 
 fn parse_root_table<'a>(
@@ -312,6 +338,85 @@ fn read_i16_field(
     read_i16(table.data, off)
 }
 
+fn read_i32_field(
+    table: &FlatTable<'_>,
+    field_id: usize,
+    default: i32,
+) -> Result<i32, DenseGemmError> {
+    let Some(off) = table.field_offset(field_id)? else {
+        return Ok(default);
+    };
+    read_i32(table.data, off)
+}
+
+fn read_u32_field(
+    table: &FlatTable<'_>,
+    field_id: usize,
+    default: u32,
+) -> Result<u32, DenseGemmError> {
+    let Some(off) = table.field_offset(field_id)? else {
+        return Ok(default);
+    };
+    read_u32(table.data, off)
+}
+
+fn read_vector_i32(table: &FlatTable<'_>, field_id: usize) -> Result<Vec<i32>, DenseGemmError> {
+    let Some(target) = read_offset_object(table, field_id)? else {
+        return Ok(Vec::new());
+    };
+    let len = read_u32(table.data, target)? as usize;
+    let start = target
+        .checked_add(4)
+        .ok_or_else(|| invalid_template("i32 vector start overflow"))?;
+    let byte_len = len
+        .checked_mul(4)
+        .ok_or_else(|| invalid_template("i32 vector byte_len overflow"))?;
+    checked_slice(table.data, start, byte_len, "i32 vector bounds")?;
+    let mut out = Vec::with_capacity(len);
+    for i in 0..len {
+        out.push(read_i32(table.data, start + i * 4)?);
+    }
+    Ok(out)
+}
+
+fn read_vector_i64(table: &FlatTable<'_>, field_id: usize) -> Result<Vec<i64>, DenseGemmError> {
+    let Some(target) = read_offset_object(table, field_id)? else {
+        return Ok(Vec::new());
+    };
+    let len = read_u32(table.data, target)? as usize;
+    let start = target
+        .checked_add(4)
+        .ok_or_else(|| invalid_template("i64 vector start overflow"))?;
+    let byte_len = len
+        .checked_mul(8)
+        .ok_or_else(|| invalid_template("i64 vector byte_len overflow"))?;
+    checked_slice(table.data, start, byte_len, "i64 vector bounds")?;
+    let mut out = Vec::with_capacity(len);
+    for i in 0..len {
+        out.push(read_i64(table.data, start + i * 8)?);
+    }
+    Ok(out)
+}
+
+fn read_vector_f32(table: &FlatTable<'_>, field_id: usize) -> Result<Vec<f32>, DenseGemmError> {
+    let Some(target) = read_offset_object(table, field_id)? else {
+        return Ok(Vec::new());
+    };
+    let len = read_u32(table.data, target)? as usize;
+    let start = target
+        .checked_add(4)
+        .ok_or_else(|| invalid_template("f32 vector start overflow"))?;
+    let byte_len = len
+        .checked_mul(4)
+        .ok_or_else(|| invalid_template("f32 vector byte_len overflow"))?;
+    checked_slice(table.data, start, byte_len, "f32 vector bounds")?;
+    let mut out = Vec::with_capacity(len);
+    for i in 0..len {
+        out.push(read_f32(table.data, start + i * 4)?);
+    }
+    Ok(out)
+}
+
 fn scan_dwn1_candidates(data: &[u8]) -> Vec<usize> {
     let mut out = Vec::new();
     if data.len() < 8 {
@@ -375,6 +480,120 @@ fn parse_multi_executable_layout(multi_bytes: &[u8]) -> Result<Vec<Region>, Dens
     }
 
     Ok(regions)
+}
+
+fn tensor_scale_from_offset(
+    blob: &[u8],
+    tensor_table_offset: usize,
+) -> Result<f32, DenseGemmError> {
+    let tensor_table = parse_table_at(blob, tensor_table_offset)?;
+    let quant_off = read_offset_object(&tensor_table, 4)?
+        .ok_or_else(|| invalid_template("tensor missing quantization table"))?;
+    let quant_table = parse_table_at(blob, quant_off)?;
+    let scales = read_vector_f32(&quant_table, 2)?;
+    scales
+        .first()
+        .copied()
+        .ok_or_else(|| invalid_template("tensor quantization scales missing"))
+}
+
+pub fn extract_tflite_conv1x1_quant_params(
+    blob: &[u8],
+    subgraph_index: usize,
+    in_channels: usize,
+    out_channels: usize,
+) -> Result<Conv1x1QuantParams, DenseGemmError> {
+    let model_table = parse_root_table(blob, 0, Some(TFL3_IDENTIFIER))?;
+    let subgraphs = read_vector_table_offsets(&model_table, 2)?;
+    if subgraph_index >= subgraphs.len() {
+        return Err(invalid_template(format!(
+            "subgraph index {} out of range (subgraphs={})",
+            subgraph_index,
+            subgraphs.len()
+        )));
+    }
+    let buffers = read_vector_table_offsets(&model_table, 4)?;
+    let subgraph_table = parse_table_at(blob, subgraphs[subgraph_index])?;
+    let tensors = read_vector_table_offsets(&subgraph_table, 0)?;
+    let inputs = read_vector_i32(&subgraph_table, 1)?;
+    let outputs = read_vector_i32(&subgraph_table, 2)?;
+    let input_tensor_index = (*inputs
+        .first()
+        .ok_or_else(|| invalid_template("subgraph missing input tensor indexes"))?)
+        as usize;
+    let output_tensor_index = (*outputs
+        .first()
+        .ok_or_else(|| invalid_template("subgraph missing output tensor indexes"))?)
+        as usize;
+    if input_tensor_index >= tensors.len() || output_tensor_index >= tensors.len() {
+        return Err(invalid_template(format!(
+            "input/output tensor index out of range (input={} output={} tensors={})",
+            input_tensor_index,
+            output_tensor_index,
+            tensors.len()
+        )));
+    }
+
+    let input_scale = tensor_scale_from_offset(blob, tensors[input_tensor_index])?;
+    let output_scale = tensor_scale_from_offset(blob, tensors[output_tensor_index])?;
+    let expected_len = in_channels
+        .checked_mul(out_channels)
+        .ok_or_else(|| invalid_template("conv1x1 expected_len overflow"))?;
+    let accepted_shapes = [
+        vec![out_channels as i32, 1, 1, in_channels as i32],
+        vec![1, 1, in_channels as i32, out_channels as i32],
+    ];
+
+    for (tensor_index, tensor_table_offset) in tensors.iter().copied().enumerate() {
+        let tensor_table = parse_table_at(blob, tensor_table_offset)?;
+        let shape = read_vector_i32(&tensor_table, 0)?;
+        if !accepted_shapes.iter().any(|s| s == &shape) {
+            continue;
+        }
+        let buffer_index = read_u32_field(&tensor_table, 2, 0)? as usize;
+        if buffer_index >= buffers.len() {
+            continue;
+        }
+        let buffer_table = parse_table_at(blob, buffers[buffer_index])?;
+        let Some(buffer_region) = read_vector_region(&buffer_table, 0)? else {
+            continue;
+        };
+        let buffer_len = buffer_region.end.saturating_sub(buffer_region.start);
+        if buffer_len != expected_len {
+            continue;
+        }
+        let Some(quant_off) = read_offset_object(&tensor_table, 4)? else {
+            continue;
+        };
+        let quant_table = parse_table_at(blob, quant_off)?;
+        let weight_scales = read_vector_f32(&quant_table, 2)?;
+        let weight_zero_points = read_vector_i64(&quant_table, 3)?;
+        let quantized_dimension = read_i32_field(&quant_table, 5, 0)?;
+        if !(weight_scales.len() == 1 || weight_scales.len() == out_channels) {
+            continue;
+        }
+        if !weight_zero_points.is_empty()
+            && !(weight_zero_points.len() == 1 || weight_zero_points.len() == out_channels)
+        {
+            continue;
+        }
+        return Ok(Conv1x1QuantParams {
+            subgraph_index,
+            weight_tensor_index: tensor_index,
+            weight_buffer_index: buffer_index,
+            stored_shape: shape,
+            quantized_dimension,
+            input_scale,
+            output_scale,
+            weight_scales,
+            weight_zero_points,
+        });
+    }
+
+    Err(invalid_template(format!(
+        "no candidate 1x1 Conv2D weight tensor found with shapes {:?} and buffer_size={}",
+        accepted_shapes, expected_len
+    )))
 }
 
 pub(crate) fn inspect_packages(blob: &[u8]) -> Vec<PackageView> {

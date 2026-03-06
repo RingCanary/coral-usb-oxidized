@@ -1,6 +1,7 @@
 use coral_usb_oxidized::{
-    conv1x1_param_stream_len, pack_conv1x1_row_major_i8_to_stream,
-    pack_conv1x1_row_major_u8_to_stream,
+    conv1x1_param_stream_len, extract_tflite_conv1x1_quant_params,
+    pack_conv1x1_row_major_i8_to_stream, pack_conv1x1_row_major_i8_to_stream_with_quant_params,
+    pack_conv1x1_row_major_u8_to_stream, pack_conv1x1_row_major_u8_to_stream_with_quant_params,
 };
 use std::env;
 use std::error::Error;
@@ -9,7 +10,7 @@ use std::path::PathBuf;
 
 fn usage(program: &str) {
     eprintln!(
-        "Usage: {program} --in-channels N --out-channels N (--stored-u8 PATH | --stored-i8 PATH) --out PATH"
+        "Usage: {program} --in-channels N --out-channels N (--stored-u8 PATH | --stored-i8 PATH) --out PATH [--quant-model PATH]"
     );
 }
 
@@ -46,6 +47,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut out_channels: Option<usize> = None;
     let mut stored_u8: Option<PathBuf> = None;
     let mut stored_i8: Option<PathBuf> = None;
+    let mut quant_model: Option<PathBuf> = None;
     let mut out_path: Option<PathBuf> = None;
 
     let mut i = 1usize;
@@ -69,6 +71,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             "--stored-i8" => {
                 stored_i8 = Some(PathBuf::from(next_arg(&args, &mut i, "--stored-i8")?));
             }
+            "--quant-model" => {
+                quant_model = Some(PathBuf::from(next_arg(&args, &mut i, "--quant-model")?));
+            }
             "--out" => {
                 out_path = Some(PathBuf::from(next_arg(&args, &mut i, "--out")?));
             }
@@ -89,6 +94,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     let expected_row_major_len = in_channels
         .checked_mul(out_channels)
         .ok_or("overflow computing row-major length")?;
+    let quant = if let Some(model_path) = quant_model.as_ref() {
+        let model_bytes = fs::read(model_path)?;
+        Some(extract_tflite_conv1x1_quant_params(
+            &model_bytes,
+            0,
+            in_channels,
+            out_channels,
+        )?)
+    } else {
+        None
+    };
     let stream = if let Some(path) = stored_u8.as_ref() {
         let bytes = fs::read(path)?;
         if bytes.len() != expected_row_major_len {
@@ -100,7 +116,19 @@ fn main() -> Result<(), Box<dyn Error>> {
             )
             .into());
         }
-        pack_conv1x1_row_major_u8_to_stream(in_channels, out_channels, &bytes)?
+        if let Some(q) = quant.as_ref() {
+            pack_conv1x1_row_major_u8_to_stream_with_quant_params(
+                in_channels,
+                out_channels,
+                &bytes,
+                q.input_scale,
+                q.output_scale,
+                &q.weight_scales,
+                &q.weight_zero_points,
+            )?
+        } else {
+            pack_conv1x1_row_major_u8_to_stream(in_channels, out_channels, &bytes)?
+        }
     } else {
         let bytes = fs::read(stored_i8.as_ref().unwrap())?;
         if bytes.len() != expected_row_major_len {
@@ -113,7 +141,19 @@ fn main() -> Result<(), Box<dyn Error>> {
             .into());
         }
         let vals: Vec<i8> = bytes.iter().map(|&v| v as i8).collect();
-        pack_conv1x1_row_major_i8_to_stream(in_channels, out_channels, &vals)?
+        if let Some(q) = quant.as_ref() {
+            pack_conv1x1_row_major_i8_to_stream_with_quant_params(
+                in_channels,
+                out_channels,
+                &vals,
+                q.input_scale,
+                q.output_scale,
+                &q.weight_scales,
+                &q.weight_zero_points,
+            )?
+        } else {
+            pack_conv1x1_row_major_i8_to_stream(in_channels, out_channels, &vals)?
+        }
     };
 
     if let Some(parent) = out_path.parent() {

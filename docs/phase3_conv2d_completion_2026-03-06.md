@@ -68,9 +68,11 @@ Validated cases:
 
 All tested probe points matched the recovered formula.
 
-### 3) The Conv2D parameter stream splits into two parts: exact compilerless weight payload + unresolved prefix bytes
-Artifact:
-- `traces/analysis/phase3-conv2d-param-override-matrix-20260306T132851Z/`
+### 3) The full tested 1x1 Conv2D parameter stream is now compilerless and exact
+Artifacts:
+- initial narrowing result: `traces/analysis/phase3-conv2d-param-override-matrix-20260306T132851Z/`
+- exact-recovery proof: `traces/analysis/phase3-conv2d-param-override-matrix-20260306T135325Z/`
+- stale-prefix motivation probe: `traces/analysis/phase3-conv2d-prefix-residual-probe-20260306T132745Z/`
 
 New Rust support:
 - `src/param_pack.rs`
@@ -79,42 +81,32 @@ New Rust support:
 New helper:
 - `tools/dump_tflite_conv1x1_weights.py`
 
-Important correction discovered during implementation:
+Important corrections discovered during implementation:
 - the tested TFLite Conv2D `1x1` constant tensor is stored in `[out, 1, 1, in]` order,
-- and compiled parameter payload bytes use a `+128` encoding bias for the weight region.
+- compiled parameter payload weight bytes use a `+128` encoding bias,
+- the prefix is blockwise, not global,
+- the effective-scale float table matches the compiler only when computed as:
+  - `effective_scale = (input_scale * weight_scale) * f32(1 / output_scale)`
+  - i.e. using a pre-rounded `f32` reciprocal of `output_scale`
 
-With that corrected, the results became clean:
-- full stream byte-equivalence: **False**
-- weight-region byte-equivalence: **True**
-- remaining mismatches are confined to the non-weight prefix bytes
+Recovered tested prefix law per output block (up to 64 channels):
+- `f32 effective_scale[out]`
+- `u32 stored_zero_point[out]`
+- with `stored_zero_point = weight_zero_point + 128`
 
-Representative results:
-- `64 -> 64`: `prefix_mismatch_count=320`, `weight_mismatch_count=0`
-- `64 -> 128`: `prefix_mismatch_count=637`, `weight_mismatch_count=0`
-- `128 -> 64`: `prefix_mismatch_count=320`, `weight_mismatch_count=0`
+After wiring that in, the compilerless packer reached exact local equivalence in all tested cases:
+- `64 -> 64`: `local_byte_equal=True`, `prefix_mismatch_count=0`, `weight_mismatch_count=0`
+- `64 -> 128`: `local_byte_equal=True`, `prefix_mismatch_count=0`, `weight_mismatch_count=0`
+- `128 -> 64`: `local_byte_equal=True`, `prefix_mismatch_count=0`, `weight_mismatch_count=0`
 
-DUT result for zero/stale-prefix overrides:
-- replay still passes transport,
-- but output hash drifts from the compiled baseline in every tested case.
+DUT result for full-stream overrides in all 3 cases:
+- replay PASS
+- output hash exactly equals the compiled baseline
 
-So the compilerless story for Conv2D `1x1` is:
-> the weight payload is now compilerless and exact,
-> but the prefix bytes remain a residual dependency.
+So for the tested single-op `1x1` regime:
+> the full parameter stream is now compilerless and exact.
 
-### 4) The residual Conv2D parameter dependency is semantic, not just cosmetic
-Artifact:
-- `traces/analysis/phase3-conv2d-prefix-residual-probe-20260306T132745Z/`
-
-This probe held the weight region fixed to the correct target weights, but replaced the prefix with a stale same-shape prefix from another seed.
-
-Result:
-- baseline: PASS, hash `0xb57cd4d5e6a691dd`
-- stale-prefix hybrid: PASS, hash `0x6586bc8da1c03d1e`
-
-So the unresolved prefix bytes are not transport filler.
-They are semantically relevant to target-equivalent replay.
-
-### 5) Same-product spatial cross-dim replay depends only on EO target bytes in the tested regime
+### 4) Same-product spatial cross-dim replay depends only on EO target bytes in the tested regime
 Artifact:
 - `traces/analysis/phase3-conv2d-crossdim-oracle-matrix-20260306T132611Z/`
 
@@ -147,21 +139,21 @@ EO exact target bytes are sufficient.
 
 ### Compilerless today for tested Conv2D 1x1 regime
 - family/size bootstrap and routing evidence
-- weight-region packing formula
-- exact compilerless generation of the **weight payload** portion of the parameter stream
+- exact blockwise packing formula for the weight region
+- exact blockwise packing formula for the prefix region
+- full compilerless parameter-stream generation with local byte-equivalence
+- DUT hash-equivalence with full-stream parameter override at anchor dims
 - same-product cross-dim replay analysis showing PC is not the blocker
 
 ### Not compilerless today for tested Conv2D 1x1 regime
-- the **parameter-stream prefix bytes**
 - the **EO target-state bytes** for same-product spatial moves
 
-So the residual non-compilerless surface is now much smaller than “Conv2D in general”:
-> **(a) Conv2D 1x1 parameter-prefix bytes and (b) EO run-phase target bytes**
+So the residual non-compilerless surface is now narrower still:
+> **EO run-phase target bytes for unseen/target Conv2D spatial moves**
 
 That is the correct closeout boundary for this phase.
 
 ## What Phase 3 does *not* prove
-- full compilerless parameter-stream synthesis for Conv2D `1x1`
 - general Conv2D (`k>1`, depthwise, stride changes, etc.)
 - multi-op Conv2D->Dense behavior
 - EO synthesis for unseen Conv2D target dims
@@ -174,7 +166,7 @@ Phase 3 Conv2D is complete enough to close because:
 3. the remaining compiler dependency is no longer vague.
 
 ## Recommended next Conv2D work, if revisited later
-1. decode or factor the Conv2D parameter-prefix bytes,
-2. only then consider whether full compilerless parameter-stream generation is realistic,
-3. keep EO work focused on same-product spatial moves before widening to `k>1`,
+1. focus directly on EO target-state synthesis for same-product spatial moves,
+2. only after that widen beyond single-op `1x1`,
+3. keep widening conservative (`k>1`, stride changes, depthwise) and evidence-first,
 4. defer multi-op Conv2D->Dense until single-op Conv2D target-state dependence is better understood.

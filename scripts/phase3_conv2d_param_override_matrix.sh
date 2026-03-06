@@ -54,7 +54,7 @@ for spec in "${cases[@]}"; do
   edgetpu_compiler -s -o "$CASE_DIR" "$QUANT" > "$CASE_DIR/edgetpu_compile.log" 2>&1
 
   cargo run --quiet --bin model_param_stream_dump -- --model "$COMPILED" --out "$COMPILED_STREAM" --metadata-out "$CASE_DIR/${CASE_ID}.compiled_param_meta.json" >/dev/null
-  cargo run --quiet --bin conv1x1_param_pack -- --in-channels "$IC" --out-channels "$OC" --stored-i8 "$ROW_MAJOR" --out "$PACKED" >/dev/null
+  cargo run --quiet --bin conv1x1_param_pack -- --in-channels "$IC" --out-channels "$OC" --stored-i8 "$ROW_MAJOR" --quant-model "$QUANT" --out "$PACKED" >/dev/null
 
   python3 - <<'PY' "$COMPILED_STREAM" "$PACKED" "$COMPARE_JSON" "$IC" "$OC"
 import hashlib, json, pathlib, sys
