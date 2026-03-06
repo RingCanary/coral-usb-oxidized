@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ARTIFACT_REL="traces/analysis/phase3-conv2d-crossdim-oracle-matrix-20260306T132611Z"
 PAIRS=(p32 p64 p128)
-GROUP_COUNT=8
+SUBSPLIT=4
 PI_HOST="${PI_HOST:-rpc@rpilm3.local}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_rsa_glmpitwo}"
 REMOTE_REPO="${REMOTE_REPO:-/home/rpc/coral-usb-oxidized}"
@@ -18,16 +18,16 @@ while (($# > 0)); do
       ARTIFACT_REL="$2"
       shift 2
       ;;
-    --pair)
-      PAIRS+=("$2")
-      shift 2
-      ;;
     --pairs)
       IFS=',' read -r -a PAIRS <<< "$2"
       shift 2
       ;;
-    --groups)
-      GROUP_COUNT="$2"
+    --pair)
+      PAIRS+=("$2")
+      shift 2
+      ;;
+    --subsplit)
+      SUBSPLIT="$2"
       shift 2
       ;;
     *)
@@ -40,7 +40,7 @@ done
 ARTIFACT_DIR="$REPO_ROOT/$ARTIFACT_REL"
 [[ -d "$ARTIFACT_DIR" ]] || { echo "artifact dir not found: $ARTIFACT_DIR" >&2; exit 1; }
 
-RUN_ID="phase3-conv2d-eo-group-probe-$(date -u +%Y%m%dT%H%M%SZ)"
+RUN_ID="phase3-conv2d-eo-window-refine-probe-$(date -u +%Y%m%dT%H%M%SZ)"
 OUT_REL="traces/analysis/$RUN_ID"
 OUT_DIR="$REPO_ROOT/$OUT_REL"
 DUT_REL="traces/analysis/specv3-$RUN_ID-dut"
@@ -53,83 +53,57 @@ mkdir -p "$OUT_DIR" "$DUT_DIR"
 echo "run_id=$RUN_ID"
 echo "artifact_rel=$ARTIFACT_REL"
 echo "pairs=${PAIRS[*]}"
-echo "groups=$GROUP_COUNT"
+echo "subsplit=$SUBSPLIT"
 echo "pi_host=$PI_HOST"
 
 SSH_OPTS=( -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i "$SSH_KEY" )
 ssh_run() { ssh "${SSH_OPTS[@]}" "$PI_HOST" "$@"; }
 rsync_pi() { rsync -av -e "ssh -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i $SSH_KEY" "$@"; }
 
-python3 - "$ARTIFACT_DIR" "$OUT_DIR" "$GROUP_COUNT" "${PAIRS[@]}" <<'PY'
+python3 - "$ARTIFACT_DIR" "$OUT_DIR" "$SUBSPLIT" "${PAIRS[@]}" <<'PY'
 import json, pathlib, sys
 artifact_dir = pathlib.Path(sys.argv[1])
 out_dir = pathlib.Path(sys.argv[2])
-group_count = int(sys.argv[3])
+subsplit = int(sys.argv[3])
 pairs = sys.argv[4:]
+
+windows = {
+    'p32': [(242, 2292), (2292, 3236)],
+    'p64': [(242, 2297), (2297, 3236)],
+    'p128': [(242, 2289), (2289, 3236)],
+}
 
 for pair in pairs:
     prep = json.loads((artifact_dir / pair / 'PREP_SUMMARY.json').read_text())
-    src_patch = artifact_dir / pair / 'eo_oracle.patchspec'
     pair_out = out_dir / pair
     pair_out.mkdir(parents=True, exist_ok=True)
 
     rules = []
-    for line in src_patch.read_text().splitlines():
+    for line in (artifact_dir / pair / 'eo_oracle.patchspec').read_text().splitlines():
         s = line.strip()
         if not s or s.startswith('#'):
             continue
         plen_s, off_s, val_s = s.split()[:3]
         rules.append((int(plen_s), int(off_s), int(val_s, 16)))
     rules.sort(key=lambda x: x[1])
-    n = len(rules)
-    groups = []
-    for idx in range(group_count):
-        start = (idx * n) // group_count
-        end = ((idx + 1) * n) // group_count
-        groups.append({
-            'group_index': idx,
-            'rule_start': start,
-            'rule_end': end,
-            'rule_count': end - start,
-            'offset_start': rules[start][1] if start < end else None,
-            'offset_end': rules[end - 1][1] if start < end else None,
-        })
 
-    def write_patch(path: pathlib.Path, subset):
+    def write_patch(path, subset):
         lines = [f'# auto-generated subset for {pair}']
         for plen, off, val in subset:
             lines.append(f'{plen} {off} 0x{val:02x}')
         path.write_text('\n'.join(lines) + '\n')
 
     write_patch(pair_out / 'eo_full.patchspec', rules)
-    cases = []
-    for g in groups:
-        start, end = g['rule_start'], g['rule_end']
-        only_rules = rules[start:end]
-        minus_rules = rules[:start] + rules[end:]
-        only_name = f"eo_g{g['group_index']:02d}_only"
-        minus_name = f"eo_minus_g{g['group_index']:02d}"
-        write_patch(pair_out / f'{only_name}.patchspec', only_rules)
-        write_patch(pair_out / f'{minus_name}.patchspec', minus_rules)
-        cases.append({'name': only_name, 'mode': 'only', **g})
-        cases.append({'name': minus_name, 'mode': 'minus', **g})
-
-    anchor_model = pathlib.Path(prep['anchor_model'])
-    target_model = pathlib.Path(prep['target_model'])
     meta = {
         'pair_id': pair,
         'artifact_rel': str(artifact_dir.relative_to(pathlib.Path.cwd())),
-        'anchor_model_rel': str(anchor_model.resolve().relative_to(pathlib.Path.cwd())),
-        'target_model_rel': str(target_model.resolve().relative_to(pathlib.Path.cwd())),
-        'param_equal': prep['param_equal'],
+        'anchor_model_rel': str(pathlib.Path(prep['anchor_model']).resolve().relative_to(pathlib.Path.cwd())),
+        'target_model_rel': str(pathlib.Path(prep['target_model']).resolve().relative_to(pathlib.Path.cwd())),
         'eo_rule_count': prep['eo_rule_count'],
         'pc_rule_count': prep['pc_rule_count'],
-        'group_count': group_count,
-        'groups': groups,
-        'cases': cases,
+        'param_equal': prep['param_equal'],
+        'windows': [],
     }
-    # recover input/output bytes from model file name context encoded in pair id metadata
-    # p32/p64/p128 all use the target spatial dims and channels from PREP_SUMMARY consumer script.
     if pair == 'p32':
         meta['input_bytes'] = 32 * 32 * 32
         meta['output_bytes'] = 32 * 32 * 32
@@ -140,12 +114,45 @@ for pair in pairs:
         meta['input_bytes'] = 32 * 32 * 128
         meta['output_bytes'] = 32 * 32 * 128
     else:
-        raise RuntimeError(f'unknown pair id without explicit byte metadata: {pair}')
-    (pair_out / 'GROUPS.json').write_text(json.dumps(meta, indent=2) + '\n')
-    with (pair_out / 'GROUPS.txt').open('w', encoding='utf-8') as f:
-        f.write(f"pair={pair} eo_rule_count={prep['eo_rule_count']} group_count={group_count}\n")
-        for g in groups:
-            f.write(f"g{g['group_index']:02d}: rule_count={g['rule_count']} offset_range={g['offset_start']}..{g['offset_end']}\n")
+        raise RuntimeError(f'unknown pair: {pair}')
+
+    for widx, (start, end) in enumerate(windows[pair]):
+        window_rules = [r for r in rules if start <= r[1] <= end]
+        bins = []
+        n = len(window_rules)
+        for idx in range(subsplit):
+            lo = (idx * n) // subsplit
+            hi = ((idx + 1) * n) // subsplit
+            subset = window_rules[lo:hi]
+            if subset:
+                sub_start = subset[0][1]
+                sub_end = subset[-1][1]
+            else:
+                sub_start = sub_end = None
+            kept = [r for r in rules if r not in subset]
+            name = f'eo_minus_w{widx:02d}_g{idx:02d}'
+            write_patch(pair_out / f'{name}.patchspec', kept)
+            bins.append({
+                'name': name,
+                'start': sub_start,
+                'end': sub_end,
+                'rule_count': len(subset),
+            })
+        meta['windows'].append({
+            'window_index': widx,
+            'start': start,
+            'end': end,
+            'rule_count': len(window_rules),
+            'bins': bins,
+        })
+
+    (pair_out / 'REFINE_META.json').write_text(json.dumps(meta, indent=2) + '\n')
+    with (pair_out / 'REFINE_META.txt').open('w', encoding='utf-8') as f:
+        f.write(f'pair={pair} eo_rule_count={prep["eo_rule_count"]}\n')
+        for w in meta['windows']:
+            f.write(f"w{w['window_index']:02d}: {w['start']}..{w['end']} rule_count={w['rule_count']}\n")
+            for b in w['bins']:
+                f.write(f"  {b['name']}: {b['start']}..{b['end']} rule_count={b['rule_count']}\n")
 PY
 
 ssh_run "mkdir -p '$REMOTE_OUT_DIR' '$REMOTE_DUT_DIR' '$REMOTE_SRC_DIR'"
@@ -175,7 +182,7 @@ run_case() {
 }
 
 for pair in "${PAIRS[@]}"; do
-  meta="$OUT_DIR/$pair/GROUPS.json"
+  meta="$OUT_DIR/$pair/REFINE_META.json"
   anchor_rel=$(python3 - <<'PY' "$meta"
 import json,sys
 print(json.load(open(sys.argv[1]))['anchor_model_rel'])
@@ -210,8 +217,10 @@ PY
       --instruction-patch-spec "$remote_pair_dir/${case_name}.patchspec"
   done < <(python3 - <<'PY' "$meta"
 import json,sys
-for case in json.load(open(sys.argv[1]))['cases']:
-    print(case['name'])
+meta=json.load(open(sys.argv[1]))
+for w in meta['windows']:
+    for b in w['bins']:
+        print(b['name'])
 PY
 )
 done
@@ -220,9 +229,9 @@ python3 - "$OUT_DIR" "$DUT_DIR" <<'PY'
 import json, pathlib, re, sys
 out_dir = pathlib.Path(sys.argv[1])
 dut_dir = pathlib.Path(sys.argv[2])
-root_lines = [f"run_id={out_dir.name}"]
+root_lines = [f'run_id={out_dir.name}']
 for pair_dir in sorted(p for p in out_dir.iterdir() if p.is_dir()):
-    meta = json.loads((pair_dir / 'GROUPS.json').read_text())
+    meta = json.loads((pair_dir / 'REFINE_META.json').read_text())
     logs_dir = dut_dir / pair_dir.name
     cases = {}
     for log_path in sorted(logs_dir.glob('*.log')):
@@ -236,38 +245,30 @@ for pair_dir in sorted(p for p in out_dir.iterdir() if p.is_dir()):
             'error': err[-1] if err else None,
         }
     target_hash = cases.get('target_baseline', {}).get('hash')
-    rows = []
-    for case in meta['cases']:
-        result = cases.get(case['name'], {})
-        rows.append({
-            **case,
-            **result,
-            'hash_eq_target': result.get('hash') == target_hash,
-        })
-    summary = {
-        'pair_id': pair_dir.name,
-        'meta': meta,
-        'target_baseline': cases.get('target_baseline', {}),
-        'anchor_baseline': cases.get('anchor_baseline', {}),
-        'eo_full': cases.get('eo_full', {}),
-        'group_cases': rows,
-    }
-    (pair_dir / 'SUMMARY.json').write_text(json.dumps(summary, indent=2) + '\n')
     with (pair_dir / 'SUMMARY.txt').open('w', encoding='utf-8') as f:
-        f.write(f"pair={pair_dir.name} target_hash={target_hash}\n")
-        for fixed in ['target_baseline', 'anchor_baseline', 'eo_full']:
+        f.write(f'pair={pair_dir.name} target_hash={target_hash}\n')
+        for fixed in ['target_baseline','anchor_baseline','eo_full']:
             r = cases.get(fixed, {})
             f.write(f"{fixed}: pass={r.get('pass')} hash={r.get('hash')} error={r.get('error')}\n")
-        for row in rows:
-            f.write(
-                f"{row['name']}: mode={row['mode']} rule_count={row['rule_count']} offset_range={row['offset_start']}..{row['offset_end']} pass={row.get('pass')} hash={row.get('hash')} hash_eq_target={row['hash_eq_target']} error={row.get('error')}\n"
-            )
-    root_lines.append(
-        f"[{pair_dir.name}] target_hash={target_hash} eo_full_hash_eq_target={cases.get('eo_full', {}).get('hash') == target_hash} "
-        f"target_only_groups={[r['name'] for r in rows if r['mode']=='only' and r['hash_eq_target']]} "
-        f"target_minus_groups={[r['name'] for r in rows if r['mode']=='minus' and r['hash_eq_target']]} "
-        f"failing_minus_groups={[r['name'] for r in rows if r['mode']=='minus' and not r.get('pass', False)]}"
-    )
+        for w in meta['windows']:
+            f.write(f"window w{w['window_index']:02d}: {w['start']}..{w['end']} rule_count={w['rule_count']}\n")
+            for b in w['bins']:
+                c = cases.get(b['name'], {})
+                f.write(
+                    f"  {b['name']}: {b['start']}..{b['end']} rule_count={b['rule_count']} pass={c.get('pass', False)} hash={c.get('hash')} hash_eq_target={c.get('hash') == target_hash} error={c.get('error')}\n"
+                )
+    root_lines.append(f'[{pair_dir.name}] target_hash={target_hash}')
+    for w in meta['windows']:
+        fatal=[]; semantic=[]; exact=[]
+        for b in w['bins']:
+            c=cases.get(b['name'], {})
+            if not c.get('pass', False):
+                fatal.append(b['name'])
+            elif c.get('hash') == target_hash:
+                exact.append(b['name'])
+            else:
+                semantic.append(b['name'])
+        root_lines.append(f"  w{w['window_index']:02d} fatal_bins={fatal} semantic_bins={semantic} exact_bins={exact}")
 (out_dir / 'SUMMARY.txt').write_text('\n'.join(root_lines) + '\n')
 print(out_dir / 'SUMMARY.txt')
 PY
