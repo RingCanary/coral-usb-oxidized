@@ -3051,8 +3051,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             run_exe.payload.len()
         );
 
+        let mut run_ms_values = Vec::with_capacity(config.runs);
         for run in 0..config.runs {
             println!("RUN {}", run + 1);
+            let run_started = Instant::now();
             for (idx, chunk) in run_exe.instruction_bitstreams.iter().enumerate() {
                 println!("  run instr chunk {} ({} bytes)", idx, chunk.len());
                 send_instruction_chunk(
@@ -3096,6 +3098,22 @@ fn main() -> Result<(), Box<dyn Error>> {
                     Err(err) => println!("  Interrupt read failed: {}", err),
                 }
             }
+            let run_ms = run_started.elapsed().as_secs_f64() * 1000.0;
+            run_ms_values.push(run_ms);
+            println!("  Run timing: run_ms={:.3}", run_ms);
+        }
+        if !run_ms_values.is_empty() {
+            let sum: f64 = run_ms_values.iter().sum();
+            let avg = sum / run_ms_values.len() as f64;
+            let min = run_ms_values.iter().copied().fold(f64::INFINITY, f64::min);
+            let max = run_ms_values
+                .iter()
+                .copied()
+                .fold(f64::NEG_INFINITY, f64::max);
+            println!(
+                "Run timing summary: runs={} avg_ms={:.3} min_ms={:.3} max_ms={:.3}",
+                run_ms_values.len(), avg, min, max
+            );
         }
 
         Ok(())

@@ -192,7 +192,10 @@ For protocol-level and syscall-level capture helpers, use:
 - `scripts/phase3_conv2d_layout_matrix.sh` (Phase-3 helper: widen 1x1 Conv2D layout validation across `32/64/128` channel regimes)
 - `scripts/phase3_conv2d_param_override_matrix.sh` (Phase-3 helper: exact full-stream Conv2D parameter synthesis + DUT override matrix)
 - `scripts/phase3_conv2d_crossdim_oracle_matrix.sh` (Phase-3 helper: same-product spatial cross-dim oracle matrix for 1x1 Conv2D)
+- `scripts/phase3_conv2d_eo_group_probe.sh` (Phase-3 follow-up helper: coarse EO oracle group ablation for same-product 1x1 Conv2D moves)
 - `scripts/phase3_conv2d_prefix_residual_probe.sh` (Phase-3 archival helper: stale-prefix semantic probe used before exact prefix recovery)
+- `scripts/phase4_conv2d_k3_family_scout.sh` (Phase-4 scout helper: first local widening pass beyond 1x1 to single-op k=3 Conv2D)
+- `scripts/benchmark_dense_gemm_replay.sh` (benchmark helper: pure-rusb Dense replay latency / GMAC/s matrix on Pi)
 - `scripts/m6_instruction_axis_probe.sh` (Phase-2 M6 helper: quant/activation/bias instruction-axis differential probe)
 - `tools/dense_layout_probe.py` (single-hot parameter-layout probe and offset mapping extractor)
 - `tools/conv_layout_probe.py` (single-hot Conv2D parameter-layout probe and offset candidate extraction)
@@ -231,6 +234,9 @@ Current reverse-engineering notes:
 - `docs/phase2_dense_completion_2026-03-06.md`
 - `docs/phase3_conv2d_kickoff_2026-03-06.md`
 - `docs/phase3_conv2d_completion_2026-03-06.md`
+- `docs/phase3_conv2d_eo_group_probe_2026-03-06.md`
+- `docs/phase4_conv2d_k3_scout_2026-03-06.md`
+- `docs/dense_gemm_replay_benchmark_2026-03-06.md`
 - `docs/phase2_claims_audit_2026-03-03.md`
 - `docs/usb_invoke_scaling_by_model.md`
 - `docs/next_usbmon_capture_matrix.md`
