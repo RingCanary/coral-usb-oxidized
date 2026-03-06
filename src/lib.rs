@@ -54,9 +54,12 @@ pub use crate::gemm::{
 #[cfg(feature = "legacy-runtime")]
 pub use crate::interpreter::CoralInterpreter;
 pub use crate::param_pack::{
-    dense_param_stream_len, dense_param_stream_offset, pack_dense_row_major_i8_to_stream,
-    pack_dense_row_major_u8_to_stream, unpack_dense_stream_to_row_major_i8,
-    unpack_dense_stream_to_row_major_u8, DenseParamPackError,
+    conv1x1_param_stream_len, conv1x1_param_stream_offset, conv1x1_param_stream_prefix_len,
+    dense_param_stream_len, dense_param_stream_offset, pack_conv1x1_row_major_i8_to_stream,
+    pack_conv1x1_row_major_u8_to_stream, pack_dense_row_major_i8_to_stream,
+    pack_dense_row_major_u8_to_stream, unpack_conv1x1_stream_to_row_major_i8,
+    unpack_conv1x1_stream_to_row_major_u8, unpack_dense_stream_to_row_major_i8,
+    unpack_dense_stream_to_row_major_u8, Conv1x1ParamPackError, DenseParamPackError,
 };
 pub use crate::toolchain::{
     compile_dense_template_with_uv, DenseTemplateCompileArtifacts, DenseTemplateCompileRequest,

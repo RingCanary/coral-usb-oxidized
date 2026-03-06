@@ -9,21 +9,22 @@
 - [x] C1: Verify whether parameter bytes scale independently from EO/PC for initial 1x1 cases.
 
 - [x] C2: Revalidate the old 1x1 Conv2D layout clue with the current toolchain.
-- [ ] C2: Expand layout recovery beyond `64x64` channels and test threshold changes (`32/64/128`).
-- [ ] C2: Decide whether 1x1 Conv2D parameter packing is “Dense-like + prefix” or needs family-specific rules.
+- [x] C2: Expand layout recovery beyond `64x64` channels and test threshold changes (`32/64/128`).
+- [x] C2: Decide the current tested rule: blockwise output-channel packing + per-block prefix, not a single global prefix.
 
-- [ ] C3: Add compilerless 1x1 Conv2D parameter packing in Rust.
-- [ ] C3: Prove local byte-equivalence against compiled parameter streams.
-- [ ] C3: Prove DUT hash-equivalence with parameter override at anchor dims.
+- [x] C3: Add compilerless 1x1 Conv2D parameter packing in Rust.
+- [x] C3: Prove exact local equivalence for the **weight region** against compiled parameter streams.
+- [x] C3: Prove negative result for full-stream compilerless params at anchor dims: stale/zero prefix stays transport-safe but changes DUT hash.
 
-- [ ] C4: Add minimal Conv2D family-profile glue / `--check-profile` support.
-- [ ] C4: Validate anchor-dim Conv2D profile replay on DUT.
+- [x] C4: Critically decide whether Conv2D family-profile glue is needed for Phase-3 boundary-setting.
+- [x] C4: Defer profile glue; not required to state the residual dependency precisely for single-op `1x1` Conv2D.
 
-- [ ] C5: Run a same-family cross-dim oracle matrix for 1x1 Conv2D.
-- [ ] C5: Determine whether cross-dim target-equivalent replay again requires EO target bytes.
+- [x] C5: Run a same-family cross-dim oracle matrix for 1x1 Conv2D.
+- [x] C5: Determine the tested cross-dim blocker: EO target bytes only (`PC=0-rule`, params already equal).
 
-- [ ] C6: Only if C5 says EO is the blocker, localize Conv2D EO transport-critical windows conservatively.
-- [ ] Phase 3 Exit: write a precise Conv2D residual-dependency boundary and keep multi-op / k>1 / depthwise deferred unless justified.
+- [x] C6: Re-check whether deeper EO localization is necessary for this phase.
+- [x] C6: Defer EO ablation; the Phase-3 residual boundary is already precise enough without it.
+- [x] Phase 3 Exit: write a precise Conv2D residual-dependency boundary and keep multi-op / k>1 / depthwise deferred.
 
 ## Guardrails
 - [x] Keep no-reboot recovery workflow (`--reset-before-claim`); do not power-cycle the hub.

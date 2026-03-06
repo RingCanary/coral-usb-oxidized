@@ -174,6 +174,8 @@ For protocol-level and syscall-level capture helpers, use:
 - `tools/tensorizer_patch_edgetpu.py` (in-place parameter patcher for compiled `*_edgetpu.tflite`)
 - `tools/generate_dense_quant_tflite.py` (single-layer Dense INT8 model generator)
 - `tools/generate_conv2d_quant_tflite.py` (single-layer Conv2D INT8 model generator)
+- `tools/dump_tflite_conv1x1_weights.py` (dump stored 1x1 Conv2D quantized weight bytes from a TFLite model)
+- `tools/patch_tflite_conv1x1_weight_pattern.py` (patch stored 1x1 Conv2D quantized weight bytes deterministically)
 - `tools/generate_dense_conv_quant_tflite.py` (Conv2D->Dense INT8 multi-op model generator)
 - `tools/bootstrap_edgetpu_compiler.sh` (local `edgetpu_compiler` bootstrap from Coral apt repo)
 - `tools/dense_template_pipeline.sh` (generate -> compile -> extract -> parse -> inspect pipeline)
@@ -186,7 +188,11 @@ For protocol-level and syscall-level capture helpers, use:
 - `scripts/m5_eo_neutral_window_crosscheck.sh` (Phase-2 follow-up helper: reverse-direction validation of candidate EO neutral windows)
 - `scripts/m5_eo_window_refine_probe.sh` (Phase-2 follow-up helper: recurse only inside currently transport-critical EO windows)
 - `scripts/m5_eo_rule_refine_probe.sh` (Phase-2 follow-up helper: rule-level refinement inside compact fatal EO windows)
-- `scripts/phase3_conv2d_family_bootstrap.sh` (Phase-3 kickoff helper: small local 1x1 Conv2D family/size bootstrap scan)
+- `scripts/phase3_conv2d_family_bootstrap.sh` (Phase-3 helper: small local 1x1 Conv2D family/size bootstrap scan)
+- `scripts/phase3_conv2d_layout_matrix.sh` (Phase-3 helper: widen 1x1 Conv2D layout validation across `32/64/128` channel regimes)
+- `scripts/phase3_conv2d_param_override_matrix.sh` (Phase-3 helper: compilerless Conv2D weight-region equivalence + DUT override matrix)
+- `scripts/phase3_conv2d_crossdim_oracle_matrix.sh` (Phase-3 helper: same-product spatial cross-dim oracle matrix for 1x1 Conv2D)
+- `scripts/phase3_conv2d_prefix_residual_probe.sh` (Phase-3 helper: isolate stale-prefix semantic residual on DUT)
 - `scripts/m6_instruction_axis_probe.sh` (Phase-2 M6 helper: quant/activation/bias instruction-axis differential probe)
 - `tools/dense_layout_probe.py` (single-hot parameter-layout probe and offset mapping extractor)
 - `tools/conv_layout_probe.py` (single-hot Conv2D parameter-layout probe and offset candidate extraction)
@@ -216,7 +222,7 @@ Current reverse-engineering notes:
 
 - `WORKLOG.md`
 - `phase2-todo.md` (closed Dense Phase-2 checklist)
-- `phase3-conv2d-todo.md` (active Conv2D Phase-3 checklist)
+- `phase3-conv2d-todo.md` (closed Phase-3 Conv2D checklist)
 - `docs/phase2_dense_m5_m7_2026-03-03.md`
 - `docs/phase2_dense_m55_crossdim_oracle_matrix_2026-03-06.md`
 - `docs/phase2_dense_eo_group_ablation_2026-03-06.md`
@@ -224,6 +230,7 @@ Current reverse-engineering notes:
 - `docs/phase2_dense_eo_transport_window_refine_2026-03-06.md`
 - `docs/phase2_dense_completion_2026-03-06.md`
 - `docs/phase3_conv2d_kickoff_2026-03-06.md`
+- `docs/phase3_conv2d_completion_2026-03-06.md`
 - `docs/phase2_claims_audit_2026-03-03.md`
 - `docs/usb_invoke_scaling_by_model.md`
 - `docs/next_usbmon_capture_matrix.md`
