@@ -17,6 +17,7 @@ If you are working on the current native path, start with:
 
 - `docs/active_path.md`
 - `docs/phase4_conv2d_k3_completion_2026-03-16.md`
+- `docs/phase5_conv2d_k3_h8_band_completion_2026-03-16.md`
 - `docs/phase5_conv2d_k3_6496_h8_band_2026-03-16.md`
 - `docs/phase5_conv2d_k3_6496_boundary_scan_2026-03-16.md`
 - `docs/phase4_completion_control_plan_2026-03-07.md`
@@ -30,7 +31,9 @@ Current bounded completion status:
 - Phase 4 is now complete for the bounded single-op Conv2D `k=3`, `same`, same-product family rooted at `16x64`
 - active completion assets live under `templates/phase4_conv2d_k3_sameprod_6512/`
 - the one-command Pi proof is `scripts/phase4_conv2d_k3_completion_demo.sh`
-- Phase 5 boundary discovery now shows a local p64 `H=8` `EO=6496` band (`8x112/120/128/136/144`) across nearby products, but still no same-product `6496` family with more than one member; no promotable `6496` family has been frozen yet
+- Phase 5 is now complete for the bounded mixed-product `fixed_height=8` `EO=6496` family frozen under `templates/phase5_conv2d_k3_h8_band_6496/`
+- the Phase 5 family uses a native EO emitter driven by field rules plus bounded lookup residue, not raw byte tables alone
+- the Phase 5 Pi proof passes for `p32/p64/p128 × {8x104,8x116,8x128,8x140,8x152}`
 
 ## Raspberry Pi 5 setup
 

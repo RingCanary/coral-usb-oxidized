@@ -18,7 +18,8 @@ LOCAL_DUT_DIR="$OUT_DIR/dut"
 mkdir -p "$LOCAL_CASES_DIR" "$LOCAL_DUT_DIR"
 
 pairs=(p32 p64 p128)
-target_heights=(32 64 128)
+requested_target_heights=()
+requested_target_widths=()
 
 while (($# > 0)); do
   case "$1" in
@@ -35,11 +36,19 @@ while (($# > 0)); do
       shift 2
       ;;
     --target-height)
-      target_heights=("$2")
+      requested_target_heights=("$2")
       shift 2
       ;;
     --target-heights)
-      IFS=',' read -r -a target_heights <<<"$2"
+      IFS=',' read -r -a requested_target_heights <<<"$2"
+      shift 2
+      ;;
+    --target-width)
+      requested_target_widths=("$2")
+      shift 2
+      ;;
+    --target-widths)
+      IFS=',' read -r -a requested_target_widths <<<"$2"
       shift 2
       ;;
     --pi-host)
@@ -74,6 +83,49 @@ channels_for_pair() {
   esac
 }
 
+resolve_target_shapes() {
+  python3 - <<'PY' "$FAMILY_SPEC" "${requested_target_heights[*]:-}" "${requested_target_widths[*]:-}"
+import json, pathlib, sys
+spec = json.loads(pathlib.Path(sys.argv[1]).read_text())
+height_arg = sys.argv[2].strip()
+width_arg = sys.argv[3].strip()
+targets = spec["regimes"][0]["targets"]
+heights = [int(x) for x in height_arg.split()] if height_arg else []
+widths = [int(x) for x in width_arg.split()] if width_arg else []
+
+def die(msg):
+    raise SystemExit(msg)
+
+if not heights and not widths:
+    for target in targets:
+        print(f"{target['height']} {target['width']}")
+    raise SystemExit(0)
+
+if widths and not heights:
+    die("target widths require target heights")
+
+pairs = []
+if widths:
+    if len(heights) == 1:
+        pairs = [(heights[0], w) for w in widths]
+    elif len(heights) == len(widths):
+        pairs = list(zip(heights, widths))
+    else:
+        die("target heights/widths length mismatch")
+else:
+    for h in heights:
+        matches = [(t["height"], t["width"]) for t in targets if int(t["height"]) == h]
+        if len(matches) != 1:
+            die(f"height {h} is ambiguous or unsupported; pass target width")
+        pairs.extend(matches)
+
+for h, w in pairs:
+    if not any(int(t["height"]) == h and int(t["width"]) == w for t in targets):
+        die(f"unsupported target shape {h}x{w}")
+    print(f"{h} {w}")
+PY
+}
+
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i "$SSH_KEY")
 ssh_run() { ssh "${SSH_OPTS[@]}" "$PI_HOST" "$@"; }
 rsync_pi() { rsync -av -e "ssh -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i $SSH_KEY" "$@"; }
@@ -81,13 +133,15 @@ rsync_pi() { rsync -av -e "ssh -o StrictHostKeyChecking=accept-new -o Identities
 emit_case_assets() {
   local pair="$1"
   local target_height="$2"
-  local channels="$3"
-  local case_dir="$LOCAL_CASES_DIR/$pair/h${target_height}"
+  local target_width="$3"
+  local channels="$4"
+  local case_dir="$LOCAL_CASES_DIR/$pair/h${target_height}_w${target_width}"
   mkdir -p "$case_dir"
   cargo run --quiet --bin conv_k3_eo_emit -- \
     --family-spec "$FAMILY_SPEC" \
     --channels "$channels" \
     --target-height "$target_height" \
+    --target-width "$target_width" \
     --out-patchspec "$case_dir/eo.patchspec" \
     --out-report "$case_dir/eo_report.json" >/dev/null
   python3 - <<'PY' "$case_dir/eo_report.json" "$case_dir/eo_report.txt"
@@ -133,10 +187,13 @@ run_remote_case() {
   ssh_run "$cmd" > "$log_path" 2>&1 || true
 }
 
+mapfile -t target_shapes < <(resolve_target_shapes)
+
 for pair in "${pairs[@]}"; do
   channels=$(channels_for_pair "$pair")
-  for target_height in "${target_heights[@]}"; do
-    emit_case_assets "$pair" "$target_height" "$channels"
+  for shape in "${target_shapes[@]}"; do
+    read -r target_height target_width <<<"$shape"
+    emit_case_assets "$pair" "$target_height" "$target_width" "$channels"
   done
 done
 
@@ -147,19 +204,20 @@ rsync -av --delete --exclude '.git' --exclude 'target' --exclude 'traces' \
 ssh_run "cd '$REMOTE_SRC_DIR' && cargo build --example rusb_serialized_exec_replay $([[ "$BUILD_PROFILE" == release ]] && echo --release) >/dev/null"
 
 for pair in "${pairs[@]}"; do
-  for target_height in "${target_heights[@]}"; do
-    case_dir="$LOCAL_CASES_DIR/$pair/h${target_height}"
+  for shape in "${target_shapes[@]}"; do
+    read -r target_height target_width <<<"$shape"
+    case_dir="$LOCAL_CASES_DIR/$pair/h${target_height}_w${target_width}"
     report_json="$case_dir/eo_report.json"
-    read -r target_width rule_count anchor_model target_compiled_model < <(
+    read -r report_height report_width rule_count anchor_model target_compiled_model < <(
       python3 - <<'PY' "$report_json"
 import json, pathlib, sys
 report = json.loads(pathlib.Path(sys.argv[1]).read_text())
-print(report["target_width"], report["rule_count"], report["anchor_compiled_model"], report["target_compiled_model"])
+print(report["target_height"], report["target_width"], report["rule_count"], report["anchor_compiled_model"], report["target_compiled_model"])
 PY
     )
-    input_bytes=$((target_height * target_width * $(channels_for_pair "$pair")))
+    input_bytes=$((report_height * report_width * $(channels_for_pair "$pair")))
     output_bytes=$input_bytes
-    case_remote_dir="$REMOTE_SRC_DIR/traces/analysis/$RUN_ID/$pair/h${target_height}"
+    case_remote_dir="$REMOTE_SRC_DIR/traces/analysis/$RUN_ID/$pair/h${report_height}_w${report_width}"
     mkdir -p "$LOCAL_DUT_DIR/$pair"
     ssh_run "mkdir -p '$case_remote_dir'"
     rsync_pi "$case_dir/" "$PI_HOST:$case_remote_dir/" >/dev/null
@@ -167,8 +225,8 @@ PY
     target_rel="${target_compiled_model#$REPO_ROOT/}"
     anchor_remote="$REMOTE_SRC_DIR/$anchor_rel"
     target_remote="$REMOTE_SRC_DIR/$target_rel"
-    run_remote_case target_baseline "$target_remote" "$case_remote_dir" "$input_bytes" "$output_bytes" "$rule_count" "$LOCAL_DUT_DIR/$pair/h${target_height}_target_baseline.log"
-    run_remote_case native_completion "$anchor_remote" "$case_remote_dir" "$input_bytes" "$output_bytes" "$rule_count" "$LOCAL_DUT_DIR/$pair/h${target_height}_native_completion.log"
+    run_remote_case target_baseline "$target_remote" "$case_remote_dir" "$input_bytes" "$output_bytes" "$rule_count" "$LOCAL_DUT_DIR/$pair/h${report_height}_w${report_width}_target_baseline.log"
+    run_remote_case native_completion "$anchor_remote" "$case_remote_dir" "$input_bytes" "$output_bytes" "$rule_count" "$LOCAL_DUT_DIR/$pair/h${report_height}_w${report_width}_native_completion.log"
   done
 done
 
@@ -201,7 +259,6 @@ for pair_dir in sorted(cases_dir.iterdir()):
         report = (case_dir / "eo_report.json")
         if not report.exists():
             continue
-        target_height = case_dir.name.lstrip("h")
         base_log = dut_dir / pair_dir.name / f"{case_dir.name}_target_baseline.log"
         native_log = dut_dir / pair_dir.name / f"{case_dir.name}_native_completion.log"
         base_hash, base_err = parse_hash(base_log)

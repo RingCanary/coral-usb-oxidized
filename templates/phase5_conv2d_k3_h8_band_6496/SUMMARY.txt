@@ -1,0 +1,22 @@
+family_id=phase5_conv2d_k3_h8_band_6496_v1
+family_mode=fixed_height_band
+fixed_height=8
+source_artifact=traces/analysis/phase4-conv2d-k3-family-scout-20260316T091108Z
+[p32] channels=32
+  h8_w104: source=rule_lookup lookup_rules=0
+  h8_w116: source=rule_lookup lookup_rules=107
+  h8_w128: source=noop lookup_rules=0
+  h8_w140: source=rule_lookup lookup_rules=119
+  h8_w152: source=rule_lookup lookup_rules=0
+[p64] channels=64
+  h8_w104: source=rule_lookup lookup_rules=0
+  h8_w116: source=rule_lookup lookup_rules=101
+  h8_w128: source=noop lookup_rules=0
+  h8_w140: source=rule_lookup lookup_rules=100
+  h8_w152: source=rule_lookup lookup_rules=0
+[p128] channels=128
+  h8_w104: source=rule_lookup lookup_rules=0
+  h8_w116: source=rule_lookup lookup_rules=71
+  h8_w128: source=noop lookup_rules=0
+  h8_w140: source=rule_lookup lookup_rules=79
+  h8_w152: source=rule_lookup lookup_rules=0

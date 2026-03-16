@@ -23,10 +23,12 @@ Those remain compatibility or archival surfaces outside the active bounded compl
 For current status and frontier:
 
 - `docs/phase4_conv2d_k3_completion_2026-03-16.md`
+- `docs/phase5_conv2d_k3_h8_band_completion_2026-03-16.md`
 - `docs/phase5_conv2d_k3_6496_h8_band_2026-03-16.md`
 - `docs/phase5_conv2d_k3_6496_boundary_scan_2026-03-16.md`
 - `docs/phase4_completion_control_plan_2026-03-07.md`
 - `templates/phase4_conv2d_k3_sameprod_6512/family.json`
+- `templates/phase5_conv2d_k3_h8_band_6496/family.json`
 - `WORKLOG.md`
 
 For active runtime smoke checks:
@@ -42,6 +44,9 @@ For active bounded completion helpers:
 ```bash
 cargo run --bin conv_k3_eo_emit -- --family-spec templates/phase4_conv2d_k3_sameprod_6512/family.json --channels 64 --target-height 64 --out-report /tmp/conv_k3_eo_emit.json
 bash scripts/phase4_conv2d_k3_completion_demo.sh
+
+cargo run --bin conv_k3_eo_emit -- --family-spec templates/phase5_conv2d_k3_h8_band_6496/family.json --channels 64 --target-height 8 --target-width 140 --out-report /tmp/conv_k3_eo_emit_phase5.json
+bash scripts/phase4_conv2d_k3_completion_demo.sh --family-spec templates/phase5_conv2d_k3_h8_band_6496/family.json --pairs p32,p64,p128 --target-height 8 --target-widths 104,116,128,140,152
 ```
 
 ## Current Bounded Status
@@ -57,13 +62,24 @@ Bounded Phase 4 completion is now achieved for:
 - pure-`rusb` replay on Pi
 - no `edgetpu_compiler` in the active artifact-creation loop
 
-The current frontier is no longer bounded-family completion. It is family-boundary discovery beyond this frozen family.
+Bounded Phase 5 completion is now also achieved for:
 
-The current Phase 5 result is sharper than the first blocker note:
+- single-op Conv2D
+- `kernel_size=3`
+- `stride=1`
+- `padding=same`
+- `bias=off`
+- mixed-product `fixed_height=8` family
+- frozen widths `104,116,128,140,152`
+- symmetric `p32/p64/p128`
+- pure-`rusb` replay on Pi
+- no `edgetpu_compiler` in the active artifact-creation loop
 
-- `EO=6496` now appears as a local p64 `H=8` band across nearby products (`8x112/120/128/136/144`)
-- but each of those points still belongs to a different same-product family, so there is still no promotable `6496` family under the current schema
-- the active loop therefore remains intentionally frozen at the checked-in `6512` family
+The active frontier is now beyond the first `6496` family closure:
+
+- widen the frozen `H=8` width set
+- compress lookup residue further toward a more reusable law
+- test whether the mixed-product family model extends beyond `fixed_height=8`
 
 ## Compatibility Boundary
 
