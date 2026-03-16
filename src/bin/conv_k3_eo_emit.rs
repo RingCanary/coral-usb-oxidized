@@ -1,7 +1,7 @@
 use coral_usb_oxidized::extract_instruction_chunk_from_serialized_executable;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::error::Error;
 use std::fs;
@@ -49,6 +49,8 @@ struct FieldRuntimeSpec {
     high_dim: i64,
     #[serde(default)]
     mid_dim: Option<i64>,
+    #[serde(default = "default_predict_mode")]
+    predict_mode: String,
     #[serde(default = "default_tile_size")]
     tile_size: i64,
     #[serde(default)]
@@ -233,6 +235,10 @@ impl LanePick {
 
 fn default_tile_size() -> i64 {
     64
+}
+
+fn default_predict_mode() -> String {
+    "threepoint".to_string()
 }
 
 fn default_lane_priority() -> String {
@@ -437,13 +443,23 @@ fn encode_domain_value(v: i128, bits: u8, domain: &str) -> i128 {
 fn param_i64(params: &Map<String, Value>, key: &str, default: i64) -> i64 {
     params
         .get(key)
-        .and_then(Value::as_i64)
-        .or_else(|| params.get(key).and_then(Value::as_u64).map(|x| x as i64))
+        .and_then(|v| match v {
+            Value::Number(n) => n.as_i64().or_else(|| n.as_u64().map(|x| x as i64)),
+            Value::String(s) => s.parse::<i64>().ok(),
+            _ => None,
+        })
         .unwrap_or(default)
 }
 
 fn param_f64(params: &Map<String, Value>, key: &str, default: f64) -> f64 {
-    params.get(key).and_then(Value::as_f64).unwrap_or(default)
+    params
+        .get(key)
+        .and_then(|v| match v {
+            Value::Number(n) => n.as_f64(),
+            Value::String(s) => s.parse::<f64>().ok(),
+            _ => None,
+        })
+        .unwrap_or(default)
 }
 
 fn pick_best_candidate(
@@ -585,6 +601,12 @@ fn read_word_le(bytes: &[u8], offset: usize, lane_bytes: usize) -> u64 {
     out
 }
 
+fn write_word_le(bytes: &mut [u8], offset: usize, lane_bytes: usize, value: u64) {
+    for idx in 0..lane_bytes {
+        bytes[offset + idx] = ((value >> (idx * 8)) & 0xff) as u8;
+    }
+}
+
 fn iter_per_offsets(lane: &LaneAnalysis) -> Vec<PerOffsetRow> {
     let mut out = Vec::new();
     for group in &lane.top_groups {
@@ -665,7 +687,8 @@ fn emit_from_field_spec(
     runtime: &FieldRuntimeSpec,
     target_dim: i64,
 ) -> Result<Vec<[usize; 2]>, Box<dyn Error>> {
-    let mut assigned: HashMap<usize, Vec<u8>> = HashMap::new();
+    let mut patched = base_chunk.to_vec();
+    let mut assigned_offsets: HashSet<usize> = HashSet::new();
     for lane in parse_lane_priority(&runtime.lane_priority)? {
         let lane_obj = match lane {
             LanePick::Lane16 => &analysis.lane16,
@@ -673,7 +696,7 @@ fn emit_from_field_spec(
         };
         for per in iter_per_offsets(lane_obj) {
             let off = per.offset;
-            if assigned.contains_key(&off) || off + lane.bytes() > base_chunk.len() {
+            if assigned_offsets.contains(&off) || off + lane.bytes() > base_chunk.len() {
                 continue;
             }
             let vals = values_map(&per.values_by_dim);
@@ -685,7 +708,7 @@ fn emit_from_field_spec(
             };
             let override_rule = match_rule(field_spec, lane.key(), off, per.stride_residue);
 
-            let mut mode_use = "endpoint".to_string();
+            let mut mode_use = runtime.predict_mode.clone();
             if let Some(rule) = override_rule {
                 if let Some(policy) = &rule.policy {
                     mode_use = policy.clone();
@@ -746,20 +769,31 @@ fn emit_from_field_spec(
                 .unwrap_or("u")
                 .to_string();
 
-            let pred_field = if mode_use == "threepoint" {
+            let pred_word = if mode_use == "threepoint" {
                 if let (Some(mid_dim), Some(mid_value)) = (runtime.mid_dim, mid_eval) {
-                    let pred = fit_three_point_predict(
-                        tiles(runtime.low_dim, runtime.tile_size) as f64,
-                        decode_domain_value(low_eval, bits, &domain),
-                        tiles(mid_dim, runtime.tile_size) as f64,
-                        decode_domain_value(mid_value, bits, &domain),
-                        tiles(runtime.high_dim, runtime.tile_size) as f64,
-                        decode_domain_value(high_eval, bits, &domain),
-                        tiles(target_dim, runtime.tile_size) as f64,
+                    let pred = encode_domain_value(
+                        fit_three_point_predict(
+                            tiles(runtime.low_dim, runtime.tile_size) as f64,
+                            decode_domain_value(low_eval, bits, &domain),
+                            tiles(mid_dim, runtime.tile_size) as f64,
+                            decode_domain_value(mid_value, bits, &domain),
+                            tiles(runtime.high_dim, runtime.tile_size) as f64,
+                            decode_domain_value(high_eval, bits, &domain),
+                            tiles(target_dim, runtime.tile_size) as f64,
+                        ),
+                        bits,
+                        &domain,
                     );
-                    encode_domain_value(pred, bits, &domain)
+                    let pred_field_norm = pred.rem_euclid(1i128 << field_width) as u64;
+                    if let Some([lo, _hi]) = bit_range {
+                        let base_word = read_word_le(base_chunk, off, lane.bytes());
+                        let field_mask = bits_mask(field_width);
+                        (base_word & !(field_mask << lo)) | ((pred_field_norm & field_mask) << lo)
+                    } else {
+                        pred_field_norm
+                    }
                 } else {
-                    predict_value(
+                    let pred_field = predict_value(
                         &model,
                         &params,
                         runtime.low_dim,
@@ -768,13 +802,21 @@ fn emit_from_field_spec(
                         high_eval,
                         target_dim,
                         runtime.tile_size,
-                        "endpoint",
+                        "best",
                         &domain,
                         bits,
-                    )
+                    );
+                    let pred_field_norm = pred_field.rem_euclid(1i128 << field_width) as u64;
+                    if let Some([lo, _hi]) = bit_range {
+                        let base_word = read_word_le(base_chunk, off, lane.bytes());
+                        let field_mask = bits_mask(field_width);
+                        (base_word & !(field_mask << lo)) | ((pred_field_norm & field_mask) << lo)
+                    } else {
+                        pred_field_norm
+                    }
                 }
             } else {
-                predict_value(
+                let pred_field = predict_value(
                     &model,
                     &params,
                     runtime.low_dim,
@@ -786,28 +828,24 @@ fn emit_from_field_spec(
                     &mode_use,
                     &domain,
                     bits,
-                )
-            } as u64;
-
-            let field_mask = bits_mask(field_width);
-            let pred_word = if let Some([lo, _hi]) = bit_range {
-                let base_word = read_word_le(base_chunk, off, lane.bytes());
-                (base_word & !(field_mask << lo)) | ((pred_field & field_mask) << lo)
-            } else {
-                pred_field & bits_mask(lane_bits)
+                );
+                let pred_field_norm = pred_field.rem_euclid(1i128 << field_width) as u64;
+                if let Some([lo, _hi]) = bit_range {
+                    let base_word = read_word_le(base_chunk, off, lane.bytes());
+                    let field_mask = bits_mask(field_width);
+                    (base_word & !(field_mask << lo)) | ((pred_field_norm & field_mask) << lo)
+                } else {
+                    pred_field_norm
+                }
             };
-            assigned.insert(
+            write_word_le(
+                &mut patched,
                 off,
-                (0..lane.bytes())
-                    .map(|idx| ((pred_word >> (idx * 8)) & 0xff) as u8)
-                    .collect(),
+                lane.bytes(),
+                ((pred_word as u128) % (1u128 << lane_bits)) as u64,
             );
+            assigned_offsets.insert(off);
         }
-    }
-
-    let mut patched = base_chunk.to_vec();
-    for (offset, bytes) in &assigned {
-        patched[*offset..(*offset + bytes.len())].copy_from_slice(bytes);
     }
     let mut out = Vec::new();
     for idx in 0..base_chunk.len() {

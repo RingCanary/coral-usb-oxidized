@@ -1,0 +1,105 @@
+family_id=phase6_conv2d_k3_h8_corridor_6496_v1
+family_mode=fixed_height_band
+fixed_height=8
+source_artifact=traces/analysis/phase4-conv2d-k3-family-scout-20260316T094618Z
+lookup_cap=96
+predict_mode=threepoint
+[p32] channels=32
+  h8_w72: source=rule_lookup lookup_rules=56
+  h8_w76: source=rule_lookup lookup_rules=0
+  h8_w80: source=rule_lookup lookup_rules=12
+  h8_w84: source=rule_lookup lookup_rules=28
+  h8_w88: source=rule_lookup lookup_rules=33
+  h8_w92: source=rule_lookup lookup_rules=21
+  h8_w96: source=rule_lookup lookup_rules=22
+  h8_w100: source=rule_lookup lookup_rules=36
+  h8_w104: source=rule_lookup lookup_rules=36
+  h8_w108: source=rule_lookup lookup_rules=18
+  h8_w112: source=rule_lookup lookup_rules=9
+  h8_w116: source=rule_lookup lookup_rules=26
+  h8_w120: source=rule_lookup lookup_rules=32
+  h8_w124: source=rule_lookup lookup_rules=12
+  h8_w128: source=noop lookup_rules=0
+  h8_w132: source=rule_lookup lookup_rules=23
+  h8_w136: source=rule_lookup lookup_rules=18
+  h8_w140: source=rule_lookup lookup_rules=12
+  h8_w144: source=rule_lookup lookup_rules=8
+  h8_w148: source=rule_lookup lookup_rules=26
+  h8_w152: source=rule_lookup lookup_rules=32
+  h8_w156: source=rule_lookup lookup_rules=9
+  h8_w160: source=rule_lookup lookup_rules=8
+  h8_w164: source=rule_lookup lookup_rules=34
+  h8_w168: source=rule_lookup lookup_rules=42
+  h8_w172: source=rule_lookup lookup_rules=9
+  h8_w176: source=rule_lookup lookup_rules=10
+  h8_w180: source=rule_lookup lookup_rules=28
+  h8_w184: source=rule_lookup lookup_rules=40
+  h8_w188: source=rule_lookup lookup_rules=0
+  h8_w192: source=rule_lookup lookup_rules=40
+  max_lookup_rules=56
+[p64] channels=64
+  h8_w72: source=rule_lookup lookup_rules=45
+  h8_w76: source=rule_lookup lookup_rules=0
+  h8_w80: source=rule_lookup lookup_rules=8
+  h8_w84: source=rule_lookup lookup_rules=8
+  h8_w88: source=rule_lookup lookup_rules=11
+  h8_w92: source=rule_lookup lookup_rules=10
+  h8_w96: source=rule_lookup lookup_rules=7
+  h8_w100: source=rule_lookup lookup_rules=8
+  h8_w104: source=rule_lookup lookup_rules=7
+  h8_w108: source=rule_lookup lookup_rules=11
+  h8_w112: source=rule_lookup lookup_rules=10
+  h8_w116: source=rule_lookup lookup_rules=12
+  h8_w120: source=rule_lookup lookup_rules=10
+  h8_w124: source=rule_lookup lookup_rules=13
+  h8_w128: source=noop lookup_rules=0
+  h8_w132: source=rule_lookup lookup_rules=7
+  h8_w136: source=rule_lookup lookup_rules=10
+  h8_w140: source=rule_lookup lookup_rules=8
+  h8_w144: source=rule_lookup lookup_rules=8
+  h8_w148: source=rule_lookup lookup_rules=9
+  h8_w152: source=rule_lookup lookup_rules=9
+  h8_w156: source=rule_lookup lookup_rules=7
+  h8_w160: source=rule_lookup lookup_rules=4
+  h8_w164: source=rule_lookup lookup_rules=16
+  h8_w168: source=rule_lookup lookup_rules=20
+  h8_w172: source=rule_lookup lookup_rules=9
+  h8_w176: source=rule_lookup lookup_rules=8
+  h8_w180: source=rule_lookup lookup_rules=6
+  h8_w184: source=rule_lookup lookup_rules=6
+  h8_w188: source=rule_lookup lookup_rules=0
+  h8_w192: source=rule_lookup lookup_rules=42
+  max_lookup_rules=45
+[p128] channels=128
+  h8_w72: source=rule_lookup lookup_rules=11
+  h8_w76: source=rule_lookup lookup_rules=0
+  h8_w80: source=rule_lookup lookup_rules=5
+  h8_w84: source=rule_lookup lookup_rules=11
+  h8_w88: source=rule_lookup lookup_rules=8
+  h8_w92: source=rule_lookup lookup_rules=5
+  h8_w96: source=rule_lookup lookup_rules=4
+  h8_w100: source=rule_lookup lookup_rules=11
+  h8_w104: source=rule_lookup lookup_rules=11
+  h8_w108: source=rule_lookup lookup_rules=10
+  h8_w112: source=rule_lookup lookup_rules=5
+  h8_w116: source=rule_lookup lookup_rules=9
+  h8_w120: source=rule_lookup lookup_rules=12
+  h8_w124: source=rule_lookup lookup_rules=5
+  h8_w128: source=noop lookup_rules=0
+  h8_w132: source=rule_lookup lookup_rules=22
+  h8_w136: source=rule_lookup lookup_rules=10
+  h8_w140: source=rule_lookup lookup_rules=11
+  h8_w144: source=rule_lookup lookup_rules=6
+  h8_w148: source=rule_lookup lookup_rules=11
+  h8_w152: source=rule_lookup lookup_rules=10
+  h8_w156: source=rule_lookup lookup_rules=6
+  h8_w160: source=rule_lookup lookup_rules=8
+  h8_w164: source=rule_lookup lookup_rules=19
+  h8_w168: source=rule_lookup lookup_rules=17
+  h8_w172: source=rule_lookup lookup_rules=6
+  h8_w176: source=rule_lookup lookup_rules=6
+  h8_w180: source=rule_lookup lookup_rules=14
+  h8_w184: source=rule_lookup lookup_rules=11
+  h8_w188: source=rule_lookup lookup_rules=0
+  h8_w192: source=rule_lookup lookup_rules=8
+  max_lookup_rules=22

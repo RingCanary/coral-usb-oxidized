@@ -1,0 +1,6215 @@
+{
+  "schema_version": 2,
+  "family_id": "phase6_conv2d_k3_h8_corridor_6496_v1",
+  "family_mode": "fixed_height_band",
+  "fixed_height": 8,
+  "anchor_height": 8,
+  "anchor_width": 128,
+  "eo_payload_len": 6496,
+  "kernel_size": 3,
+  "stride": 1,
+  "padding": "same",
+  "bias": false,
+  "source_artifact": "traces/analysis/phase4-conv2d-k3-family-scout-20260316T094618Z",
+  "asset_root": "templates/phase6_conv2d_k3_h8_corridor_6496",
+  "regimes": [
+    {
+      "name": "p32",
+      "channels": 32,
+      "anchor_compiled_model": "p32/anchor/conv2d_8x128x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+      "anchor_uncompiled_model": "p32/anchor/conv2d_8x128x32_to_32_k3_s1_same_quant.tflite",
+      "anchor_metadata": "p32/anchor/conv2d_8x128x32_to_32_k3_s1_same_quant.metadata.json",
+      "anchor_executable": "p32/anchor/serialized_executable_000.bin",
+      "field_runtime": {
+        "analysis_json": "p32/law/eo_width_band_analysis.json",
+        "low_dim": 76,
+        "mid_dim": 128,
+        "high_dim": 188,
+        "predict_mode": "threepoint",
+        "tile_size": 4,
+        "chunk_index": 0,
+        "lane_priority": "lane32,lane16"
+      },
+      "targets": [
+        {
+          "height": 8,
+          "width": 72,
+          "target_model": "p32/targets/h8_w72/conv2d_8x72x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w72/conv2d_8x72x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w72/conv2d_8x72x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w72/field_spec.json",
+          "lookup_rules": [
+            [
+              634,
+              26
+            ],
+            [
+              1271,
+              128
+            ],
+            [
+              1278,
+              252
+            ],
+            [
+              1286,
+              240
+            ],
+            [
+              1290,
+              68
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1390,
+              252
+            ],
+            [
+              1398,
+              240
+            ],
+            [
+              1402,
+              68
+            ],
+            [
+              1439,
+              120
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1502,
+              252
+            ],
+            [
+              1510,
+              240
+            ],
+            [
+              1514,
+              68
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1612,
+              4
+            ],
+            [
+              1622,
+              240
+            ],
+            [
+              1627,
+              9
+            ],
+            [
+              1663,
+              120
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1726,
+              252
+            ],
+            [
+              1734,
+              240
+            ],
+            [
+              1738,
+              68
+            ],
+            [
+              1799,
+              31
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1854,
+              252
+            ],
+            [
+              1862,
+              240
+            ],
+            [
+              1866,
+              68
+            ],
+            [
+              1886,
+              9
+            ],
+            [
+              1927,
+              31
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1982,
+              252
+            ],
+            [
+              1990,
+              240
+            ],
+            [
+              1994,
+              68
+            ],
+            [
+              2055,
+              31
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2110,
+              252
+            ],
+            [
+              2118,
+              240
+            ],
+            [
+              2122,
+              68
+            ],
+            [
+              2183,
+              31
+            ],
+            [
+              3138,
+              4
+            ],
+            [
+              3144,
+              9
+            ],
+            [
+              3234,
+              4
+            ],
+            [
+              3240,
+              9
+            ],
+            [
+              3330,
+              4
+            ],
+            [
+              3336,
+              9
+            ],
+            [
+              3432,
+              9
+            ],
+            [
+              3528,
+              9
+            ],
+            [
+              3624,
+              9
+            ],
+            [
+              3963,
+              96
+            ],
+            [
+              4137,
+              0
+            ],
+            [
+              4154,
+              93
+            ],
+            [
+              4157,
+              96
+            ],
+            [
+              4158,
+              97
+            ],
+            [
+              4163,
+              96
+            ],
+            [
+              4164,
+              17
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 76,
+          "target_model": "p32/targets/h8_w76/conv2d_8x76x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w76/conv2d_8x76x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w76/conv2d_8x76x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w76/field_spec.json",
+          "lookup_rules": []
+        },
+        {
+          "height": 8,
+          "width": 80,
+          "target_model": "p32/targets/h8_w80/conv2d_8x80x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w80/conv2d_8x80x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w80/conv2d_8x80x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w80/field_spec.json",
+          "lookup_rules": [
+            [
+              1440,
+              14
+            ],
+            [
+              1799,
+              63
+            ],
+            [
+              1927,
+              63
+            ],
+            [
+              2055,
+              63
+            ],
+            [
+              2183,
+              63
+            ],
+            [
+              3963,
+              80
+            ],
+            [
+              4137,
+              0
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4154,
+              95
+            ],
+            [
+              4156,
+              0
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4163,
+              64
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 84,
+          "target_model": "p32/targets/h8_w84/conv2d_8x84x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w84/conv2d_8x84x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w84/conv2d_8x84x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w84/field_spec.json",
+          "lookup_rules": [
+            [
+              1271,
+              128
+            ],
+            [
+              1272,
+              2
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1384,
+              2
+            ],
+            [
+              1439,
+              184
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1496,
+              2
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1608,
+              2
+            ],
+            [
+              1663,
+              56
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1720,
+              2
+            ],
+            [
+              1799,
+              79
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1848,
+              2
+            ],
+            [
+              1927,
+              79
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1976,
+              2
+            ],
+            [
+              2055,
+              79
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2104,
+              2
+            ],
+            [
+              2183,
+              79
+            ],
+            [
+              3963,
+              72
+            ],
+            [
+              4137,
+              0
+            ],
+            [
+              4152,
+              0
+            ],
+            [
+              4153,
+              192
+            ],
+            [
+              4154,
+              95
+            ],
+            [
+              4398,
+              20
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 88,
+          "target_model": "p32/targets/h8_w88/conv2d_8x88x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w88/conv2d_8x88x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w88/conv2d_8x88x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w88/field_spec.json",
+          "lookup_rules": [
+            [
+              1271,
+              128
+            ],
+            [
+              1290,
+              68
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1402,
+              68
+            ],
+            [
+              1439,
+              120
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1502,
+              251
+            ],
+            [
+              1514,
+              68
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1612,
+              5
+            ],
+            [
+              1627,
+              11
+            ],
+            [
+              1663,
+              120
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1738,
+              68
+            ],
+            [
+              1799,
+              95
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1866,
+              68
+            ],
+            [
+              1886,
+              11
+            ],
+            [
+              1927,
+              95
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1982,
+              251
+            ],
+            [
+              1994,
+              68
+            ],
+            [
+              2055,
+              95
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2122,
+              68
+            ],
+            [
+              2183,
+              95
+            ],
+            [
+              3963,
+              64
+            ],
+            [
+              4137,
+              0
+            ],
+            [
+              4152,
+              0
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4156,
+              0
+            ],
+            [
+              4157,
+              192
+            ],
+            [
+              4398,
+              20
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 92,
+          "target_model": "p32/targets/h8_w92/conv2d_8x92x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w92/conv2d_8x92x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w92/conv2d_8x92x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w92/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              111
+            ],
+            [
+              1927,
+              111
+            ],
+            [
+              2055,
+              111
+            ],
+            [
+              2183,
+              111
+            ],
+            [
+              2810,
+              128
+            ],
+            [
+              2812,
+              128
+            ],
+            [
+              2813,
+              128
+            ],
+            [
+              2906,
+              128
+            ],
+            [
+              2908,
+              128
+            ],
+            [
+              2909,
+              128
+            ],
+            [
+              3386,
+              128
+            ],
+            [
+              3388,
+              128
+            ],
+            [
+              3389,
+              128
+            ],
+            [
+              3482,
+              128
+            ],
+            [
+              3484,
+              128
+            ],
+            [
+              3485,
+              128
+            ],
+            [
+              3963,
+              56
+            ],
+            [
+              4137,
+              0
+            ],
+            [
+              4152,
+              0
+            ],
+            [
+              4153,
+              192
+            ],
+            [
+              4154,
+              95
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 96,
+          "target_model": "p32/targets/h8_w96/conv2d_8x96x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w96/conv2d_8x96x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w96/conv2d_8x96x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w96/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              2810,
+              128
+            ],
+            [
+              2812,
+              128
+            ],
+            [
+              2813,
+              128
+            ],
+            [
+              2906,
+              128
+            ],
+            [
+              2908,
+              128
+            ],
+            [
+              2909,
+              128
+            ],
+            [
+              3386,
+              128
+            ],
+            [
+              3388,
+              128
+            ],
+            [
+              3389,
+              128
+            ],
+            [
+              3482,
+              128
+            ],
+            [
+              3484,
+              128
+            ],
+            [
+              3485,
+              128
+            ],
+            [
+              3963,
+              48
+            ],
+            [
+              4137,
+              0
+            ],
+            [
+              4152,
+              0
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4156,
+              0
+            ],
+            [
+              4157,
+              192
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 100,
+          "target_model": "p32/targets/h8_w100/conv2d_8x100x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w100/conv2d_8x100x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w100/conv2d_8x100x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w100/field_spec.json",
+          "lookup_rules": [
+            [
+              1271,
+              128
+            ],
+            [
+              1272,
+              1
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1384,
+              1
+            ],
+            [
+              1439,
+              184
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1496,
+              1
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1608,
+              1
+            ],
+            [
+              1663,
+              56
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1720,
+              1
+            ],
+            [
+              1799,
+              143
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1848,
+              1
+            ],
+            [
+              1927,
+              143
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1976,
+              1
+            ],
+            [
+              2055,
+              143
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2104,
+              1
+            ],
+            [
+              2183,
+              143
+            ],
+            [
+              2812,
+              128
+            ],
+            [
+              2908,
+              128
+            ],
+            [
+              2909,
+              128
+            ],
+            [
+              3388,
+              128
+            ],
+            [
+              3389,
+              128
+            ],
+            [
+              3484,
+              128
+            ],
+            [
+              3485,
+              128
+            ],
+            [
+              3963,
+              40
+            ],
+            [
+              4137,
+              0
+            ],
+            [
+              4152,
+              0
+            ],
+            [
+              4153,
+              0
+            ],
+            [
+              4157,
+              192
+            ],
+            [
+              4163,
+              224
+            ],
+            [
+              4398,
+              24
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 104,
+          "target_model": "p32/targets/h8_w104/conv2d_8x104x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w104/conv2d_8x104x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w104/conv2d_8x104x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w104/field_spec.json",
+          "lookup_rules": [
+            [
+              1271,
+              128
+            ],
+            [
+              1290,
+              68
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1402,
+              68
+            ],
+            [
+              1439,
+              120
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1502,
+              250
+            ],
+            [
+              1514,
+              68
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1612,
+              6
+            ],
+            [
+              1627,
+              13
+            ],
+            [
+              1663,
+              120
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1738,
+              68
+            ],
+            [
+              1799,
+              159
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1866,
+              68
+            ],
+            [
+              1886,
+              13
+            ],
+            [
+              1927,
+              159
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1982,
+              250
+            ],
+            [
+              1994,
+              68
+            ],
+            [
+              2055,
+              159
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2122,
+              68
+            ],
+            [
+              2183,
+              159
+            ],
+            [
+              2813,
+              128
+            ],
+            [
+              2908,
+              128
+            ],
+            [
+              3389,
+              128
+            ],
+            [
+              3485,
+              128
+            ],
+            [
+              3963,
+              32
+            ],
+            [
+              4137,
+              0
+            ],
+            [
+              4153,
+              0
+            ],
+            [
+              4157,
+              224
+            ],
+            [
+              4163,
+              224
+            ],
+            [
+              4398,
+              24
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 108,
+          "target_model": "p32/targets/h8_w108/conv2d_8x108x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w108/conv2d_8x108x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w108/conv2d_8x108x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w108/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              175
+            ],
+            [
+              1927,
+              175
+            ],
+            [
+              2055,
+              175
+            ],
+            [
+              2183,
+              175
+            ],
+            [
+              2813,
+              128
+            ],
+            [
+              2908,
+              128
+            ],
+            [
+              2909,
+              128
+            ],
+            [
+              3388,
+              128
+            ],
+            [
+              3389,
+              128
+            ],
+            [
+              3484,
+              128
+            ],
+            [
+              3485,
+              128
+            ],
+            [
+              3963,
+              24
+            ],
+            [
+              4137,
+              0
+            ],
+            [
+              4153,
+              63
+            ],
+            [
+              4154,
+              95
+            ],
+            [
+              4156,
+              0
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4163,
+              64
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 112,
+          "target_model": "p32/targets/h8_w112/conv2d_8x112x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w112/conv2d_8x112x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w112/conv2d_8x112x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w112/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              191
+            ],
+            [
+              1927,
+              191
+            ],
+            [
+              2055,
+              191
+            ],
+            [
+              2183,
+              191
+            ],
+            [
+              2908,
+              127
+            ],
+            [
+              3963,
+              16
+            ],
+            [
+              4139,
+              192
+            ],
+            [
+              4153,
+              192
+            ],
+            [
+              4154,
+              95
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 116,
+          "target_model": "p32/targets/h8_w116/conv2d_8x116x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w116/conv2d_8x116x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w116/conv2d_8x116x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w116/field_spec.json",
+          "lookup_rules": [
+            [
+              1271,
+              128
+            ],
+            [
+              1275,
+              0
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1387,
+              0
+            ],
+            [
+              1439,
+              184
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1499,
+              0
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1611,
+              0
+            ],
+            [
+              1663,
+              56
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1723,
+              0
+            ],
+            [
+              1799,
+              207
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1851,
+              0
+            ],
+            [
+              1927,
+              207
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1979,
+              0
+            ],
+            [
+              2055,
+              207
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2107,
+              0
+            ],
+            [
+              2183,
+              207
+            ],
+            [
+              2908,
+              127
+            ],
+            [
+              4154,
+              97
+            ],
+            [
+              4158,
+              93
+            ],
+            [
+              4164,
+              14
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 120,
+          "target_model": "p32/targets/h8_w120/conv2d_8x120x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w120/conv2d_8x120x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w120/conv2d_8x120x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w120/field_spec.json",
+          "lookup_rules": [
+            [
+              1271,
+              128
+            ],
+            [
+              1290,
+              68
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1402,
+              68
+            ],
+            [
+              1439,
+              120
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1502,
+              249
+            ],
+            [
+              1514,
+              68
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1622,
+              228
+            ],
+            [
+              1627,
+              15
+            ],
+            [
+              1663,
+              120
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1738,
+              68
+            ],
+            [
+              1799,
+              223
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1866,
+              68
+            ],
+            [
+              1886,
+              15
+            ],
+            [
+              1927,
+              223
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1982,
+              249
+            ],
+            [
+              1994,
+              68
+            ],
+            [
+              2055,
+              223
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2122,
+              68
+            ],
+            [
+              2183,
+              223
+            ],
+            [
+              2812,
+              127
+            ],
+            [
+              3388,
+              127
+            ],
+            [
+              4139,
+              192
+            ],
+            [
+              4153,
+              192
+            ],
+            [
+              4154,
+              95
+            ],
+            [
+              4157,
+              255
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 124,
+          "target_model": "p32/targets/h8_w124/conv2d_8x124x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w124/conv2d_8x124x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w124/conv2d_8x124x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w124/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              239
+            ],
+            [
+              1927,
+              239
+            ],
+            [
+              2055,
+              239
+            ],
+            [
+              2183,
+              239
+            ],
+            [
+              2812,
+              127
+            ],
+            [
+              3388,
+              127
+            ],
+            [
+              3963,
+              248
+            ],
+            [
+              4153,
+              63
+            ],
+            [
+              4154,
+              95
+            ],
+            [
+              4156,
+              0
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4163,
+              64
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 128,
+          "target_model": "p32/anchor/conv2d_8x128x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/anchor/conv2d_8x128x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/anchor/conv2d_8x128x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "noop",
+          "field_spec_json": null,
+          "lookup_rules": []
+        },
+        {
+          "height": 8,
+          "width": 132,
+          "target_model": "p32/targets/h8_w132/conv2d_8x132x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w132/conv2d_8x132x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w132/conv2d_8x132x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w132/field_spec.json",
+          "lookup_rules": [
+            [
+              1271,
+              128
+            ],
+            [
+              1273,
+              65
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1385,
+              65
+            ],
+            [
+              1439,
+              184
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1497,
+              65
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1609,
+              65
+            ],
+            [
+              1663,
+              56
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1721,
+              65
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1849,
+              65
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1977,
+              65
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2105,
+              65
+            ],
+            [
+              3963,
+              232
+            ],
+            [
+              4086,
+              126
+            ],
+            [
+              4153,
+              32
+            ],
+            [
+              4155,
+              232
+            ],
+            [
+              4398,
+              32
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 136,
+          "target_model": "p32/targets/h8_w136/conv2d_8x136x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w136/conv2d_8x136x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w136/conv2d_8x136x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w136/field_spec.json",
+          "lookup_rules": [
+            [
+              1271,
+              128
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1439,
+              120
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1663,
+              120
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1799,
+              31
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1927,
+              31
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              2055,
+              31
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2183,
+              31
+            ],
+            [
+              3963,
+              224
+            ],
+            [
+              4153,
+              32
+            ],
+            [
+              4157,
+              128
+            ],
+            [
+              4398,
+              32
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 140,
+          "target_model": "p32/targets/h8_w140/conv2d_8x140x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w140/conv2d_8x140x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w140/conv2d_8x140x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w140/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              47
+            ],
+            [
+              1927,
+              47
+            ],
+            [
+              2055,
+              47
+            ],
+            [
+              2183,
+              47
+            ],
+            [
+              3963,
+              216
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4154,
+              97
+            ],
+            [
+              4155,
+              40
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4158,
+              93
+            ],
+            [
+              4163,
+              160
+            ],
+            [
+              4164,
+              14
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 144,
+          "target_model": "p32/targets/h8_w144/conv2d_8x144x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w144/conv2d_8x144x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w144/conv2d_8x144x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w144/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              63
+            ],
+            [
+              1927,
+              63
+            ],
+            [
+              2055,
+              63
+            ],
+            [
+              2183,
+              63
+            ],
+            [
+              3963,
+              208
+            ],
+            [
+              4153,
+              128
+            ],
+            [
+              4157,
+              32
+            ],
+            [
+              4163,
+              32
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 148,
+          "target_model": "p32/targets/h8_w148/conv2d_8x148x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w148/conv2d_8x148x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w148/conv2d_8x148x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w148/field_spec.json",
+          "lookup_rules": [
+            [
+              1271,
+              128
+            ],
+            [
+              1273,
+              65
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1385,
+              65
+            ],
+            [
+              1439,
+              184
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1497,
+              65
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1609,
+              65
+            ],
+            [
+              1663,
+              56
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1721,
+              65
+            ],
+            [
+              1799,
+              79
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1849,
+              65
+            ],
+            [
+              1927,
+              79
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1977,
+              65
+            ],
+            [
+              2055,
+              79
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2105,
+              65
+            ],
+            [
+              2183,
+              79
+            ],
+            [
+              3963,
+              200
+            ],
+            [
+              4153,
+              191
+            ],
+            [
+              4157,
+              255
+            ],
+            [
+              4398,
+              36
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 152,
+          "target_model": "p32/targets/h8_w152/conv2d_8x152x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w152/conv2d_8x152x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w152/conv2d_8x152x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w152/field_spec.json",
+          "lookup_rules": [
+            [
+              1271,
+              128
+            ],
+            [
+              1290,
+              68
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1402,
+              68
+            ],
+            [
+              1439,
+              120
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1502,
+              247
+            ],
+            [
+              1514,
+              68
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1612,
+              9
+            ],
+            [
+              1622,
+              220
+            ],
+            [
+              1627,
+              19
+            ],
+            [
+              1663,
+              120
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1738,
+              68
+            ],
+            [
+              1799,
+              95
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1866,
+              68
+            ],
+            [
+              1886,
+              19
+            ],
+            [
+              1927,
+              95
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1982,
+              247
+            ],
+            [
+              1994,
+              68
+            ],
+            [
+              2055,
+              95
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2122,
+              68
+            ],
+            [
+              2183,
+              95
+            ],
+            [
+              3963,
+              192
+            ],
+            [
+              4152,
+              0
+            ],
+            [
+              4153,
+              96
+            ],
+            [
+              4163,
+              128
+            ],
+            [
+              4398,
+              36
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 156,
+          "target_model": "p32/targets/h8_w156/conv2d_8x156x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w156/conv2d_8x156x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w156/conv2d_8x156x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w156/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              111
+            ],
+            [
+              1927,
+              111
+            ],
+            [
+              2055,
+              111
+            ],
+            [
+              2183,
+              111
+            ],
+            [
+              3963,
+              184
+            ],
+            [
+              4152,
+              0
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4154,
+              94
+            ],
+            [
+              4157,
+              192
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 160,
+          "target_model": "p32/targets/h8_w160/conv2d_8x160x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w160/conv2d_8x160x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w160/conv2d_8x160x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w160/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              3963,
+              176
+            ],
+            [
+              4153,
+              255
+            ],
+            [
+              4157,
+              191
+            ],
+            [
+              4163,
+              224
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 164,
+          "target_model": "p32/targets/h8_w164/conv2d_8x164x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w164/conv2d_8x164x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w164/conv2d_8x164x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w164/field_spec.json",
+          "lookup_rules": [
+            [
+              1271,
+              128
+            ],
+            [
+              1273,
+              65
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1385,
+              65
+            ],
+            [
+              1439,
+              184
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1497,
+              65
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1609,
+              65
+            ],
+            [
+              1663,
+              56
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1721,
+              65
+            ],
+            [
+              1799,
+              143
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1849,
+              65
+            ],
+            [
+              1927,
+              143
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1977,
+              65
+            ],
+            [
+              2055,
+              143
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2105,
+              65
+            ],
+            [
+              2183,
+              143
+            ],
+            [
+              2570,
+              5
+            ],
+            [
+              2666,
+              5
+            ],
+            [
+              2762,
+              5
+            ],
+            [
+              2858,
+              5
+            ],
+            [
+              2954,
+              5
+            ],
+            [
+              3050,
+              5
+            ],
+            [
+              3914,
+              5
+            ],
+            [
+              3963,
+              168
+            ],
+            [
+              4152,
+              0
+            ],
+            [
+              4153,
+              96
+            ],
+            [
+              4163,
+              128
+            ],
+            [
+              4398,
+              40
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 168,
+          "target_model": "p32/targets/h8_w168/conv2d_8x168x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w168/conv2d_8x168x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w168/conv2d_8x168x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w168/field_spec.json",
+          "lookup_rules": [
+            [
+              634,
+              234
+            ],
+            [
+              1271,
+              128
+            ],
+            [
+              1290,
+              68
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1402,
+              68
+            ],
+            [
+              1439,
+              120
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1502,
+              246
+            ],
+            [
+              1514,
+              68
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1612,
+              10
+            ],
+            [
+              1627,
+              21
+            ],
+            [
+              1663,
+              120
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1738,
+              68
+            ],
+            [
+              1799,
+              159
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1866,
+              68
+            ],
+            [
+              1886,
+              21
+            ],
+            [
+              1927,
+              159
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1982,
+              246
+            ],
+            [
+              1994,
+              68
+            ],
+            [
+              2055,
+              159
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2122,
+              68
+            ],
+            [
+              2183,
+              159
+            ],
+            [
+              2570,
+              5
+            ],
+            [
+              2666,
+              5
+            ],
+            [
+              2762,
+              5
+            ],
+            [
+              2858,
+              5
+            ],
+            [
+              2954,
+              5
+            ],
+            [
+              3050,
+              5
+            ],
+            [
+              3914,
+              5
+            ],
+            [
+              3963,
+              160
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4154,
+              97
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4158,
+              93
+            ],
+            [
+              4163,
+              160
+            ],
+            [
+              4164,
+              14
+            ],
+            [
+              4398,
+              40
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 172,
+          "target_model": "p32/targets/h8_w172/conv2d_8x172x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w172/conv2d_8x172x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w172/conv2d_8x172x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w172/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              175
+            ],
+            [
+              1927,
+              175
+            ],
+            [
+              2055,
+              175
+            ],
+            [
+              2183,
+              175
+            ],
+            [
+              3963,
+              152
+            ],
+            [
+              4152,
+              0
+            ],
+            [
+              4153,
+              128
+            ],
+            [
+              4157,
+              32
+            ],
+            [
+              4163,
+              32
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 176,
+          "target_model": "p32/targets/h8_w176/conv2d_8x176x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w176/conv2d_8x176x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w176/conv2d_8x176x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w176/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              191
+            ],
+            [
+              1927,
+              191
+            ],
+            [
+              2055,
+              191
+            ],
+            [
+              2183,
+              191
+            ],
+            [
+              3963,
+              144
+            ],
+            [
+              4153,
+              128
+            ],
+            [
+              4155,
+              40
+            ],
+            [
+              4156,
+              0
+            ],
+            [
+              4157,
+              32
+            ],
+            [
+              4163,
+              32
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 180,
+          "target_model": "p32/targets/h8_w180/conv2d_8x180x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w180/conv2d_8x180x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w180/conv2d_8x180x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w180/field_spec.json",
+          "lookup_rules": [
+            [
+              1271,
+              128
+            ],
+            [
+              1273,
+              65
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1385,
+              65
+            ],
+            [
+              1439,
+              184
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1497,
+              65
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1609,
+              65
+            ],
+            [
+              1663,
+              56
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1721,
+              65
+            ],
+            [
+              1799,
+              207
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1849,
+              65
+            ],
+            [
+              1927,
+              207
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1977,
+              65
+            ],
+            [
+              2055,
+              207
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2105,
+              65
+            ],
+            [
+              2183,
+              207
+            ],
+            [
+              3963,
+              136
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4156,
+              0
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4163,
+              64
+            ],
+            [
+              4398,
+              44
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 184,
+          "target_model": "p32/targets/h8_w184/conv2d_8x184x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w184/conv2d_8x184x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w184/conv2d_8x184x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w184/field_spec.json",
+          "lookup_rules": [
+            [
+              1271,
+              128
+            ],
+            [
+              1278,
+              245
+            ],
+            [
+              1290,
+              68
+            ],
+            [
+              1383,
+              128
+            ],
+            [
+              1390,
+              245
+            ],
+            [
+              1402,
+              68
+            ],
+            [
+              1439,
+              120
+            ],
+            [
+              1495,
+              128
+            ],
+            [
+              1502,
+              245
+            ],
+            [
+              1514,
+              68
+            ],
+            [
+              1607,
+              128
+            ],
+            [
+              1612,
+              11
+            ],
+            [
+              1627,
+              23
+            ],
+            [
+              1663,
+              120
+            ],
+            [
+              1719,
+              128
+            ],
+            [
+              1726,
+              245
+            ],
+            [
+              1738,
+              68
+            ],
+            [
+              1799,
+              223
+            ],
+            [
+              1847,
+              128
+            ],
+            [
+              1854,
+              245
+            ],
+            [
+              1866,
+              68
+            ],
+            [
+              1886,
+              23
+            ],
+            [
+              1927,
+              223
+            ],
+            [
+              1975,
+              128
+            ],
+            [
+              1982,
+              245
+            ],
+            [
+              1994,
+              68
+            ],
+            [
+              2055,
+              223
+            ],
+            [
+              2103,
+              128
+            ],
+            [
+              2110,
+              245
+            ],
+            [
+              2122,
+              68
+            ],
+            [
+              2183,
+              223
+            ],
+            [
+              3138,
+              11
+            ],
+            [
+              3234,
+              11
+            ],
+            [
+              3330,
+              11
+            ],
+            [
+              3963,
+              128
+            ],
+            [
+              4152,
+              0
+            ],
+            [
+              4153,
+              192
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4158,
+              94
+            ],
+            [
+              4163,
+              32
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 188,
+          "target_model": "p32/targets/h8_w188/conv2d_8x188x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w188/conv2d_8x188x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w188/conv2d_8x188x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w188/field_spec.json",
+          "lookup_rules": []
+        },
+        {
+          "height": 8,
+          "width": 192,
+          "target_model": "p32/targets/h8_w192/conv2d_8x192x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h8_w192/conv2d_8x192x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h8_w192/conv2d_8x192x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h8_w192/field_spec.json",
+          "lookup_rules": [
+            [
+              634,
+              222
+            ],
+            [
+              1286,
+              210
+            ],
+            [
+              1290,
+              68
+            ],
+            [
+              1398,
+              210
+            ],
+            [
+              1402,
+              68
+            ],
+            [
+              1440,
+              35
+            ],
+            [
+              1502,
+              244
+            ],
+            [
+              1510,
+              210
+            ],
+            [
+              1514,
+              68
+            ],
+            [
+              1612,
+              11
+            ],
+            [
+              1622,
+              210
+            ],
+            [
+              1627,
+              24
+            ],
+            [
+              1734,
+              210
+            ],
+            [
+              1738,
+              68
+            ],
+            [
+              1756,
+              232
+            ],
+            [
+              1862,
+              210
+            ],
+            [
+              1866,
+              68
+            ],
+            [
+              1886,
+              24
+            ],
+            [
+              1982,
+              244
+            ],
+            [
+              1990,
+              210
+            ],
+            [
+              1994,
+              68
+            ],
+            [
+              2118,
+              210
+            ],
+            [
+              2122,
+              68
+            ],
+            [
+              2140,
+              232
+            ],
+            [
+              2562,
+              37
+            ],
+            [
+              2658,
+              37
+            ],
+            [
+              2754,
+              37
+            ],
+            [
+              3144,
+              24
+            ],
+            [
+              3240,
+              24
+            ],
+            [
+              3336,
+              24
+            ],
+            [
+              3432,
+              24
+            ],
+            [
+              3528,
+              24
+            ],
+            [
+              3624,
+              24
+            ],
+            [
+              3963,
+              112
+            ],
+            [
+              4152,
+              0
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4156,
+              0
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4163,
+              64
+            ],
+            [
+              4398,
+              44
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "p64",
+      "channels": 64,
+      "anchor_compiled_model": "p64/anchor/conv2d_8x128x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+      "anchor_uncompiled_model": "p64/anchor/conv2d_8x128x64_to_64_k3_s1_same_quant.tflite",
+      "anchor_metadata": "p64/anchor/conv2d_8x128x64_to_64_k3_s1_same_quant.metadata.json",
+      "anchor_executable": "p64/anchor/serialized_executable_000.bin",
+      "field_runtime": {
+        "analysis_json": "p64/law/eo_width_band_analysis.json",
+        "low_dim": 76,
+        "mid_dim": 128,
+        "high_dim": 188,
+        "predict_mode": "threepoint",
+        "tile_size": 4,
+        "chunk_index": 0,
+        "lane_priority": "lane32,lane16"
+      },
+      "targets": [
+        {
+          "height": 8,
+          "width": 72,
+          "target_model": "p64/targets/h8_w72/conv2d_8x72x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w72/conv2d_8x72x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w72/conv2d_8x72x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w72/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              63
+            ],
+            [
+              1927,
+              63
+            ],
+            [
+              2055,
+              63
+            ],
+            [
+              2183,
+              63
+            ],
+            [
+              3963,
+              192
+            ],
+            [
+              4151,
+              231
+            ],
+            [
+              4152,
+              255
+            ],
+            [
+              4153,
+              31
+            ],
+            [
+              4155,
+              232
+            ],
+            [
+              4156,
+              255
+            ],
+            [
+              4157,
+              127
+            ],
+            [
+              4163,
+              192
+            ],
+            [
+              4398,
+              32
+            ],
+            [
+              4582,
+              8
+            ],
+            [
+              4624,
+              8
+            ],
+            [
+              4678,
+              8
+            ],
+            [
+              4720,
+              8
+            ],
+            [
+              4774,
+              8
+            ],
+            [
+              4816,
+              8
+            ],
+            [
+              4870,
+              8
+            ],
+            [
+              4912,
+              8
+            ],
+            [
+              4966,
+              8
+            ],
+            [
+              5008,
+              8
+            ],
+            [
+              5062,
+              8
+            ],
+            [
+              5104,
+              8
+            ],
+            [
+              5158,
+              8
+            ],
+            [
+              5200,
+              8
+            ],
+            [
+              5254,
+              8
+            ],
+            [
+              5296,
+              8
+            ],
+            [
+              5350,
+              8
+            ],
+            [
+              5392,
+              8
+            ],
+            [
+              5446,
+              8
+            ],
+            [
+              5488,
+              8
+            ],
+            [
+              5542,
+              8
+            ],
+            [
+              5584,
+              8
+            ],
+            [
+              5638,
+              8
+            ],
+            [
+              5680,
+              8
+            ],
+            [
+              5734,
+              8
+            ],
+            [
+              5776,
+              8
+            ],
+            [
+              5830,
+              8
+            ],
+            [
+              5872,
+              8
+            ],
+            [
+              5926,
+              8
+            ],
+            [
+              5968,
+              8
+            ],
+            [
+              6022,
+              8
+            ],
+            [
+              6064,
+              8
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 76,
+          "target_model": "p64/targets/h8_w76/conv2d_8x76x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w76/conv2d_8x76x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w76/conv2d_8x76x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w76/field_spec.json",
+          "lookup_rules": []
+        },
+        {
+          "height": 8,
+          "width": 80,
+          "target_model": "p64/targets/h8_w80/conv2d_8x80x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w80/conv2d_8x80x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w80/conv2d_8x80x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w80/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              3963,
+              160
+            ],
+            [
+              4153,
+              0
+            ],
+            [
+              4157,
+              192
+            ],
+            [
+              4163,
+              224
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 84,
+          "target_model": "p64/targets/h8_w84/conv2d_8x84x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w84/conv2d_8x84x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w84/conv2d_8x84x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w84/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              159
+            ],
+            [
+              1927,
+              159
+            ],
+            [
+              2055,
+              159
+            ],
+            [
+              2183,
+              159
+            ],
+            [
+              3963,
+              144
+            ],
+            [
+              4153,
+              32
+            ],
+            [
+              4157,
+              128
+            ],
+            [
+              4163,
+              192
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 88,
+          "target_model": "p64/targets/h8_w88/conv2d_8x88x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w88/conv2d_8x88x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w88/conv2d_8x88x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w88/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              191
+            ],
+            [
+              1927,
+              191
+            ],
+            [
+              2055,
+              191
+            ],
+            [
+              2183,
+              191
+            ],
+            [
+              3963,
+              128
+            ],
+            [
+              4151,
+              39
+            ],
+            [
+              4153,
+              128
+            ],
+            [
+              4154,
+              94
+            ],
+            [
+              4157,
+              160
+            ],
+            [
+              4158,
+              96
+            ],
+            [
+              4163,
+              160
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 92,
+          "target_model": "p64/targets/h8_w92/conv2d_8x92x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w92/conv2d_8x92x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w92/conv2d_8x92x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w92/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              223
+            ],
+            [
+              1927,
+              223
+            ],
+            [
+              2055,
+              223
+            ],
+            [
+              2183,
+              223
+            ],
+            [
+              3963,
+              112
+            ],
+            [
+              4153,
+              0
+            ],
+            [
+              4154,
+              94
+            ],
+            [
+              4157,
+              224
+            ],
+            [
+              4158,
+              96
+            ],
+            [
+              4163,
+              224
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 96,
+          "target_model": "p64/targets/h8_w96/conv2d_8x96x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w96/conv2d_8x96x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w96/conv2d_8x96x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w96/field_spec.json",
+          "lookup_rules": [
+            [
+              3963,
+              96
+            ],
+            [
+              4151,
+              231
+            ],
+            [
+              4152,
+              255
+            ],
+            [
+              4153,
+              191
+            ],
+            [
+              4155,
+              232
+            ],
+            [
+              4156,
+              255
+            ],
+            [
+              4157,
+              255
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 100,
+          "target_model": "p64/targets/h8_w100/conv2d_8x100x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w100/conv2d_8x100x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w100/conv2d_8x100x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w100/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              31
+            ],
+            [
+              1927,
+              31
+            ],
+            [
+              2055,
+              31
+            ],
+            [
+              2183,
+              31
+            ],
+            [
+              3963,
+              80
+            ],
+            [
+              4153,
+              32
+            ],
+            [
+              4157,
+              128
+            ],
+            [
+              4163,
+              192
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 104,
+          "target_model": "p64/targets/h8_w104/conv2d_8x104x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w104/conv2d_8x104x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w104/conv2d_8x104x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w104/field_spec.json",
+          "lookup_rules": [
+            [
+              3963,
+              64
+            ],
+            [
+              4153,
+              0
+            ],
+            [
+              4155,
+              232
+            ],
+            [
+              4156,
+              255
+            ],
+            [
+              4157,
+              191
+            ],
+            [
+              4163,
+              224
+            ],
+            [
+              4398,
+              48
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 108,
+          "target_model": "p64/targets/h8_w108/conv2d_8x108x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w108/conv2d_8x108x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w108/conv2d_8x108x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w108/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              95
+            ],
+            [
+              1927,
+              95
+            ],
+            [
+              2055,
+              95
+            ],
+            [
+              2183,
+              95
+            ],
+            [
+              3963,
+              48
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4154,
+              97
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4158,
+              93
+            ],
+            [
+              4163,
+              160
+            ],
+            [
+              4164,
+              14
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 112,
+          "target_model": "p64/targets/h8_w112/conv2d_8x112x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w112/conv2d_8x112x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w112/conv2d_8x112x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w112/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              3963,
+              32
+            ],
+            [
+              4151,
+              39
+            ],
+            [
+              4153,
+              0
+            ],
+            [
+              4154,
+              94
+            ],
+            [
+              4157,
+              224
+            ],
+            [
+              4163,
+              224
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 116,
+          "target_model": "p64/targets/h8_w116/conv2d_8x116x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w116/conv2d_8x116x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w116/conv2d_8x116x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w116/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              159
+            ],
+            [
+              1927,
+              159
+            ],
+            [
+              2055,
+              159
+            ],
+            [
+              2183,
+              159
+            ],
+            [
+              3963,
+              16
+            ],
+            [
+              3964,
+              126
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4154,
+              97
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4158,
+              93
+            ],
+            [
+              4163,
+              160
+            ],
+            [
+              4164,
+              14
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 120,
+          "target_model": "p64/targets/h8_w120/conv2d_8x120x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w120/conv2d_8x120x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w120/conv2d_8x120x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w120/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              191
+            ],
+            [
+              1927,
+              191
+            ],
+            [
+              2055,
+              191
+            ],
+            [
+              2183,
+              191
+            ],
+            [
+              3964,
+              126
+            ],
+            [
+              4153,
+              128
+            ],
+            [
+              4157,
+              192
+            ],
+            [
+              4158,
+              94
+            ],
+            [
+              4163,
+              96
+            ],
+            [
+              4398,
+              56
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 124,
+          "target_model": "p64/targets/h8_w124/conv2d_8x124x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w124/conv2d_8x124x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w124/conv2d_8x124x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w124/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              223
+            ],
+            [
+              1927,
+              223
+            ],
+            [
+              2055,
+              223
+            ],
+            [
+              2183,
+              223
+            ],
+            [
+              3963,
+              240
+            ],
+            [
+              4151,
+              231
+            ],
+            [
+              4152,
+              255
+            ],
+            [
+              4153,
+              255
+            ],
+            [
+              4154,
+              94
+            ],
+            [
+              4155,
+              232
+            ],
+            [
+              4156,
+              255
+            ],
+            [
+              4157,
+              95
+            ],
+            [
+              4163,
+              96
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 128,
+          "target_model": "p64/anchor/conv2d_8x128x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/anchor/conv2d_8x128x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/anchor/conv2d_8x128x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "noop",
+          "field_spec_json": null,
+          "lookup_rules": []
+        },
+        {
+          "height": 8,
+          "width": 132,
+          "target_model": "p64/targets/h8_w132/conv2d_8x132x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w132/conv2d_8x132x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w132/conv2d_8x132x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w132/field_spec.json",
+          "lookup_rules": [
+            [
+              4086,
+              126
+            ],
+            [
+              4151,
+              231
+            ],
+            [
+              4152,
+              255
+            ],
+            [
+              4153,
+              191
+            ],
+            [
+              4154,
+              94
+            ],
+            [
+              4157,
+              128
+            ],
+            [
+              4163,
+              128
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 136,
+          "target_model": "p64/targets/h8_w136/conv2d_8x136x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w136/conv2d_8x136x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w136/conv2d_8x136x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w136/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              63
+            ],
+            [
+              1927,
+              63
+            ],
+            [
+              2055,
+              63
+            ],
+            [
+              2183,
+              63
+            ],
+            [
+              3963,
+              192
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4155,
+              232
+            ],
+            [
+              4156,
+              255
+            ],
+            [
+              4157,
+              63
+            ],
+            [
+              4163,
+              160
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 140,
+          "target_model": "p64/targets/h8_w140/conv2d_8x140x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w140/conv2d_8x140x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w140/conv2d_8x140x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w140/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              95
+            ],
+            [
+              1927,
+              95
+            ],
+            [
+              2055,
+              95
+            ],
+            [
+              2183,
+              95
+            ],
+            [
+              3963,
+              176
+            ],
+            [
+              4153,
+              0
+            ],
+            [
+              4157,
+              96
+            ],
+            [
+              4163,
+              96
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 144,
+          "target_model": "p64/targets/h8_w144/conv2d_8x144x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w144/conv2d_8x144x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w144/conv2d_8x144x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w144/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              3963,
+              160
+            ],
+            [
+              4151,
+              39
+            ],
+            [
+              4153,
+              128
+            ],
+            [
+              4163,
+              32
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 148,
+          "target_model": "p64/targets/h8_w148/conv2d_8x148x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w148/conv2d_8x148x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w148/conv2d_8x148x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w148/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              159
+            ],
+            [
+              1927,
+              159
+            ],
+            [
+              2055,
+              159
+            ],
+            [
+              2183,
+              159
+            ],
+            [
+              3963,
+              144
+            ],
+            [
+              4153,
+              160
+            ],
+            [
+              4157,
+              128
+            ],
+            [
+              4158,
+              94
+            ],
+            [
+              4163,
+              64
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 152,
+          "target_model": "p64/targets/h8_w152/conv2d_8x152x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w152/conv2d_8x152x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w152/conv2d_8x152x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w152/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              191
+            ],
+            [
+              1927,
+              191
+            ],
+            [
+              2055,
+              191
+            ],
+            [
+              2183,
+              191
+            ],
+            [
+              3963,
+              128
+            ],
+            [
+              4153,
+              96
+            ],
+            [
+              4155,
+              40
+            ],
+            [
+              4163,
+              128
+            ],
+            [
+              4398,
+              72
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 156,
+          "target_model": "p64/targets/h8_w156/conv2d_8x156x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w156/conv2d_8x156x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w156/conv2d_8x156x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w156/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              223
+            ],
+            [
+              1927,
+              223
+            ],
+            [
+              2055,
+              223
+            ],
+            [
+              2183,
+              223
+            ],
+            [
+              3963,
+              112
+            ],
+            [
+              4153,
+              96
+            ],
+            [
+              4163,
+              128
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 160,
+          "target_model": "p64/targets/h8_w160/conv2d_8x160x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w160/conv2d_8x160x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w160/conv2d_8x160x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w160/field_spec.json",
+          "lookup_rules": [
+            [
+              3963,
+              96
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4163,
+              64
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 164,
+          "target_model": "p64/targets/h8_w164/conv2d_8x164x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w164/conv2d_8x164x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w164/conv2d_8x164x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w164/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              31
+            ],
+            [
+              1800,
+              5
+            ],
+            [
+              1927,
+              31
+            ],
+            [
+              1928,
+              5
+            ],
+            [
+              2055,
+              31
+            ],
+            [
+              2056,
+              5
+            ],
+            [
+              2183,
+              31
+            ],
+            [
+              2184,
+              5
+            ],
+            [
+              2570,
+              5
+            ],
+            [
+              2666,
+              5
+            ],
+            [
+              2762,
+              5
+            ],
+            [
+              2858,
+              5
+            ],
+            [
+              2954,
+              5
+            ],
+            [
+              3050,
+              5
+            ],
+            [
+              3914,
+              5
+            ],
+            [
+              3963,
+              80
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 168,
+          "target_model": "p64/targets/h8_w168/conv2d_8x168x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w168/conv2d_8x168x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w168/conv2d_8x168x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w168/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              63
+            ],
+            [
+              1800,
+              5
+            ],
+            [
+              1927,
+              63
+            ],
+            [
+              1928,
+              5
+            ],
+            [
+              2055,
+              63
+            ],
+            [
+              2056,
+              5
+            ],
+            [
+              2183,
+              63
+            ],
+            [
+              2184,
+              5
+            ],
+            [
+              2570,
+              5
+            ],
+            [
+              2666,
+              5
+            ],
+            [
+              2762,
+              5
+            ],
+            [
+              2858,
+              5
+            ],
+            [
+              2954,
+              5
+            ],
+            [
+              3050,
+              5
+            ],
+            [
+              3914,
+              5
+            ],
+            [
+              3963,
+              64
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4163,
+              64
+            ],
+            [
+              4398,
+              80
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 172,
+          "target_model": "p64/targets/h8_w172/conv2d_8x172x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w172/conv2d_8x172x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w172/conv2d_8x172x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w172/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              95
+            ],
+            [
+              1927,
+              95
+            ],
+            [
+              2055,
+              95
+            ],
+            [
+              2183,
+              95
+            ],
+            [
+              3963,
+              48
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4158,
+              96
+            ],
+            [
+              4163,
+              64
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 176,
+          "target_model": "p64/targets/h8_w176/conv2d_8x176x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w176/conv2d_8x176x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w176/conv2d_8x176x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w176/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              3963,
+              32
+            ],
+            [
+              4153,
+              96
+            ],
+            [
+              4154,
+              96
+            ],
+            [
+              4163,
+              128
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 180,
+          "target_model": "p64/targets/h8_w180/conv2d_8x180x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w180/conv2d_8x180x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w180/conv2d_8x180x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w180/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              159
+            ],
+            [
+              1927,
+              159
+            ],
+            [
+              2055,
+              159
+            ],
+            [
+              2183,
+              159
+            ],
+            [
+              3963,
+              16
+            ],
+            [
+              4158,
+              96
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 184,
+          "target_model": "p64/targets/h8_w184/conv2d_8x184x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w184/conv2d_8x184x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w184/conv2d_8x184x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w184/field_spec.json",
+          "lookup_rules": [
+            [
+              1799,
+              191
+            ],
+            [
+              1927,
+              191
+            ],
+            [
+              2055,
+              191
+            ],
+            [
+              2183,
+              191
+            ],
+            [
+              4153,
+              96
+            ],
+            [
+              4163,
+              128
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 188,
+          "target_model": "p64/targets/h8_w188/conv2d_8x188x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w188/conv2d_8x188x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w188/conv2d_8x188x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w188/field_spec.json",
+          "lookup_rules": []
+        },
+        {
+          "height": 8,
+          "width": 192,
+          "target_model": "p64/targets/h8_w192/conv2d_8x192x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h8_w192/conv2d_8x192x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h8_w192/conv2d_8x192x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h8_w192/field_spec.json",
+          "lookup_rules": [
+            [
+              786,
+              3
+            ],
+            [
+              2306,
+              3
+            ],
+            [
+              4151,
+              231
+            ],
+            [
+              4152,
+              255
+            ],
+            [
+              4153,
+              31
+            ],
+            [
+              4155,
+              232
+            ],
+            [
+              4156,
+              255
+            ],
+            [
+              4157,
+              127
+            ],
+            [
+              4163,
+              192
+            ],
+            [
+              4398,
+              92
+            ],
+            [
+              4582,
+              23
+            ],
+            [
+              4624,
+              23
+            ],
+            [
+              4678,
+              23
+            ],
+            [
+              4720,
+              23
+            ],
+            [
+              4774,
+              23
+            ],
+            [
+              4816,
+              23
+            ],
+            [
+              4870,
+              23
+            ],
+            [
+              4912,
+              23
+            ],
+            [
+              4966,
+              23
+            ],
+            [
+              5008,
+              23
+            ],
+            [
+              5062,
+              23
+            ],
+            [
+              5104,
+              23
+            ],
+            [
+              5158,
+              23
+            ],
+            [
+              5200,
+              23
+            ],
+            [
+              5254,
+              23
+            ],
+            [
+              5296,
+              23
+            ],
+            [
+              5350,
+              23
+            ],
+            [
+              5392,
+              23
+            ],
+            [
+              5446,
+              23
+            ],
+            [
+              5488,
+              23
+            ],
+            [
+              5542,
+              23
+            ],
+            [
+              5584,
+              23
+            ],
+            [
+              5638,
+              23
+            ],
+            [
+              5680,
+              23
+            ],
+            [
+              5734,
+              23
+            ],
+            [
+              5776,
+              23
+            ],
+            [
+              5830,
+              23
+            ],
+            [
+              5872,
+              23
+            ],
+            [
+              5926,
+              23
+            ],
+            [
+              5968,
+              23
+            ],
+            [
+              6022,
+              23
+            ],
+            [
+              6064,
+              23
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "p128",
+      "channels": 128,
+      "anchor_compiled_model": "p128/anchor/conv2d_8x128x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+      "anchor_uncompiled_model": "p128/anchor/conv2d_8x128x128_to_128_k3_s1_same_quant.tflite",
+      "anchor_metadata": "p128/anchor/conv2d_8x128x128_to_128_k3_s1_same_quant.metadata.json",
+      "anchor_executable": "p128/anchor/serialized_executable_000.bin",
+      "field_runtime": {
+        "analysis_json": "p128/law/eo_width_band_analysis.json",
+        "low_dim": 76,
+        "mid_dim": 128,
+        "high_dim": 188,
+        "predict_mode": "threepoint",
+        "tile_size": 4,
+        "chunk_index": 0,
+        "lane_priority": "lane32,lane16"
+      },
+      "targets": [
+        {
+          "height": 8,
+          "width": 72,
+          "target_model": "p128/targets/h8_w72/conv2d_8x72x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w72/conv2d_8x72x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w72/conv2d_8x72x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w72/field_spec.json",
+          "lookup_rules": [
+            [
+              1107,
+              40
+            ],
+            [
+              1109,
+              78
+            ],
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              3963,
+              128
+            ],
+            [
+              4153,
+              96
+            ],
+            [
+              4157,
+              0
+            ],
+            [
+              4158,
+              95
+            ],
+            [
+              4163,
+              128
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 76,
+          "target_model": "p128/targets/h8_w76/conv2d_8x76x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w76/conv2d_8x76x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w76/conv2d_8x76x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w76/field_spec.json",
+          "lookup_rules": []
+        },
+        {
+          "height": 8,
+          "width": 80,
+          "target_model": "p128/targets/h8_w80/conv2d_8x80x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w80/conv2d_8x80x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w80/conv2d_8x80x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w80/field_spec.json",
+          "lookup_rules": [
+            [
+              1106,
+              255
+            ],
+            [
+              1109,
+              76
+            ],
+            [
+              3963,
+              64
+            ],
+            [
+              4156,
+              0
+            ],
+            [
+              4157,
+              64
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 84,
+          "target_model": "p128/targets/h8_w84/conv2d_8x84x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w84/conv2d_8x84x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w84/conv2d_8x84x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w84/field_spec.json",
+          "lookup_rules": [
+            [
+              1107,
+              42
+            ],
+            [
+              1109,
+              75
+            ],
+            [
+              1799,
+              63
+            ],
+            [
+              1927,
+              63
+            ],
+            [
+              2055,
+              63
+            ],
+            [
+              2183,
+              63
+            ],
+            [
+              3963,
+              32
+            ],
+            [
+              4153,
+              191
+            ],
+            [
+              4154,
+              94
+            ],
+            [
+              4157,
+              128
+            ],
+            [
+              4163,
+              128
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 88,
+          "target_model": "p128/targets/h8_w88/conv2d_8x88x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w88/conv2d_8x88x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w88/conv2d_8x88x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w88/field_spec.json",
+          "lookup_rules": [
+            [
+              1107,
+              42
+            ],
+            [
+              1109,
+              74
+            ],
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              4157,
+              32
+            ],
+            [
+              4163,
+              32
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 92,
+          "target_model": "p128/targets/h8_w92/conv2d_8x92x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w92/conv2d_8x92x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w92/conv2d_8x92x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w92/field_spec.json",
+          "lookup_rules": [
+            [
+              1107,
+              43
+            ],
+            [
+              1109,
+              73
+            ],
+            [
+              3963,
+              224
+            ],
+            [
+              4153,
+              192
+            ],
+            [
+              4157,
+              0
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 96,
+          "target_model": "p128/targets/h8_w96/conv2d_8x96x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w96/conv2d_8x96x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w96/conv2d_8x96x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w96/field_spec.json",
+          "lookup_rules": [
+            [
+              1107,
+              43
+            ],
+            [
+              1109,
+              72
+            ],
+            [
+              4153,
+              0
+            ],
+            [
+              4163,
+              224
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 100,
+          "target_model": "p128/targets/h8_w100/conv2d_8x100x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w100/conv2d_8x100x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w100/conv2d_8x100x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w100/field_spec.json",
+          "lookup_rules": [
+            [
+              1107,
+              44
+            ],
+            [
+              1109,
+              71
+            ],
+            [
+              1799,
+              63
+            ],
+            [
+              1927,
+              63
+            ],
+            [
+              2055,
+              63
+            ],
+            [
+              2183,
+              63
+            ],
+            [
+              3963,
+              160
+            ],
+            [
+              4151,
+              39
+            ],
+            [
+              4154,
+              94
+            ],
+            [
+              4157,
+              160
+            ],
+            [
+              4163,
+              160
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 104,
+          "target_model": "p128/targets/h8_w104/conv2d_8x104x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w104/conv2d_8x104x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w104/conv2d_8x104x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w104/field_spec.json",
+          "lookup_rules": [
+            [
+              1107,
+              44
+            ],
+            [
+              1109,
+              70
+            ],
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              4151,
+              231
+            ],
+            [
+              4153,
+              191
+            ],
+            [
+              4154,
+              94
+            ],
+            [
+              4157,
+              128
+            ],
+            [
+              4163,
+              128
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 108,
+          "target_model": "p128/targets/h8_w108/conv2d_8x108x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w108/conv2d_8x108x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w108/conv2d_8x108x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w108/field_spec.json",
+          "lookup_rules": [
+            [
+              1107,
+              45
+            ],
+            [
+              1109,
+              69
+            ],
+            [
+              3963,
+              96
+            ],
+            [
+              4151,
+              39
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4155,
+              40
+            ],
+            [
+              4156,
+              0
+            ],
+            [
+              4157,
+              64
+            ],
+            [
+              4158,
+              95
+            ],
+            [
+              4163,
+              160
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 112,
+          "target_model": "p128/targets/h8_w112/conv2d_8x112x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w112/conv2d_8x112x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w112/conv2d_8x112x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w112/field_spec.json",
+          "lookup_rules": [
+            [
+              1107,
+              45
+            ],
+            [
+              1109,
+              68
+            ],
+            [
+              3963,
+              64
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4157,
+              64
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 116,
+          "target_model": "p128/targets/h8_w116/conv2d_8x116x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w116/conv2d_8x116x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w116/conv2d_8x116x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w116/field_spec.json",
+          "lookup_rules": [
+            [
+              1107,
+              46
+            ],
+            [
+              1109,
+              67
+            ],
+            [
+              1799,
+              63
+            ],
+            [
+              1927,
+              63
+            ],
+            [
+              2055,
+              63
+            ],
+            [
+              2183,
+              63
+            ],
+            [
+              3963,
+              32
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4157,
+              64
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 120,
+          "target_model": "p128/targets/h8_w120/conv2d_8x120x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w120/conv2d_8x120x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w120/conv2d_8x120x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w120/field_spec.json",
+          "lookup_rules": [
+            [
+              1107,
+              46
+            ],
+            [
+              1109,
+              66
+            ],
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              4151,
+              231
+            ],
+            [
+              4153,
+              31
+            ],
+            [
+              4155,
+              232
+            ],
+            [
+              4157,
+              127
+            ],
+            [
+              4158,
+              95
+            ],
+            [
+              4163,
+              192
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 124,
+          "target_model": "p128/targets/h8_w124/conv2d_8x124x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w124/conv2d_8x124x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w124/conv2d_8x124x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w124/field_spec.json",
+          "lookup_rules": [
+            [
+              1107,
+              47
+            ],
+            [
+              1109,
+              65
+            ],
+            [
+              3963,
+              224
+            ],
+            [
+              4153,
+              160
+            ],
+            [
+              4157,
+              128
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 128,
+          "target_model": "p128/anchor/conv2d_8x128x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/anchor/conv2d_8x128x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/anchor/conv2d_8x128x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "noop",
+          "field_spec_json": null,
+          "lookup_rules": []
+        },
+        {
+          "height": 8,
+          "width": 132,
+          "target_model": "p128/targets/h8_w132/conv2d_8x132x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w132/conv2d_8x132x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w132/conv2d_8x132x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w132/field_spec.json",
+          "lookup_rules": [
+            [
+              780,
+              126
+            ],
+            [
+              814,
+              126
+            ],
+            [
+              1097,
+              14
+            ],
+            [
+              1107,
+              32
+            ],
+            [
+              1109,
+              95
+            ],
+            [
+              1799,
+              63
+            ],
+            [
+              1927,
+              63
+            ],
+            [
+              2055,
+              63
+            ],
+            [
+              2183,
+              63
+            ],
+            [
+              2300,
+              126
+            ],
+            [
+              2334,
+              126
+            ],
+            [
+              3998,
+              125
+            ],
+            [
+              4012,
+              62
+            ],
+            [
+              4086,
+              126
+            ],
+            [
+              4151,
+              231
+            ],
+            [
+              4153,
+              127
+            ],
+            [
+              4154,
+              93
+            ],
+            [
+              4155,
+              232
+            ],
+            [
+              4157,
+              31
+            ],
+            [
+              4158,
+              97
+            ],
+            [
+              4163,
+              32
+            ],
+            [
+              4164,
+              17
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 136,
+          "target_model": "p128/targets/h8_w136/conv2d_8x136x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w136/conv2d_8x136x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w136/conv2d_8x136x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w136/field_spec.json",
+          "lookup_rules": [
+            [
+              1097,
+              14
+            ],
+            [
+              1107,
+              32
+            ],
+            [
+              1109,
+              94
+            ],
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              3963,
+              128
+            ],
+            [
+              4153,
+              0
+            ],
+            [
+              4157,
+              96
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 140,
+          "target_model": "p128/targets/h8_w140/conv2d_8x140x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w140/conv2d_8x140x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w140/conv2d_8x140x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w140/field_spec.json",
+          "lookup_rules": [
+            [
+              1097,
+              14
+            ],
+            [
+              1107,
+              33
+            ],
+            [
+              1109,
+              93
+            ],
+            [
+              3963,
+              96
+            ],
+            [
+              4151,
+              231
+            ],
+            [
+              4153,
+              63
+            ],
+            [
+              4154,
+              94
+            ],
+            [
+              4155,
+              232
+            ],
+            [
+              4156,
+              255
+            ],
+            [
+              4157,
+              191
+            ],
+            [
+              4163,
+              192
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 144,
+          "target_model": "p128/targets/h8_w144/conv2d_8x144x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w144/conv2d_8x144x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w144/conv2d_8x144x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w144/field_spec.json",
+          "lookup_rules": [
+            [
+              1097,
+              14
+            ],
+            [
+              1107,
+              33
+            ],
+            [
+              1109,
+              92
+            ],
+            [
+              3963,
+              64
+            ],
+            [
+              4153,
+              192
+            ],
+            [
+              4157,
+              0
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 148,
+          "target_model": "p128/targets/h8_w148/conv2d_8x148x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w148/conv2d_8x148x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w148/conv2d_8x148x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w148/field_spec.json",
+          "lookup_rules": [
+            [
+              1097,
+              14
+            ],
+            [
+              1107,
+              34
+            ],
+            [
+              1109,
+              91
+            ],
+            [
+              1799,
+              63
+            ],
+            [
+              1927,
+              63
+            ],
+            [
+              2055,
+              63
+            ],
+            [
+              2183,
+              63
+            ],
+            [
+              3963,
+              32
+            ],
+            [
+              4151,
+              39
+            ],
+            [
+              4157,
+              32
+            ],
+            [
+              4163,
+              32
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 152,
+          "target_model": "p128/targets/h8_w152/conv2d_8x152x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w152/conv2d_8x152x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w152/conv2d_8x152x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w152/field_spec.json",
+          "lookup_rules": [
+            [
+              1097,
+              14
+            ],
+            [
+              1107,
+              34
+            ],
+            [
+              1109,
+              90
+            ],
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              4151,
+              39
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4157,
+              64
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 156,
+          "target_model": "p128/targets/h8_w156/conv2d_8x156x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w156/conv2d_8x156x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w156/conv2d_8x156x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w156/field_spec.json",
+          "lookup_rules": [
+            [
+              1097,
+              14
+            ],
+            [
+              1107,
+              35
+            ],
+            [
+              1109,
+              89
+            ],
+            [
+              3963,
+              224
+            ],
+            [
+              4153,
+              0
+            ],
+            [
+              4157,
+              96
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 160,
+          "target_model": "p128/targets/h8_w160/conv2d_8x160x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w160/conv2d_8x160x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w160/conv2d_8x160x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w160/field_spec.json",
+          "lookup_rules": [
+            [
+              1097,
+              14
+            ],
+            [
+              1107,
+              35
+            ],
+            [
+              1109,
+              88
+            ],
+            [
+              4153,
+              32
+            ],
+            [
+              4156,
+              0
+            ],
+            [
+              4157,
+              128
+            ],
+            [
+              4158,
+              95
+            ],
+            [
+              4163,
+              192
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 164,
+          "target_model": "p128/targets/h8_w164/conv2d_8x164x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w164/conv2d_8x164x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w164/conv2d_8x164x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w164/field_spec.json",
+          "lookup_rules": [
+            [
+              1097,
+              14
+            ],
+            [
+              1107,
+              36
+            ],
+            [
+              1109,
+              87
+            ],
+            [
+              1799,
+              63
+            ],
+            [
+              1927,
+              63
+            ],
+            [
+              2055,
+              63
+            ],
+            [
+              2183,
+              63
+            ],
+            [
+              2570,
+              5
+            ],
+            [
+              2666,
+              5
+            ],
+            [
+              2762,
+              5
+            ],
+            [
+              2858,
+              5
+            ],
+            [
+              2954,
+              5
+            ],
+            [
+              3050,
+              5
+            ],
+            [
+              3914,
+              5
+            ],
+            [
+              3963,
+              160
+            ],
+            [
+              4153,
+              192
+            ],
+            [
+              4154,
+              93
+            ],
+            [
+              4158,
+              97
+            ],
+            [
+              4164,
+              17
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 168,
+          "target_model": "p128/targets/h8_w168/conv2d_8x168x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w168/conv2d_8x168x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w168/conv2d_8x168x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w168/field_spec.json",
+          "lookup_rules": [
+            [
+              1097,
+              14
+            ],
+            [
+              1107,
+              36
+            ],
+            [
+              1109,
+              86
+            ],
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              2570,
+              5
+            ],
+            [
+              2666,
+              5
+            ],
+            [
+              2762,
+              5
+            ],
+            [
+              2858,
+              5
+            ],
+            [
+              2954,
+              5
+            ],
+            [
+              3050,
+              5
+            ],
+            [
+              3914,
+              5
+            ],
+            [
+              3963,
+              128
+            ],
+            [
+              4153,
+              0
+            ],
+            [
+              4163,
+              224
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 172,
+          "target_model": "p128/targets/h8_w172/conv2d_8x172x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w172/conv2d_8x172x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w172/conv2d_8x172x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w172/field_spec.json",
+          "lookup_rules": [
+            [
+              1097,
+              14
+            ],
+            [
+              1107,
+              37
+            ],
+            [
+              1109,
+              85
+            ],
+            [
+              3963,
+              96
+            ],
+            [
+              4153,
+              192
+            ],
+            [
+              4157,
+              0
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 176,
+          "target_model": "p128/targets/h8_w176/conv2d_8x176x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w176/conv2d_8x176x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w176/conv2d_8x176x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w176/field_spec.json",
+          "lookup_rules": [
+            [
+              1097,
+              14
+            ],
+            [
+              1107,
+              37
+            ],
+            [
+              1109,
+              84
+            ],
+            [
+              3963,
+              64
+            ],
+            [
+              4157,
+              32
+            ],
+            [
+              4163,
+              32
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 180,
+          "target_model": "p128/targets/h8_w180/conv2d_8x180x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w180/conv2d_8x180x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w180/conv2d_8x180x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w180/field_spec.json",
+          "lookup_rules": [
+            [
+              1097,
+              14
+            ],
+            [
+              1107,
+              38
+            ],
+            [
+              1109,
+              83
+            ],
+            [
+              1799,
+              63
+            ],
+            [
+              1927,
+              63
+            ],
+            [
+              2055,
+              63
+            ],
+            [
+              2183,
+              63
+            ],
+            [
+              3963,
+              32
+            ],
+            [
+              3964,
+              122
+            ],
+            [
+              4153,
+              64
+            ],
+            [
+              4155,
+              232
+            ],
+            [
+              4156,
+              255
+            ],
+            [
+              4157,
+              63
+            ],
+            [
+              4163,
+              160
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 184,
+          "target_model": "p128/targets/h8_w184/conv2d_8x184x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w184/conv2d_8x184x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w184/conv2d_8x184x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w184/field_spec.json",
+          "lookup_rules": [
+            [
+              1107,
+              38
+            ],
+            [
+              1109,
+              82
+            ],
+            [
+              1799,
+              127
+            ],
+            [
+              1927,
+              127
+            ],
+            [
+              2055,
+              127
+            ],
+            [
+              2183,
+              127
+            ],
+            [
+              3964,
+              122
+            ],
+            [
+              4153,
+              96
+            ],
+            [
+              4155,
+              40
+            ],
+            [
+              4158,
+              95
+            ],
+            [
+              4163,
+              128
+            ]
+          ]
+        },
+        {
+          "height": 8,
+          "width": 188,
+          "target_model": "p128/targets/h8_w188/conv2d_8x188x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w188/conv2d_8x188x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w188/conv2d_8x188x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w188/field_spec.json",
+          "lookup_rules": []
+        },
+        {
+          "height": 8,
+          "width": 192,
+          "target_model": "p128/targets/h8_w192/conv2d_8x192x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h8_w192/conv2d_8x192x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h8_w192/conv2d_8x192x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h8_w192/field_spec.json",
+          "lookup_rules": [
+            [
+              786,
+              6
+            ],
+            [
+              1106,
+              255
+            ],
+            [
+              1109,
+              80
+            ],
+            [
+              2306,
+              6
+            ],
+            [
+              4153,
+              32
+            ],
+            [
+              4157,
+              128
+            ],
+            [
+              4158,
+              95
+            ],
+            [
+              4163,
+              192
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

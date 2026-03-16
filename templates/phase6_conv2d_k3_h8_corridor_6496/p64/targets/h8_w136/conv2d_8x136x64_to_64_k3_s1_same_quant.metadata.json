@@ -1,0 +1,61 @@
+{
+  "tool": "generate_conv2d_quant_tflite.py",
+  "model_name": "conv2d_8x136x64_to_64_k3_s1_same",
+  "output_path": "/home/bhav/Documents/experiments/rngcnr-gh/coral-usb-oxidized/traces/analysis/phase4-conv2d-k3-family-scout-20260316T094618Z/h8_w136_ic64_oc64_k3/conv2d_8x136x64_to_64_k3_s1_same_quant.tflite",
+  "output_sha256": "fd6a5b07adba14ca6d680bb53953556504303da7dab30a9636ccb9d66a905d76",
+  "height": 8,
+  "width": 136,
+  "in_channels": 64,
+  "out_channels": 64,
+  "kernel_size": 3,
+  "stride": 1,
+  "padding": "same",
+  "init_mode": "random_uniform",
+  "diag_scale": 1.0,
+  "hot_y": 0,
+  "hot_x": 0,
+  "hot_in_channel": 0,
+  "hot_out_channel": 0,
+  "hot_value": 1.0,
+  "use_bias": false,
+  "seed": 1337,
+  "rep_samples": 128,
+  "rep_range": 1.0,
+  "kernel_shape": [
+    3,
+    3,
+    64,
+    64
+  ],
+  "kernel_sha256": "9977b5526ea272a8107889c6f6af18012fdbaee390ba845435b16dd373ce8326",
+  "kernel_min": -0.9999864101409912,
+  "kernel_max": 0.9999489188194275,
+  "input_tensor": {
+    "name": "serving_default_input:0",
+    "shape": [
+      1,
+      8,
+      136,
+      64
+    ],
+    "dtype": "<class 'numpy.int8'>",
+    "quantization": [
+      0.007843135856091976,
+      -1
+    ]
+  },
+  "output_tensor": {
+    "name": "StatefulPartitionedCall:0",
+    "shape": [
+      1,
+      8,
+      136,
+      64
+    ],
+    "dtype": "<class 'numpy.int8'>",
+    "quantization": [
+      0.3438986837863922,
+      -3
+    ]
+  }
+}

@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SOURCE_ARTIFACT_REL="${SOURCE_ARTIFACT_REL:-traces/analysis/phase4-conv2d-k3-family-scout-20260316T091108Z}"
 OUT_DIR_REL="${OUT_DIR_REL:-templates/phase5_conv2d_k3_h8_band_6496}"
+FAMILY_ID="${FAMILY_ID:-phase5_conv2d_k3_h8_band_6496_v1}"
 SOURCE_ARTIFACT="$REPO_ROOT/$SOURCE_ARTIFACT_REL"
 OUT_DIR="$REPO_ROOT/$OUT_DIR_REL"
 
@@ -15,6 +16,9 @@ MID_WIDTH="${MID_WIDTH:-128}"
 HIGH_WIDTH="${HIGH_WIDTH:-152}"
 TARGET_WIDTHS_CSV="${TARGET_WIDTHS_CSV:-104,116,128,140,152}"
 TILE_SIZE="${TILE_SIZE:-8}"
+EO_PAYLOAD_LEN="${EO_PAYLOAD_LEN:-6496}"
+LOOKUP_CAP="${LOOKUP_CAP:-999999}"
+PREDICT_MODE="${PREDICT_MODE:-threepoint}"
 
 pairs=(
   "p32 32"
@@ -140,7 +144,7 @@ for spec in "${pairs[@]}"; do
       --out-spec "$target_out/field_spec.json" \
       --out-report "$target_out/field_spec.report.json" \
       --out-patchspec "$target_out/field_spec.patchspec" >/dev/null
-    lookup_from_predicted "6496" \
+    lookup_from_predicted "$EO_PAYLOAD_LEN" \
       "$anchor_out/serialized_executable_000.bin" \
       "$target_out/serialized_executable_000.bin" \
       "$target_out/field_spec.patchspec" \
@@ -148,19 +152,23 @@ for spec in "${pairs[@]}"; do
   done
 done
 
-python3 - <<'PY' "$OUT_DIR" "$OUT_DIR_REL" "$SOURCE_ARTIFACT_REL" "$ANCHOR_HEIGHT" "$ANCHOR_WIDTH" "$LOW_WIDTH" "$MID_WIDTH" "$HIGH_WIDTH" "$TILE_SIZE" "$TARGET_WIDTHS_CSV"
+python3 - <<'PY' "$OUT_DIR" "$OUT_DIR_REL" "$SOURCE_ARTIFACT_REL" "$FAMILY_ID" "$ANCHOR_HEIGHT" "$ANCHOR_WIDTH" "$LOW_WIDTH" "$MID_WIDTH" "$HIGH_WIDTH" "$TILE_SIZE" "$TARGET_WIDTHS_CSV" "$EO_PAYLOAD_LEN" "$LOOKUP_CAP" "$PREDICT_MODE"
 import json, pathlib, sys
 
 out_dir = pathlib.Path(sys.argv[1])
 out_dir_rel = sys.argv[2]
 source_artifact_rel = sys.argv[3]
-anchor_height = int(sys.argv[4])
-anchor_width = int(sys.argv[5])
-low_width = int(sys.argv[6])
-mid_width = int(sys.argv[7])
-high_width = int(sys.argv[8])
-tile_size = int(sys.argv[9])
-target_widths = [int(x) for x in sys.argv[10].split(",") if x]
+family_id = sys.argv[4]
+anchor_height = int(sys.argv[5])
+anchor_width = int(sys.argv[6])
+low_width = int(sys.argv[7])
+mid_width = int(sys.argv[8])
+high_width = int(sys.argv[9])
+tile_size = int(sys.argv[10])
+target_widths = [int(x) for x in sys.argv[11].split(",") if x]
+eo_payload_len = int(sys.argv[12])
+lookup_cap = int(sys.argv[13])
+predict_mode = sys.argv[14]
 
 regimes = [("p32", 32), ("p64", 64), ("p128", 128)]
 
@@ -194,12 +202,12 @@ def read_patch(path: pathlib.Path):
 
 spec = {
     "schema_version": 2,
-    "family_id": "phase5_conv2d_k3_h8_band_6496_v1",
+    "family_id": family_id,
     "family_mode": "fixed_height_band",
     "fixed_height": anchor_height,
     "anchor_height": anchor_height,
     "anchor_width": anchor_width,
-    "eo_payload_len": 6496,
+    "eo_payload_len": eo_payload_len,
     "kernel_size": 3,
     "stride": 1,
     "padding": "same",
@@ -214,6 +222,8 @@ summary = [
     f"family_mode={spec['family_mode']}",
     f"fixed_height={anchor_height}",
     f"source_artifact={source_artifact_rel}",
+    f"lookup_cap={lookup_cap}",
+    f"predict_mode={predict_mode}",
 ]
 
 for name, channels in regimes:
@@ -228,6 +238,7 @@ for name, channels in regimes:
         "low_dim": low_width,
         "mid_dim": mid_width,
         "high_dim": high_width,
+        "predict_mode": predict_mode,
         "tile_size": tile_size,
         "chunk_index": 0,
         "lane_priority": "lane32,lane16",
@@ -285,11 +296,12 @@ print(out_dir / "family.json")
 print(out_dir / "SUMMARY.txt")
 PY
 
-python3 - <<'PY' "$OUT_DIR/family.json" "$REPO_ROOT"
+python3 - <<'PY' "$OUT_DIR/family.json" "$REPO_ROOT" "$ANCHOR_HEIGHT"
 import json, pathlib, subprocess, sys, tempfile
 
 spec_path = pathlib.Path(sys.argv[1])
 repo_root = pathlib.Path(sys.argv[2])
+anchor_height = int(sys.argv[3])
 spec = json.loads(spec_path.read_text())
 
 sys.path.insert(0, str(repo_root / "tools"))
@@ -309,7 +321,7 @@ def emitted_rules(channels, width):
             "cargo", "run", "--quiet", "--bin", "conv_k3_eo_emit", "--",
             "--family-spec", str(spec_path),
             "--channels", str(channels),
-            "--target-height", "8",
+            "--target-height", str(anchor_height),
             "--target-width", str(width),
             "--out-patchspec", path,
         ],
@@ -333,7 +345,7 @@ for regime in spec["regimes"]:
         if target["source_kind"] == "noop":
             continue
         target_exec = read_chunk(
-            spec_path.parent / f"{regime['name']}/targets/h8_w{target['width']}/serialized_executable_000.bin"
+            spec_path.parent / f"{regime['name']}/targets/h{anchor_height}_w{target['width']}/serialized_executable_000.bin"
         )
         patched = bytearray(anchor_exec)
         for off, val in emitted_rules(regime["channels"], target["width"]):
@@ -343,27 +355,44 @@ for regime in spec["regimes"]:
             if lhs != rhs:
                 extra.append([idx, rhs])
         if extra:
-            target["lookup_rules"].extend(extra)
+            merged = {off: val for off, val in target.get("lookup_rules", [])}
+            for off, val in extra:
+                merged[off] = val
+            target["lookup_rules"] = [[off, merged[off]] for off in sorted(merged)]
 
 spec_path.write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
 PY
 
-python3 - <<'PY' "$OUT_DIR/family.json" "$OUT_DIR/SUMMARY.txt"
+python3 - <<'PY' "$OUT_DIR/family.json" "$OUT_DIR/SUMMARY.txt" "$LOOKUP_CAP"
 import json, pathlib, sys
 spec = json.loads(pathlib.Path(sys.argv[1]).read_text())
+lookup_cap = int(sys.argv[3])
 lines = [
     f"family_id={spec['family_id']}",
     f"family_mode={spec['family_mode']}",
     f"fixed_height={spec['fixed_height']}",
     f"source_artifact={spec['source_artifact']}",
+    f"lookup_cap={lookup_cap}",
+    f"predict_mode={spec['regimes'][0]['field_runtime'].get('predict_mode', 'threepoint')}",
 ]
+violations = []
 for regime in spec["regimes"]:
+    max_lookup = 0
     lines.append(f"[{regime['name']}] channels={regime['channels']}")
     for target in regime["targets"]:
+        lookup_rules = len(target.get("lookup_rules", []))
+        max_lookup = max(max_lookup, lookup_rules)
         lines.append(
-            f"  h{target['height']}_w{target['width']}: source={target['source_kind']} lookup_rules={len(target.get('lookup_rules', []))}"
+            f"  h{target['height']}_w{target['width']}: source={target['source_kind']} lookup_rules={lookup_rules}"
         )
+        if target["source_kind"] != "noop" and lookup_rules > lookup_cap:
+            violations.append(
+                f"{regime['name']} h{target['height']}_w{target['width']} lookup_rules={lookup_rules} cap={lookup_cap}"
+            )
+    lines.append(f"  max_lookup_rules={max_lookup}")
 pathlib.Path(sys.argv[2]).write_text("\n".join(lines) + "\n", encoding="utf-8")
+if violations:
+    raise SystemExit("lookup cap exceeded:\n" + "\n".join(violations))
 PY
 
 echo "phase5 family assets frozen under: $OUT_DIR"
