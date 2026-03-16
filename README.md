@@ -16,20 +16,18 @@ Rust SDK/driver layer for Google Coral USB Accelerator:
 If you are working on the current native path, start with:
 
 - `docs/active_path.md`
+- `docs/phase4_conv2d_k3_completion_2026-03-16.md`
 - `docs/phase4_completion_control_plan_2026-03-07.md`
 - `docs/phase4_conv2d_k3_param_region_2026-03-07.md`
 - `docs/phase4_conv2d_k3_native_param_materialize_2026-03-07.md`
 - `docs/phase4_conv2d_k3_eo_localization_2026-03-07.md`
 - `WORKLOG.md`
 
-Current bounded completion target:
+Current bounded completion status:
 
-- single-op Conv2D
-- `kernel_size=3`
-- `stride=1`
-- `padding=same`
-- `bias=off`
-- same-product spatial moves
+- Phase 4 is now complete for the bounded single-op Conv2D `k=3`, `same`, same-product family rooted at `16x64`
+- active completion assets live under `templates/phase4_conv2d_k3_sameprod_6512/`
+- the one-command Pi proof is `scripts/phase4_conv2d_k3_completion_demo.sh`
 
 ## Raspberry Pi 5 setup
 

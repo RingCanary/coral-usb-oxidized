@@ -1,0 +1,18 @@
+family_id=phase4_conv2d_k3_sameprod_6512_v1
+source_artifact=traces/analysis/phase4-conv2d-k3-crossdim-oracle-matrix-20260306T143012Z
+asset_root=templates/phase4_conv2d_k3_sameprod_6512
+[p32] channels=32
+  h16_w64: source=noop rule_count=0 model=p32/anchor/conv2d_16x64x32_to_32_k3_s1_same_quant.tflite
+  h32_w32: source=table rule_count=255 model=p32/targets/h32_w32/conv2d_32x32x32_to_32_k3_s1_same_quant.tflite
+  h64_w16: source=table rule_count=299 model=p32/targets/h64_w16/conv2d_64x16x32_to_32_k3_s1_same_quant.tflite
+  h128_w8: source=table rule_count=424 model=p32/targets/h128_w8/conv2d_128x8x32_to_32_k3_s1_same_quant.tflite
+[p64] channels=64
+  h16_w64: source=noop rule_count=0 model=p64/anchor/conv2d_16x64x64_to_64_k3_s1_same_quant.tflite
+  h32_w32: source=table rule_count=259 model=p64/targets/h32_w32/conv2d_32x32x64_to_64_k3_s1_same_quant.tflite
+  h64_w16: source=table rule_count=304 model=p64/targets/h64_w16/conv2d_64x16x64_to_64_k3_s1_same_quant.tflite
+  h128_w8: source=table rule_count=349 model=p64/targets/h128_w8/conv2d_128x8x64_to_64_k3_s1_same_quant.tflite
+[p128] channels=128
+  h16_w64: source=noop rule_count=0 model=p128/anchor/conv2d_16x64x128_to_128_k3_s1_same_quant.tflite
+  h32_w32: source=table rule_count=270 model=p128/targets/h32_w32/conv2d_32x32x128_to_128_k3_s1_same_quant.tflite
+  h64_w16: source=table rule_count=318 model=p128/targets/h64_w16/conv2d_64x16x128_to_128_k3_s1_same_quant.tflite
+  h128_w8: source=table rule_count=362 model=p128/targets/h128_w8/conv2d_128x8x128_to_128_k3_s1_same_quant.tflite

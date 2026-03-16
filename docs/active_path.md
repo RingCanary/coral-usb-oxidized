@@ -1,6 +1,6 @@
 # Active Path
 
-This is the Phase 4 front door.
+This is the active front door.
 
 The active path in this repo is:
 
@@ -16,18 +16,15 @@ The active path is **not**:
 - `edgetpu_compiler`
 - legacy Python/Bazel stacks
 
-Those remain compatibility or archival surfaces until Phase 4 native artifact generation is complete.
+Those remain compatibility or archival surfaces outside the active bounded completion path.
 
 ## Start Here
 
 For current status and frontier:
 
+- `docs/phase4_conv2d_k3_completion_2026-03-16.md`
 - `docs/phase4_completion_control_plan_2026-03-07.md`
-- `docs/phase4_conv2d_k3_scout_2026-03-06.md`
-- `docs/phase4_conv2d_k3_crossdim_oracle_matrix_2026-03-06.md`
-- `docs/phase4_conv2d_k3_param_region_2026-03-07.md`
-- `docs/phase4_conv2d_k3_native_param_materialize_2026-03-07.md`
-- `docs/phase4_conv2d_k3_eo_localization_2026-03-07.md`
+- `templates/phase4_conv2d_k3_sameprod_6512/family.json`
 - `WORKLOG.md`
 
 For active runtime smoke checks:
@@ -38,17 +35,16 @@ cargo run --example rusb_control_plane_probe -- --verbose-configs
 cargo run --example rusb_serialized_exec_replay -- --help
 ```
 
-For active Phase 4 helpers:
+For active bounded completion helpers:
 
 ```bash
-bash scripts/phase4_conv2d_k3_family_scout.sh
-bash scripts/phase4_conv2d_k3_crossdim_oracle_matrix.sh
-bash scripts/phase4_conv2d_k3_param_region_probe.sh
+cargo run --bin conv_k3_eo_emit -- --family-spec templates/phase4_conv2d_k3_sameprod_6512/family.json --channels 64 --target-height 64 --out-report /tmp/conv_k3_eo_emit.json
+bash scripts/phase4_conv2d_k3_completion_demo.sh
 ```
 
-## Current Bounded Completion Target
+## Current Bounded Status
 
-Phase 4 completion currently means:
+Bounded Phase 4 completion is now achieved for:
 
 - single-op Conv2D
 - `kernel_size=3`
@@ -58,6 +54,8 @@ Phase 4 completion currently means:
 - same-product spatial moves
 - pure-`rusb` replay on Pi
 - no `edgetpu_compiler` in the active artifact-creation loop
+
+The current frontier is no longer bounded-family completion. It is generalization beyond this frozen family.
 
 ## Compatibility Boundary
 
