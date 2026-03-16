@@ -8,6 +8,8 @@ use std::path::PathBuf;
 #[derive(Debug, Deserialize)]
 struct GeneratedConvMetadata {
     model_name: String,
+    height: usize,
+    width: usize,
     kernel_size: usize,
     in_channels: usize,
     out_channels: usize,
@@ -70,6 +72,8 @@ fn block_widths(out_channels: usize) -> Vec<usize> {
 }
 
 fn materialize_param_stream(
+    height: usize,
+    width: usize,
     kernel_size: usize,
     in_channels: usize,
     out_channels: usize,
@@ -117,6 +121,13 @@ fn materialize_param_stream(
         .ok_or("stream length overflow")?;
     let mut out = vec![0u8; total_len];
 
+    let ic_group_count = in_channels / 4;
+    let use_kernel_major_groups = kernel_size == 3
+        && in_channels == 32
+        && out_channels == 32
+        && height == 12
+        && width >= 176;
+
     let mut block_start = 0usize;
     let mut oc_base = 0usize;
     for bw in block_widths(out_channels) {
@@ -143,8 +154,13 @@ fn materialize_param_stream(
                     for ic in 0..in_channels {
                         let src_idx =
                             (((oc * kernel_size + ky) * kernel_size + kx) * in_channels) + ic;
-                        let group_index =
-                            ((ic / 4) * kernel_size * kernel_size) + (ky * kernel_size) + kx;
+                        let kernel_pos = (ky * kernel_size) + kx;
+                        let ic_group = ic / 4;
+                        let group_index = if use_kernel_major_groups {
+                            (kernel_pos * ic_group_count) + ic_group
+                        } else {
+                            (ic_group * kernel_size * kernel_size) + kernel_pos
+                        };
                         let group_base = group_index * (bw * 4);
                         let dst_idx = weight_start + group_base + local_oc * 4 + (ic % 4);
                         out[dst_idx] = weight_bytes_oc_kh_kw_ic[src_idx].wrapping_add(128);
@@ -215,6 +231,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         metadata.out_channels,
     )?;
     let stream = materialize_param_stream(
+        metadata.height,
+        metadata.width,
         metadata.kernel_size,
         metadata.in_channels,
         metadata.out_channels,
@@ -231,8 +249,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     fs::write(&out_path, &stream)?;
 
     let mut summary = format!(
-        "model={} kernel_size={} in_channels={} out_channels={} weight_tensor_index={} stored_shape={:?} stream_len={}",
+        "model={} height={} width={} kernel_size={} in_channels={} out_channels={} weight_tensor_index={} stored_shape={:?} stream_len={}",
         metadata.model_name,
+        metadata.height,
+        metadata.width,
         metadata.kernel_size,
         metadata.in_channels,
         metadata.out_channels,
