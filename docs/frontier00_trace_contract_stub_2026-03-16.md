@@ -49,10 +49,23 @@ Dense artifacts without widening any current native-control claim.
 - inventory rows: `399`
 - explicit stale-reference rows: `2`
 - normalized captures: `6`
-- direct verified `hash_eq_target=true` rows: `1`
+- direct verified `hash_eq_target=true` rows kept by rule: `1`
 
 The stored March 16 completion-demo artifacts remain structurally useful but do
 not carry colocated root summaries in this workspace copy, so their imported
-status remains bounded to structural normalization. The tail-proof row preserves
-the direct DUT hash evidence, and the Dense baseline/gated usbmon pair preserves
-the historical perturbation distinction.
+status remains bounded to structural normalization. Claim-map rows
+`f00_conv_phase6_structural` and `f00_conv_phase7_overwide_structural` freeze
+that boundary.
+
+Claim-map row `f00_conv_phase7_tail_w176_verified` is the only kept direct DUT
+success because it is the only imported exact-match tail proof that also has a
+same-shape structural counterexample in the current normalized corpus. The
+omitted exact-match siblings `h12_w184` and `h12_w192` are frozen as discard
+rows `f00_tail_h12_w184_excluded` and `f00_tail_h12_w192_excluded` until the
+same rule can be satisfied machine-readably.
+
+Claim-map rows `f00_dense_stock_structural`,
+`f00_dense_csr_baseline_failure`, and `f00_dense_gate_failure` keep the Dense
+artifacts bounded to structural or exact-failure evidence only. This stub does
+not widen to full control, firmware ownership, general executable generation,
+or live reproducibility.

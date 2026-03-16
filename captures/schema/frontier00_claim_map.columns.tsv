@@ -1,0 +1,15 @@
+claim_id
+frontier
+decision
+claim_class
+capture_ref
+source_input_ids
+hypothesis
+firmware_hash
+artifact_id
+transport_outcome
+dut_result
+nearest_counterexample_ref
+nearest_counterexample_result
+selection_rule
+notes
