@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Frontier 00 Capture Metadata",
+  "type": "object",
+  "required": [
+    "capture_id",
+    "frontier",
+    "capture_version",
+    "source",
+    "provenance",
+    "firmware",
+    "artifacts",
+    "identity",
+    "outcome",
+    "comparison",
+    "decision"
+  ],
+  "properties": {
+    "capture_id": {
+      "type": "string"
+    },
+    "frontier": {
+      "type": "string"
+    },
+    "capture_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "root",
+        "run_id",
+        "kind",
+        "imported_at_utc"
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "repo_path",
+        "repo_commit",
+        "workspace_root"
+      ]
+    },
+    "firmware": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "provenance_note"
+      ]
+    },
+    "artifacts": {
+      "type": "object",
+      "required": [
+        "model",
+        "metadata_json",
+        "serialized_executable",
+        "param_stream",
+        "eo_patchspec",
+        "dut_logs",
+        "usbmon_logs"
+      ]
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "family",
+        "regime",
+        "shape",
+        "operator"
+      ]
+    },
+    "outcome": {
+      "type": "object",
+      "required": [
+        "transport_admission",
+        "dut_hash",
+        "hash_eq_target",
+        "exact_failure_mode"
+      ]
+    },
+    "comparison": {
+      "type": "object",
+      "required": [
+        "baseline_capture_id",
+        "nearest_counterexample_id",
+        "comparison_class"
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "required": [
+        "keep_discard",
+        "reason"
+      ]
+    }
+  }
+}
