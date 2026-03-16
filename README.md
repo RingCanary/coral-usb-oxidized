@@ -38,9 +38,9 @@ Current bounded completion status:
 - the widened family uses a native EO emitter driven by `threepoint` field rules plus bounded lookup residue, not raw byte tables alone
 - the Phase 6 Pi proof passes for `p32/p64/p128 × {8x72,8x76,8x80,...,8x192}`
 - Phase 7 adds a second bounded schema-v2 corridor under `templates/phase7_conv2d_k3_h12_corridor_6512/`
-- the checked-in Phase 7 all-regime proof passes for `p32/p64/p128 × {12x64,12x72,12x80,...,12x168}`
-- the attempted wider `12x176/184/192` tail exposed a remaining native `p32` parameter-materialization gap, so the supported Phase 7 boundary currently stops at `12x168`
-- `docs/phase7_full_control_boundary_2026-03-16.md` now states the exact remaining gap to full EdgeTPU ownership: bounded native control is real, but full firmware ownership and general executable/codegen control are still open
+- the checked-in Phase 7 all-regime proof now passes for `p32/p64/p128 × {12x64,12x72,12x80,...,12x192}`
+- the previously excluded `12x176/184/192` `p32` tail now closes on-device with native parameter materialization plus native EO replay
+- `docs/phase7_full_control_boundary_2026-03-16.md` states the remaining gap to full EdgeTPU ownership: bounded native control is real, but full firmware ownership and general executable/codegen control are still open
 
 ## Raspberry Pi 5 setup
 

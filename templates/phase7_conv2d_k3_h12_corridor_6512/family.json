@@ -2786,6 +2786,530 @@
               60
             ]
           ]
+        },
+        {
+          "height": 12,
+          "width": 176,
+          "target_model": "p32/targets/h12_w176/conv2d_12x176x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h12_w176/conv2d_12x176x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h12_w176/conv2d_12x176x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h12_w176/field_spec.json",
+          "lookup_rules": [
+            [
+              1815,
+              31
+            ],
+            [
+              1943,
+              31
+            ],
+            [
+              2071,
+              31
+            ],
+            [
+              2199,
+              31
+            ],
+            [
+              3752,
+              228
+            ],
+            [
+              3755,
+              128
+            ],
+            [
+              3756,
+              35
+            ],
+            [
+              3757,
+              128
+            ],
+            [
+              3758,
+              220
+            ],
+            [
+              3760,
+              0
+            ],
+            [
+              3762,
+              185
+            ],
+            [
+              3766,
+              114
+            ],
+            [
+              3771,
+              72
+            ],
+            [
+              3778,
+              219
+            ],
+            [
+              3782,
+              219
+            ],
+            [
+              3816,
+              219
+            ],
+            [
+              3887,
+              128
+            ],
+            [
+              3927,
+              192
+            ],
+            [
+              3928,
+              17
+            ],
+            [
+              3930,
+              8
+            ],
+            [
+              3948,
+              112
+            ],
+            [
+              3951,
+              89
+            ],
+            [
+              3955,
+              32
+            ],
+            [
+              3956,
+              162
+            ],
+            [
+              3957,
+              63
+            ],
+            [
+              3960,
+              68
+            ],
+            [
+              3964,
+              128
+            ],
+            [
+              3969,
+              16
+            ],
+            [
+              3971,
+              31
+            ],
+            [
+              3979,
+              52
+            ],
+            [
+              3983,
+              62
+            ],
+            [
+              4040,
+              200
+            ],
+            [
+              4043,
+              28
+            ],
+            [
+              4044,
+              1
+            ],
+            [
+              4045,
+              228
+            ],
+            [
+              4048,
+              128
+            ],
+            [
+              4049,
+              220
+            ],
+            [
+              4050,
+              15
+            ],
+            [
+              4052,
+              144
+            ],
+            [
+              4056,
+              114
+            ],
+            [
+              4059,
+              64
+            ],
+            [
+              4060,
+              238
+            ],
+            [
+              4063,
+              200
+            ],
+            [
+              4067,
+              185
+            ],
+            [
+              4072,
+              72
+            ],
+            [
+              4081,
+              142
+            ],
+            [
+              4086,
+              0
+            ],
+            [
+              4088,
+              0
+            ],
+            [
+              4090,
+              0
+            ],
+            [
+              4094,
+              0
+            ],
+            [
+              4098,
+              0
+            ],
+            [
+              4102,
+              0
+            ],
+            [
+              4104,
+              0
+            ],
+            [
+              4108,
+              0
+            ],
+            [
+              4109,
+              132
+            ],
+            [
+              4122,
+              100
+            ],
+            [
+              4150,
+              56
+            ],
+            [
+              4156,
+              219
+            ],
+            [
+              4159,
+              219
+            ],
+            [
+              4160,
+              81
+            ],
+            [
+              4173,
+              192
+            ],
+            [
+              4179,
+              224
+            ],
+            [
+              4414,
+              64
+            ]
+          ]
+        },
+        {
+          "height": 12,
+          "width": 184,
+          "target_model": "p32/targets/h12_w184/conv2d_12x184x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h12_w184/conv2d_12x184x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h12_w184/conv2d_12x184x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h12_w184/field_spec.json",
+          "lookup_rules": [
+            [
+              1287,
+              128
+            ],
+            [
+              1399,
+              128
+            ],
+            [
+              1455,
+              120
+            ],
+            [
+              1511,
+              128
+            ],
+            [
+              1623,
+              128
+            ],
+            [
+              1679,
+              120
+            ],
+            [
+              1735,
+              128
+            ],
+            [
+              1815,
+              79
+            ],
+            [
+              1863,
+              128
+            ],
+            [
+              1943,
+              79
+            ],
+            [
+              1991,
+              128
+            ],
+            [
+              2071,
+              79
+            ],
+            [
+              2119,
+              128
+            ],
+            [
+              2199,
+              79
+            ],
+            [
+              3752,
+              228
+            ],
+            [
+              3755,
+              128
+            ],
+            [
+              3756,
+              35
+            ],
+            [
+              3757,
+              128
+            ],
+            [
+              3758,
+              220
+            ],
+            [
+              3762,
+              185
+            ],
+            [
+              3766,
+              114
+            ],
+            [
+              3771,
+              72
+            ],
+            [
+              3887,
+              128
+            ],
+            [
+              3927,
+              192
+            ],
+            [
+              3928,
+              17
+            ],
+            [
+              3948,
+              112
+            ],
+            [
+              3951,
+              105
+            ],
+            [
+              3955,
+              32
+            ],
+            [
+              3956,
+              158
+            ],
+            [
+              3957,
+              63
+            ],
+            [
+              3960,
+              196
+            ],
+            [
+              3965,
+              128
+            ],
+            [
+              3969,
+              16
+            ],
+            [
+              3971,
+              31
+            ],
+            [
+              3979,
+              32
+            ],
+            [
+              3983,
+              62
+            ],
+            [
+              4040,
+              200
+            ],
+            [
+              4042,
+              0
+            ],
+            [
+              4048,
+              128
+            ],
+            [
+              4049,
+              220
+            ],
+            [
+              4050,
+              15
+            ],
+            [
+              4052,
+              144
+            ],
+            [
+              4056,
+              114
+            ],
+            [
+              4059,
+              64
+            ],
+            [
+              4060,
+              238
+            ],
+            [
+              4067,
+              185
+            ],
+            [
+              4072,
+              72
+            ],
+            [
+              4081,
+              142
+            ],
+            [
+              4086,
+              0
+            ],
+            [
+              4088,
+              0
+            ],
+            [
+              4090,
+              0
+            ],
+            [
+              4094,
+              0
+            ],
+            [
+              4102,
+              0
+            ],
+            [
+              4104,
+              0
+            ],
+            [
+              4108,
+              0
+            ],
+            [
+              4109,
+              132
+            ],
+            [
+              4122,
+              100
+            ],
+            [
+              4150,
+              56
+            ],
+            [
+              4160,
+              81
+            ],
+            [
+              4174,
+              94
+            ]
+          ]
+        },
+        {
+          "height": 12,
+          "width": 192,
+          "target_model": "p32/targets/h12_w192/conv2d_12x192x32_to_32_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p32/targets/h12_w192/conv2d_12x192x32_to_32_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p32/targets/h12_w192/conv2d_12x192x32_to_32_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p32/targets/h12_w192/field_spec.json",
+          "lookup_rules": []
         }
       ]
     },
@@ -3886,6 +4410,190 @@
               124
             ]
           ]
+        },
+        {
+          "height": 12,
+          "width": 176,
+          "target_model": "p64/targets/h12_w176/conv2d_12x176x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h12_w176/conv2d_12x176x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h12_w176/conv2d_12x176x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h12_w176/field_spec.json",
+          "lookup_rules": [
+            [
+              786,
+              2
+            ],
+            [
+              1107,
+              32
+            ],
+            [
+              1109,
+              95
+            ],
+            [
+              1815,
+              63
+            ],
+            [
+              1816,
+              8
+            ],
+            [
+              1943,
+              63
+            ],
+            [
+              1944,
+              8
+            ],
+            [
+              2071,
+              63
+            ],
+            [
+              2072,
+              8
+            ],
+            [
+              2199,
+              63
+            ],
+            [
+              2200,
+              8
+            ],
+            [
+              2322,
+              2
+            ],
+            [
+              3930,
+              8
+            ],
+            [
+              3979,
+              104
+            ],
+            [
+              4027,
+              248
+            ],
+            [
+              4169,
+              96
+            ],
+            [
+              4171,
+              40
+            ],
+            [
+              4173,
+              0
+            ]
+          ]
+        },
+        {
+          "height": 12,
+          "width": 184,
+          "target_model": "p64/targets/h12_w184/conv2d_12x184x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h12_w184/conv2d_12x184x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h12_w184/conv2d_12x184x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h12_w184/field_spec.json",
+          "lookup_rules": [
+            [
+              786,
+              2
+            ],
+            [
+              1106,
+              63
+            ],
+            [
+              1109,
+              93
+            ],
+            [
+              1815,
+              159
+            ],
+            [
+              1943,
+              159
+            ],
+            [
+              2071,
+              159
+            ],
+            [
+              2199,
+              159
+            ],
+            [
+              2322,
+              2
+            ],
+            [
+              3751,
+              0
+            ],
+            [
+              3815,
+              128
+            ],
+            [
+              3979,
+              64
+            ],
+            [
+              4027,
+              236
+            ],
+            [
+              4155,
+              64
+            ],
+            [
+              4169,
+              64
+            ],
+            [
+              4171,
+              232
+            ],
+            [
+              4172,
+              255
+            ],
+            [
+              4173,
+              63
+            ],
+            [
+              4174,
+              95
+            ],
+            [
+              4179,
+              160
+            ],
+            [
+              4414,
+              136
+            ]
+          ]
+        },
+        {
+          "height": 12,
+          "width": 192,
+          "target_model": "p64/targets/h12_w192/conv2d_12x192x64_to_64_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p64/targets/h12_w192/conv2d_12x192x64_to_64_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p64/targets/h12_w192/conv2d_12x192x64_to_64_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p64/targets/h12_w192/field_spec.json",
+          "lookup_rules": []
         }
       ]
     },
@@ -5030,6 +5738,210 @@
               224
             ]
           ]
+        },
+        {
+          "height": 12,
+          "width": 176,
+          "target_model": "p128/targets/h12_w176/conv2d_12x176x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h12_w176/conv2d_12x176x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h12_w176/conv2d_12x176x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h12_w176/field_spec.json",
+          "lookup_rules": [
+            [
+              779,
+              160
+            ],
+            [
+              814,
+              125
+            ],
+            [
+              827,
+              152
+            ],
+            [
+              1107,
+              32
+            ],
+            [
+              1109,
+              94
+            ],
+            [
+              1815,
+              127
+            ],
+            [
+              1943,
+              127
+            ],
+            [
+              2071,
+              127
+            ],
+            [
+              2199,
+              127
+            ],
+            [
+              2315,
+              160
+            ],
+            [
+              3930,
+              8
+            ],
+            [
+              3979,
+              208
+            ],
+            [
+              4027,
+              240
+            ],
+            [
+              4167,
+              231
+            ],
+            [
+              4168,
+              255
+            ],
+            [
+              4169,
+              255
+            ],
+            [
+              4170,
+              94
+            ],
+            [
+              4173,
+              96
+            ],
+            [
+              4174,
+              96
+            ],
+            [
+              4179,
+              96
+            ],
+            [
+              4180,
+              16
+            ]
+          ]
+        },
+        {
+          "height": 12,
+          "width": 184,
+          "target_model": "p128/targets/h12_w184/conv2d_12x184x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h12_w184/conv2d_12x184x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h12_w184/conv2d_12x184x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h12_w184/field_spec.json",
+          "lookup_rules": [
+            [
+              779,
+              144
+            ],
+            [
+              786,
+              5
+            ],
+            [
+              814,
+              125
+            ],
+            [
+              827,
+              136
+            ],
+            [
+              1107,
+              34
+            ],
+            [
+              1109,
+              91
+            ],
+            [
+              1815,
+              63
+            ],
+            [
+              1816,
+              17
+            ],
+            [
+              1943,
+              63
+            ],
+            [
+              1944,
+              17
+            ],
+            [
+              2071,
+              63
+            ],
+            [
+              2072,
+              17
+            ],
+            [
+              2199,
+              63
+            ],
+            [
+              2200,
+              17
+            ],
+            [
+              2315,
+              144
+            ],
+            [
+              2322,
+              5
+            ],
+            [
+              3751,
+              0
+            ],
+            [
+              3815,
+              128
+            ],
+            [
+              3979,
+              128
+            ],
+            [
+              4027,
+              216
+            ],
+            [
+              4155,
+              64
+            ],
+            [
+              4173,
+              0
+            ]
+          ]
+        },
+        {
+          "height": 12,
+          "width": 192,
+          "target_model": "p128/targets/h12_w192/conv2d_12x192x128_to_128_k3_s1_same_quant.tflite",
+          "target_compiled_model": "p128/targets/h12_w192/conv2d_12x192x128_to_128_k3_s1_same_quant_edgetpu.tflite",
+          "target_metadata": "p128/targets/h12_w192/conv2d_12x192x128_to_128_k3_s1_same_quant.metadata.json",
+          "source_kind": "rule_lookup",
+          "field_spec_json": "p128/targets/h12_w192/field_spec.json",
+          "lookup_rules": []
         }
       ]
     }

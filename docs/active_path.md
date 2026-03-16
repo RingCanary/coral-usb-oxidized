@@ -56,7 +56,7 @@ bash scripts/phase4_conv2d_k3_completion_demo.sh --family-spec templates/phase5_
 cargo run --bin conv_k3_eo_emit -- --family-spec templates/phase6_conv2d_k3_h8_corridor_6496/family.json --channels 64 --target-height 8 --target-width 192 --out-report /tmp/conv_k3_eo_emit_phase6.json
 bash scripts/phase4_conv2d_k3_completion_demo.sh --family-spec templates/phase6_conv2d_k3_h8_corridor_6496/family.json --pairs p32,p64,p128
 
-cargo run --bin conv_k3_eo_emit -- --family-spec templates/phase7_conv2d_k3_h12_corridor_6512/family.json --channels 64 --target-height 12 --target-width 168 --out-report /tmp/conv_k3_eo_emit_phase7.json
+cargo run --bin conv_k3_eo_emit -- --family-spec templates/phase7_conv2d_k3_h12_corridor_6512/family.json --channels 64 --target-height 12 --target-width 192 --out-report /tmp/conv_k3_eo_emit_phase7.json
 bash scripts/phase4_conv2d_k3_completion_demo.sh --family-spec templates/phase7_conv2d_k3_h12_corridor_6512/family.json --pairs p32,p64,p128
 ```
 
@@ -95,16 +95,15 @@ Bounded Phase 7 completion is now also achieved for:
 - `padding=same`
 - `bias=off`
 - mixed-product `fixed_height=12` family
-- frozen widths `64,72,80,...,168`
+- frozen widths `64,72,80,...,192`
 - symmetric `p32/p64/p128`
 - pure-`rusb` replay on Pi
 - no `edgetpu_compiler` in the active artifact-creation loop
 - `lookup_rules <= 96` for every non-anchor target
 
-The active frontier is now beyond the completed `H=8` and bounded `H=12` corridors:
+The active frontier is now beyond the completed `H=8` and `H=12` corridors:
 
 - compress lookup residue further toward a more reusable law
-- explain and fix the excluded `p32` `12x176/184/192` native param-materialization tail
 - test whether the schema-v2 corridor model extends beyond `fixed_height=8` and `fixed_height=12`
 - close the remaining Dense EO target-state gap for unseen target dimensions
 - decide whether the project wants only strong host/runtime control or full firmware ownership

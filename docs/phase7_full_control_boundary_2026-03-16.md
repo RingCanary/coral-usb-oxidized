@@ -19,7 +19,7 @@ Yes, it does prove a strong bounded native-control milestone:
 - native parameter materialization for tested Dense and Conv2D families
 - native EO emission for bounded Conv2D families
 - exact DUT hash reproduction without `libedgetpu` or `edgetpu_compiler` in the
-  active Phase 4-6 loop
+  active Phase 4-7 loop
 
 The correct claim today is:
 
@@ -67,9 +67,10 @@ Conv2D:
 - Phase 6 widened that `H=8` family to the full checked-in corridor
   `8x72..8x192` across `p32/p64/p128`
 - Phase 7 completed a second bounded mixed-product `fixed_height=12`
-  `EO=6512` corridor `12x64..12x168` across `p32/p64/p128`
-- the excluded `12x176/184/192` tail is now localized to a native `p32`
-  parameter-materialization gap, not an EO-family gap
+  `EO=6512` corridor `12x64..12x192` across `p32/p64/p128`
+- the previously excluded `12x176/184/192` `p32` tail now closes on-device with
+  the recovered native parameter-materialization switch, so the remaining
+  Conv2D gap is no longer inside the published Phase 7 family
 
 References:
 
@@ -221,10 +222,8 @@ Until that closes, the repo does not have a general native Dense codegen story.
 
 For Conv2D, the next frontier is:
 
-- extend beyond the now-proven `fixed_height=8` and bounded `fixed_height=12`
+- extend beyond the now-proven `fixed_height=8` and `fixed_height=12`
   corridors
-- close the localized native `p32` parameter-materialization gap at
-  `12x176/184/192`
 - reduce lookup residue toward a smaller reusable law
 - determine whether adjacent geometry bands can also be frozen and emitted
   natively
