@@ -16,6 +16,7 @@ Rust SDK/driver layer for Google Coral USB Accelerator:
 If you are working on the current native path, start with:
 
 - `docs/active_path.md`
+- `docs/phase7_full_control_boundary_2026-03-16.md`
 - `docs/phase4_conv2d_k3_completion_2026-03-16.md`
 - `docs/phase6_conv2d_k3_h8_corridor_completion_2026-03-16.md`
 - `docs/phase5_conv2d_k3_h8_band_completion_2026-03-16.md`
@@ -35,6 +36,7 @@ Current bounded completion status:
 - Phase 6 widens that mixed-product `fixed_height=8` `EO=6496` family to the full checked-in corridor under `templates/phase6_conv2d_k3_h8_corridor_6496/`
 - the widened family uses a native EO emitter driven by `threepoint` field rules plus bounded lookup residue, not raw byte tables alone
 - the Phase 6 Pi proof passes for `p32/p64/p128 × {8x72,8x76,8x80,...,8x192}`
+- `docs/phase7_full_control_boundary_2026-03-16.md` now states the exact remaining gap to full EdgeTPU ownership: bounded native control is real, but full firmware ownership and general executable/codegen control are still open
 
 ## Raspberry Pi 5 setup
 

@@ -22,6 +22,7 @@ Those remain compatibility or archival surfaces outside the active bounded compl
 
 For current status and frontier:
 
+- `docs/phase7_full_control_boundary_2026-03-16.md`
 - `docs/phase4_conv2d_k3_completion_2026-03-16.md`
 - `docs/phase6_conv2d_k3_h8_corridor_completion_2026-03-16.md`
 - `docs/phase5_conv2d_k3_h8_band_completion_2026-03-16.md`
@@ -85,6 +86,8 @@ The active frontier is now beyond the widened `H=8` corridor:
 
 - compress lookup residue further toward a more reusable law
 - test whether the schema-v2 corridor model extends beyond `fixed_height=8`
+- close the remaining Dense EO target-state gap for unseen target dimensions
+- decide whether the project wants only strong host/runtime control or full firmware ownership
 
 ## Compatibility Boundary
 
