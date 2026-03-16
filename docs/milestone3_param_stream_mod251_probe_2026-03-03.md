@@ -28,7 +28,7 @@ Key files:
   - `dut_mod251_896.log`
 
 ## Tooling added for this probe
-- `tools/patch_tflite_dense_weight_pattern.py`
+- `tools/archive/patch_tflite_dense_weight_pattern.py`
   - patches Dense quantized weight bytes in-place using TFLite schema table offsets.
 - `src/bin/param_stream_permutation_probe.rs`
   - extracts parameter stream,

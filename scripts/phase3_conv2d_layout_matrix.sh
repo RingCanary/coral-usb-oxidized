@@ -21,7 +21,7 @@ for spec in "${cases[@]}"; do
   read -r IC OC <<<"$spec"
   CASE_ID="ic${IC}_oc${OC}"
   CASE_DIR="$OUT_DIR/$CASE_ID"
-  "$REPO_ROOT/tools/conv_layout_probe.py" \
+  "$REPO_ROOT/tools/archive/conv_layout_probe.py" \
     --out-dir "$CASE_DIR" \
     --height 32 --width 32 \
     --in-channels "$IC" --out-channels "$OC" \

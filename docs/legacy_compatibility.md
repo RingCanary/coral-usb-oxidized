@@ -1,6 +1,6 @@
 # Legacy Compatibility
 
-This document covers repo surfaces that remain useful, but are not the active Phase 4 path.
+This document covers repo surfaces that remain useful, but are not the active repo path.
 
 ## Compatibility-Only Surfaces
 
@@ -8,7 +8,7 @@ This document covers repo surfaces that remain useful, but are not the active Ph
 - delegate/TensorFlow Lite examples
 - `edgetpu_compiler` bootstrap and compile pipelines
 - Python helpers that inspect or patch compiled `*_edgetpu.tflite` artifacts
-- archive-forwarding tool shims under `tools/`
+- archive-only scripts and tooling under `tools/archive/`
 
 These exist for interoperability, historical reproduction, and artifact extraction. They should not be described as the native/custom control path.
 
@@ -21,7 +21,7 @@ Use the legacy stack only when you specifically need one of:
 - old experiment reproduction
 - compatibility validation against the historical Coral toolchain
 
-## Non-Goals For Phase 4
+## Non-Goals For The Active Path
 
 Using any of the following in the active artifact-creation loop means Phase 4 completion has not been reached yet:
 
@@ -33,9 +33,10 @@ Using any of the following in the active artifact-creation loop means Phase 4 co
 ## Current Legacy Entry Points
 
 - `cargo run --features legacy-runtime --example ...`
-- `tools/bootstrap_edgetpu_compiler.sh`
-- `tools/dense_template_pipeline.sh`
-- `tools/conv_template_pipeline.sh`
-- `tools/multiop_template_pipeline.sh`
+- `cargo run --features legacy-runtime --example cpu_vs_edgetpu_mvp -- --help`
+- `tools/archive/bootstrap_edgetpu_compiler.sh`
+- `tools/archive/dense_template_pipeline.sh`
+- `tools/archive/conv_template_pipeline.sh`
+- `tools/archive/multiop_template_pipeline.sh`
 
 Treat them as compatibility surfaces, not as the repo front door.

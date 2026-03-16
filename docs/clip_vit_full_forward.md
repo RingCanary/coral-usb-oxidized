@@ -55,7 +55,7 @@ Helper script (requires Python deps via `uv`):
 
 ```bash
 uv run --with numpy --with torch --with transformers \
-  tools/clip_hf_reference.py \
+  tools/archive/clip_hf_reference.py \
   Bingsu/clip-vit-base-patch32-ko \
   /tmp/clip_input.f32le \
   /tmp/clip_ref_embed.f32le

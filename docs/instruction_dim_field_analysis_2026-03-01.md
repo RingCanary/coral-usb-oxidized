@@ -41,7 +41,7 @@ Stable changed-offset intersection across all three pairs:
 Relocation overlap for these diffs remained `0`, so these are non-relocation instruction fields.
 
 ## High-Signal Offsets
-From `tools/instruction_dim_field_analysis.py` (monotonic with dimension/tile count):
+From `tools/archive/instruction_dim_field_analysis.py` (monotonic with dimension/tile count):
 
 EO examples:
 - `338`: `[31, 47, 55, 63, 71, 83]` (corr ~ `+1.0`)
@@ -78,7 +78,7 @@ Cross-family (10-dim) high-signal result:
 - Family-specific residual fields remain and must be layered on top of the stable core.
 
 ## Tooling Added
-`tools/instruction_dim_field_analysis.py`
+`tools/archive/instruction_dim_field_analysis.py`
 
 It computes:
 - pairwise changed sets,
@@ -91,7 +91,7 @@ It computes:
 EO run:
 
 ```bash
-tools/instruction_dim_field_analysis.py \
+tools/archive/instruction_dim_field_analysis.py \
   --entry 1024:traces/dense-template-1024x1024-20260222T062017Z/extract/package_000/serialized_executable_000.bin \
   --entry 1536:/tmp/dense-1536/extract/package_000/serialized_executable_000.bin \
   --entry 1792:/tmp/dense-1792/extract/package_000/serialized_executable_000.bin \
@@ -116,7 +116,7 @@ Current best synthesis candidates:
 
 ## DUT Validation (Pi5 + Coral)
 Prototype synth tool:
-- `tools/synthesize_instruction_patch_spec.py`
+- `tools/archive/synthesize_instruction_patch_spec.py`
 
 Tested family:
 - Train endpoints: `768` and `2304` (both `EO=7952`, `PC=2096`)
@@ -138,7 +138,7 @@ DUT artifacts:
 - `docs/artifacts/instruction-synthesis-20260301/pi5-logs/`
 
 ## Formula-Gated Synth Update (2026-03-01)
-`tools/synthesize_instruction_patch_spec.py` now supports formula-based byte synthesis from multiple fit points:
+`tools/archive/synthesize_instruction_patch_spec.py` now supports formula-based byte synthesis from multiple fit points:
 - `--fit-point DIM:EO_PATH:PC_PATH` (repeatable)
 - model families: `const`, `tile-linear`, `tile-quadratic`, `tile2div-linear`
 - `--offset-mode changed-fit-union`

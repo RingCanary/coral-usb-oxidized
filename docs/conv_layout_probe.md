@@ -8,7 +8,7 @@ analogous to Dense layout recovery.
 ## Run
 
 ```bash
-./tools/conv_layout_probe.py \
+./tools/archive/conv_layout_probe.py \
   --height 32 --width 32 \
   --in-channels 64 --out-channels 64 \
   --kernel-size 1 --rep-samples 32

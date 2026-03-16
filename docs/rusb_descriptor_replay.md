@@ -275,12 +275,12 @@ Interpretation:
 ## Handshake candidate at the 49 KiB wall (Pi5 extraction)
 
 A dedicated comparator was added:
-- `tools/usbmon_param_handshake_probe.py`
+- `tools/archive/usbmon_param_handshake_probe.py`
 
 Usage:
 
 ```bash
-python3 tools/usbmon_param_handshake_probe.py <good.log> <bad.log> \
+python3 tools/archive/usbmon_param_handshake_probe.py <good.log> <bad.log> \
   --bus 4 \
   --threshold 49152 \
   --context 20
@@ -486,8 +486,8 @@ Ordered runs:
    - fails at `offset=49152` (`chunk 48`)
 
 Handshake probe on this exact good-vs-bad pair:
-1. `tools/usbmon_param_handshake_probe.py ... --threshold 49152`
-2. `tools/usbmon_param_handshake_probe.py ... --threshold 33792`
+1. `tools/archive/usbmon_param_handshake_probe.py ... --threshold 49152`
+2. `tools/archive/usbmon_param_handshake_probe.py ... --threshold 33792`
 
 Near-anchor control tuples only in good (same as previous datasets):
 1. `Ci:c0:01:a0d8:0001:0004`

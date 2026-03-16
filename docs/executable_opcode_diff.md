@@ -1,6 +1,6 @@
 # EXECUTION_ONLY Chunk Diff Workflow
 
-`tools/exec_chunk_diff.py` compares instruction chunks from
+`tools/archive/exec_chunk_diff.py` compares instruction chunks from
 `serialized_executable_*.bin` files to support Phase-B ISA work.
 
 ## Why
@@ -14,7 +14,7 @@ instruction-word change counts.
 Compare two extracted executable directories:
 
 ```bash
-python3 tools/exec_chunk_diff.py \
+python3 tools/archive/exec_chunk_diff.py \
   traces/dense-template-256x256-20260222T062154Z/extract/package_000 \
   traces/dense-template-512x512-20260222T062006Z/extract/package_000 \
   --only-exec-index 0 \
@@ -25,7 +25,7 @@ python3 tools/exec_chunk_diff.py \
 Compare multiple inputs (default: consecutive pairing):
 
 ```bash
-python3 tools/exec_chunk_diff.py \
+python3 tools/archive/exec_chunk_diff.py \
   traces/dense-template-1024x1024-20260222T062017Z/extract/package_000 \
   traces/dense-template-2048x2048-20260222T062027Z/extract/package_000 \
   traces/dense-template-2304x2304-20260222T062229Z/extract/package_000 \
@@ -38,7 +38,7 @@ python3 tools/exec_chunk_diff.py \
 Use explicit pair selection:
 
 ```bash
-python3 tools/exec_chunk_diff.py \
+python3 tools/archive/exec_chunk_diff.py \
   <pathA/serialized_executable_000.bin> \
   <pathB/serialized_executable_000.bin> \
   <pathC/serialized_executable_000.bin> \
@@ -72,4 +72,4 @@ python3 tools/exec_chunk_diff.py \
 For multi-pair dimension correlation results and reproducible tooling, see:
 
 - `docs/instruction_dim_field_analysis_2026-03-01.md`
-- `tools/instruction_dim_field_analysis.py`
+- `tools/archive/instruction_dim_field_analysis.py`

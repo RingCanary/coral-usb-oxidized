@@ -150,7 +150,7 @@ Key outcomes:
 ### Phase-B RE tooling upgrade (EXECUTION_ONLY diff prep)
 
 1. Added dedicated chunk-diff tool:
-   - `tools/exec_chunk_diff.py`
+   - `tools/archive/exec_chunk_diff.py`
    - compares instruction chunks from `serialized_executable_*.bin`
    - reports:
      - changed bytes per chunk
@@ -168,7 +168,7 @@ Key outcomes:
      outcome.
 4. Local validation sample:
    - command:
-     - `python3 tools/exec_chunk_diff.py traces/dense-template-256x256-20260222T062154Z/extract/package_000 traces/dense-template-512x512-20260222T062006Z/extract/package_000 --only-exec-index 0 --out-dir traces/phase-b-diff-256-vs-512-exec0 --dump-chunks`
+     - `python3 tools/archive/exec_chunk_diff.py traces/dense-template-256x256-20260222T062154Z/extract/package_000 traces/dense-template-512x512-20260222T062006Z/extract/package_000 --only-exec-index 0 --out-dir traces/phase-b-diff-256-vs-512-exec0 --dump-chunks`
    - output:
      - `changed_bytes=3433`
      - `instr_changed=360/514`
@@ -190,7 +190,7 @@ Key outcomes:
      - event endpoint `0x82` (`kEventInEndpoint = 2`)
    - 8-byte bulk-out header format:
      - `[len_le32][tag_u8][pad_u24]`
-2. Upgraded `tools/usbmon_register_map.py`:
+2. Upgraded `tools/archive/usbmon_register_map.py`:
    - now computes full CSR offsets with:
      - `full_offset = (wIndex << 16) | wValue`
    - includes known register name annotations for key DarwiNN offsets.
@@ -223,7 +223,7 @@ Key outcomes:
 
 ### Control-sequence extraction tooling
 
-1. Extended `tools/usbmon_register_map.py` with `sequence` mode:
+1. Extended `tools/archive/usbmon_register_map.py` with `sequence` mode:
    - emits ordered vendor control operations (timestamped) for selected phases
    - includes:
      - full CSR offset (`(wIndex << 16) | wValue`)
@@ -232,7 +232,7 @@ Key outcomes:
      - decoded write payload values for CSR writes
 2. Validation sample (local trace):
    - command:
-     - `python3 tools/usbmon_register_map.py sequence traces/usbmon-20260221T090004Z-bus4/usbmon-bus4-20260221T090004Z.log --bus 4 --device 005 --phase pre_loop --json`
+     - `python3 tools/archive/usbmon_register_map.py sequence traces/usbmon-20260221T090004Z-bus4/usbmon-bus4-20260221T090004Z.log --bus 4 --device 005 --phase pre_loop --json`
    - result:
      - `sequence_count=52` pre-loop vendor ops
      - includes decoded writes such as:
@@ -358,7 +358,7 @@ metrics.
    - optional embedding dump (`--out-f32le`, `--out-norm-f32le`) and optional
      reference compare (`--reference-f32le`)
 2. Added `docs/clip_vit_full_forward.md`.
-3. Added helper script `tools/clip_hf_reference.py` (HF Transformers reference
+3. Added helper script `tools/archive/clip_hf_reference.py` (HF Transformers reference
    embedding generator from `f32le` image tensor).
 4. Pi5 validation with real checkpoint:
    - command used `--max-layers 12 --weight-qmax 32 --act-qmax 32`
@@ -628,7 +628,7 @@ All runs exited with `command_exit=0`.
      (`Bo225824 -> Bo150528 -> Bi1008`, count `35`) and `4,697,104` bytes
      pre-inference upload burst.
 7. Added register-map extraction pass:
-   - tool: `tools/usbmon_register_map.py`
+   - tool: `tools/archive/usbmon_register_map.py`
    - artifacts: `REGISTER_MAP_MATRIX.*` and per-run `*_REGISTER_REPORT.*`
    - finding: control/register address-op counts are invariant across
      `U1/U2/U3/U4/baseline`; differentiator is bulk path activation.
@@ -730,7 +730,7 @@ All runs exited with `command_exit=0`.
 2. Added summary note:
    - `docs/usb_invoke_scaling_by_model.md`
 3. Added automation tool:
-   - `tools/strace_usb_scaling.py`
+   - `tools/archive/strace_usb_scaling.py`
    - emits per-model linear fits and residuals from `R*/` strace summaries
 4. New finding:
    - EdgeTPU ioctl scaling differs by model:
@@ -950,11 +950,11 @@ All runs exited with `command_exit=0`.
 
 ### New tooling
 
-1. Added `tools/dense_layout_probe.py`:
+1. Added `tools/archive/dense_layout_probe.py`:
    - generates/compiles repeated single-hot Dense probes
    - extracts `PARAMETER_CACHING` payload bytes
    - diffs against reference probe and emits `(row,col)->offset` candidates
-2. Added `tools/dense_template_matrix_patch.py`:
+2. Added `tools/archive/dense_template_matrix_patch.py`:
    - patches Dense template payload with structured matrix modes
    - supports `identity`, `zero`, `single_hot`, `shift_plus1`, `shift_minus1`
    - uses recovered offset map for deterministic row/col addressing
@@ -1001,7 +1001,7 @@ All runs exited with `command_exit=0`.
 
 ### New tooling
 
-1. Added `tools/dense_quant_value_probe.py`:
+1. Added `tools/archive/dense_quant_value_probe.py`:
    - compiles repeated single-hot float-value probes
    - extracts weight tensor quant params (`scale`, `zero_point`)
    - compares expected signed-int8 quantization vs raw quant bytes vs compiled
@@ -1333,12 +1333,12 @@ Executed pipeline runs (`warmup=1`, `runs=5`) for:
 ### Conv2D tensorizer probing additions
 
 1. Extended `tools/generate_conv2d_quant_tflite.py` with `single_hot` kernel mode.
-2. Added `tools/conv_layout_probe.py`:
+2. Added `tools/archive/conv_layout_probe.py`:
    - compiles single-hot Conv probes
    - extracts parameter region payloads
    - reports `mapping_candidate_offset` candidates per coordinate
 3. Hardware-backed run:
-   - `./tools/conv_layout_probe.py --height 32 --width 32 --in-channels 64 --out-channels 64 --kernel-size 1 --rep-samples 32`
+   - `./tools/archive/conv_layout_probe.py --height 32 --width 32 --in-channels 64 --out-channels 64 --kernel-size 1 --rep-samples 32`
    - output: `traces/conv-layout-probe-20260222T071933Z/layout_probe.{json,txt}`
 4. Recovered 1x1 Conv2D channel-layout candidate (64x64 channels):
    - `offset = 512 + ((ic // 4) * 256) + (oc * 4) + (ic % 4)`
@@ -2403,7 +2403,7 @@ Isolate control/interrupt behavior near the `~49 KiB` class-2 wall by comparing:
 #### Tooling
 
 Added:
-- `tools/usbmon_param_handshake_probe.py`
+- `tools/archive/usbmon_param_handshake_probe.py`
 
 Key behavior:
 1. Detects parameter phase by descriptor header (`S Bo size=8`, `tag=2`).
@@ -2619,7 +2619,7 @@ Pi5 usbmon capture for submit-URB replay:
 #### Probe-first validation (good vs submit-URB bad)
 
 Ran:
-1. `tools/usbmon_param_handshake_probe.py` with:
+1. `tools/archive/usbmon_param_handshake_probe.py` with:
    - good: `traces/usbmon-transition-fixed-20260225T082936Z-bus4/libedgetpu_known_good/post/usbmon-bus4-20260225T083453Z.log`
    - bad: `traces/usbmon-20260225T121056Z-bus4/usbmon-bus4-20260225T121056Z.log`
    - `--threshold 49152 --context 30`
@@ -2683,8 +2683,8 @@ Gated capture (`offset=32768`):
 #### Check of `param_queue_tail` hypothesis against known-good capture
 
 Ran on Pi5:
-1. `tools/usbmon_register_map.py sequence ...libedgetpu_known_good/post... --known-only`
-2. `tools/usbmon_register_map.py sequence ...libedgetpu_known_good/post...` (full vendor sequence)
+1. `tools/archive/usbmon_register_map.py sequence ...libedgetpu_known_good/post... --known-only`
+2. `tools/archive/usbmon_register_map.py sequence ...libedgetpu_known_good/post...` (full vendor sequence)
 3. raw grep for `8678 0004` / `8688 0004` across known-good `pre` and `post` logs.
 
 Result in this capture set:
@@ -2749,8 +2749,8 @@ Runs:
    - lane callbacks: active but `completed=0` on `0x81/0x82/0x83`
 
 Handshake probe refresh on this ordered pair:
-1. `python3 tools/usbmon_param_handshake_probe.py good bad --threshold 49152`
-2. `python3 tools/usbmon_param_handshake_probe.py good bad --threshold 33792`
+1. `python3 tools/archive/usbmon_param_handshake_probe.py good bad --threshold 49152`
+2. `python3 tools/archive/usbmon_param_handshake_probe.py good bad --threshold 33792`
 
 Near-anchor control tuples only in good (same signal as prior datasets):
 1. `Ci:c0:01:a0d8:0001:0004`
@@ -2847,7 +2847,7 @@ Window-gated usbmon capture:
 Using:
 1. good: `traces/usbmon-goodfirst-20260225T132821Z/good_libedgetpu/usbmon-bus4-20260225T132821Z.log`
 2. bad: window-gated capture above
-3. `tools/usbmon_param_handshake_probe.py --threshold 33792 --context 40`
+3. `tools/archive/usbmon_param_handshake_probe.py --threshold 33792 --context 40`
 
 Observed:
 1. near-anchor control tuples are no longer “missing in bad” (none-only sets),
@@ -3190,7 +3190,7 @@ Validation run (Pi5, direct) after patch:
 
 Ran:
 
-`tools/usbmon_param_handshake_probe.py` against
+`tools/archive/usbmon_param_handshake_probe.py` against
 1. good: `traces/usbmon-transition-fixed-20260225T082936Z-bus4/libedgetpu_known_good/post/usbmon-bus4-20260225T083453Z.log`
 2. bad: `traces/usbmon-20260225T200228Z-bus4/usbmon-bus4-20260225T200228Z.log`
 

@@ -5,10 +5,10 @@ Practical tracing helpers for Coral USB traffic are available under `tools/`:
 - `tools/usbmon_capture.sh`: privileged kernel-level USB packet capture (`usbmon`).
 - `tools/usb_syscall_trace.sh`: unprivileged user-space syscall tracing (`strace`) fallback.
 - `tools/usbmon_phase_report.py`: phase-oriented analyzer and diff tool for usbmon logs.
-- `tools/usbmon_register_map.py`: control-transfer/register access extractor for usbmon logs.
+- `tools/archive/usbmon_register_map.py`: control-transfer/register access extractor for usbmon logs.
 - `tools/usbmon_bulk_signature.py`: bulk payload header/signature extractor by phase.
 - `tools/usbmon_three_stage_signature.py`: dedicated parser for repeated `Bo->Bo->Bo->Bi` cycle signatures.
-- `tools/strace_usb_scaling.py`: linear-fit summary for `USBDEVFS_SUBMITURB`/`REAPURBNDELAY`.
+- `tools/archive/strace_usb_scaling.py`: linear-fit summary for `USBDEVFS_SUBMITURB`/`REAPURBNDELAY`.
 
 ## 1) Privileged usbmon capture
 
@@ -157,7 +157,7 @@ Use this for vendor control-transfer analysis (`Ci/Co` endpoint 0 setup packets)
 ### One-log register report
 
 ```bash
-python3 tools/usbmon_register_map.py report \
+python3 tools/archive/usbmon_register_map.py report \
   traces/usbmon-20260221T090004Z-bus4/usbmon-bus4-20260221T090004Z.log \
   --bus 4 --device 005
 ```
@@ -171,7 +171,7 @@ Highlights:
 ### Multi-run matrix
 
 ```bash
-python3 tools/usbmon_register_map.py matrix \
+python3 tools/archive/usbmon_register_map.py matrix \
   --run U1=traces/run1.log \
   --run U2=traces/run2.log \
   --run U3=traces/run3.log \
@@ -230,13 +230,13 @@ Use this to summarize and fit USBDEVFS ioctl counts vs invoke count across
 `usb_syscall_trace.sh` run folders.
 
 ```bash
-python3 tools/strace_usb_scaling.py
+python3 tools/archive/strace_usb_scaling.py
 ```
 
 Optional filtering:
 
 ```bash
-python3 tools/strace_usb_scaling.py --include-prefix R1 --include-prefix R2
+python3 tools/archive/strace_usb_scaling.py --include-prefix R1 --include-prefix R2
 ```
 
 ## Known limits

@@ -7,8 +7,8 @@ Goal: recover the compiled parameter byte layout for the single-op
 
 ## Tooling
 
-- `tools/dense_layout_probe.py`
-- `tools/dense_template_matrix_patch.py`
+- `tools/archive/dense_layout_probe.py`
+- `tools/archive/dense_template_matrix_patch.py`
 - `tools/tensorizer_patch_edgetpu.py` (inspect region source of truth)
 - `examples/inference_dump.rs` (runtime output verification)
 
@@ -71,7 +71,7 @@ The formula matched all probed points from these runs.
 
 ## Structured matrix patch verification
 
-Using `tools/dense_template_matrix_patch.py` on
+Using `tools/archive/dense_template_matrix_patch.py` on
 `traces/dense-template-20260221T120206Z/dense_256x256_quant_edgetpu.tflite`:
 
 - `mode=shift_plus1`: output became input rotated by +1 index
@@ -89,7 +89,7 @@ This is strong evidence the recovered mapping is correct for structured
 
 Added probe tool:
 
-- `tools/dense_quant_value_probe.py`
+- `tools/archive/dense_quant_value_probe.py`
 
 Artifact:
 
@@ -116,7 +116,7 @@ Note on single-hot value sweeps:
 
 Fixed-template byte sweep validation (`value_byte_sweep`):
 
-- using `tools/dense_template_matrix_patch.py` (`mode=single_hot`, `(0,0)`)
+- using `tools/archive/dense_template_matrix_patch.py` (`mode=single_hot`, `(0,0)`)
 - bytes `255,224,192,160,128,96,...` produced output lane-0 values
   `127,96,64,32,0,-32,...` under `inference_dump alt`
 - confirms linear interpretation of payload byte around center `128`.

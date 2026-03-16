@@ -7,7 +7,7 @@ The deferred Conv2D plan was reviewed against the actual repository state before
 - Existing tooling for single-op Conv2D is real:
   - `tools/generate_conv2d_quant_tflite.py`
   - `tools/conv_template_pipeline.sh`
-  - `tools/conv_layout_probe.py`
+  - `tools/archive/conv_layout_probe.py`
 - Prior evidence already suggested that **1x1 Conv2D channel mixing may reuse Dense-like inner packing** with a fixed parameter prefix.
 - The repo already had a clean Dense lesson to apply: map families first, then test compilerless params, then test cross-dim EO dependence.
 

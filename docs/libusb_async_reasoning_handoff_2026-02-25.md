@@ -123,7 +123,7 @@ This narrows the tough nut:
 
 ## Direct check: `param_queue_tail` in known-good trace
 
-Using `tools/usbmon_register_map.py sequence` plus raw grep on:
+Using `tools/archive/usbmon_register_map.py sequence` plus raw grep on:
 1. `.../libedgetpu_known_good/pre/*.log`
 2. `.../libedgetpu_known_good/post/*.log`
 
@@ -171,6 +171,6 @@ Implication:
 2. prior transition sweep root:
    - `traces/usbmon-transition-fixed-20260225T082936Z-bus4`
 3. parser/diff tooling:
-   - `tools/usbmon_param_handshake_probe.py`
+   - `tools/archive/usbmon_param_handshake_probe.py`
    - `tools/usbmon_bulk_signature.py`
-   - `tools/usbmon_register_map.py`
+   - `tools/archive/usbmon_register_map.py`

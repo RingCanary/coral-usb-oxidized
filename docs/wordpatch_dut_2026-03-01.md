@@ -4,7 +4,7 @@
 Validate a new word/bitfield-based patch path against the dense `1536x1536` DUT model.
 
 ## New Tooling
-- `tools/emit_word_field_patch_spec.py`
+- `tools/archive/emit_word_field_patch_spec.py`
   - Input: word-field analysis JSON (`per_offset_fits`)
   - Output: replay patch spec (`<payload_len> <offset> <byte>`)
   - Modes:

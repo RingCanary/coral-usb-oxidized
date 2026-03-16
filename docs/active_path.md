@@ -1,40 +1,37 @@
 # Active Path
 
-This is the active front door.
+This page describes the current repo front door. Use `docs/index.md` for the broader map and `docs/archive_index.md` for older milestone notes.
 
-The active path in this repo is:
+## What Is Active
 
 - pure-`rusb` runtime execution
 - native Rust reverse-engineering and materialization helpers
-- bounded checked-in seed artifacts only when unavoidable
+- bounded checked-in family assets only when unavoidable
 - Pi replay helpers under `scripts/`
 
-The active path is **not**:
+## What Is Not Active
 
 - `libedgetpu`
 - TensorFlow Lite delegate execution
 - `edgetpu_compiler`
-- legacy Python/Bazel stacks
+- old Python/Bazel artifact-creation flows
 
-Those remain compatibility or archival surfaces outside the active bounded completion path.
+Those remain compatibility or archival surfaces.
 
-## Start Here
+## Current Status
 
-For current status and frontier:
+For current control boundaries and completion results:
 
 - `docs/phase7_full_control_boundary_2026-03-16.md`
 - `docs/phase7_conv2d_k3_h12_corridor_completion_2026-03-16.md`
 - `docs/phase4_conv2d_k3_completion_2026-03-16.md`
 - `docs/phase6_conv2d_k3_h8_corridor_completion_2026-03-16.md`
-- `docs/phase5_conv2d_k3_h8_band_completion_2026-03-16.md`
-- `docs/phase5_conv2d_k3_6496_h8_band_2026-03-16.md`
-- `docs/phase5_conv2d_k3_6496_boundary_scan_2026-03-16.md`
-- `docs/phase4_completion_control_plan_2026-03-07.md`
 - `templates/phase4_conv2d_k3_sameprod_6512/family.json`
-- `templates/phase5_conv2d_k3_h8_band_6496/family.json`
 - `templates/phase6_conv2d_k3_h8_corridor_6496/family.json`
 - `templates/phase7_conv2d_k3_h12_corridor_6512/family.json`
 - `WORKLOG.md`
+
+## Validation Entry Points
 
 For active runtime smoke checks:
 
@@ -44,7 +41,7 @@ cargo run --example rusb_control_plane_probe -- --verbose-configs
 cargo run --example rusb_serialized_exec_replay -- --help
 ```
 
-For active bounded completion helpers:
+For bounded completion helpers:
 
 ```bash
 cargo run --bin conv_k3_eo_emit -- --family-spec templates/phase4_conv2d_k3_sameprod_6512/family.json --channels 64 --target-height 64 --out-report /tmp/conv_k3_eo_emit.json
@@ -60,7 +57,7 @@ cargo run --bin conv_k3_eo_emit -- --family-spec templates/phase7_conv2d_k3_h12_
 bash scripts/phase4_conv2d_k3_completion_demo.sh --family-spec templates/phase7_conv2d_k3_h12_corridor_6512/family.json --pairs p32,p64,p128
 ```
 
-## Current Bounded Status
+## Published Bounded Families
 
 Bounded Phase 4 completion is now achieved for:
 
@@ -101,6 +98,8 @@ Bounded Phase 7 completion is now also achieved for:
 - no `edgetpu_compiler` in the active artifact-creation loop
 - `lookup_rules <= 96` for every non-anchor target
 
+## Immediate Frontier
+
 The active frontier is now beyond the completed `H=8` and `H=12` corridors:
 
 - compress lookup residue further toward a more reusable law
@@ -108,6 +107,9 @@ The active frontier is now beyond the completed `H=8` and `H=12` corridors:
 - close the remaining Dense EO target-state gap for unseen target dimensions
 - decide whether the project wants only strong host/runtime control or full firmware ownership
 
-## Compatibility Boundary
+## Related Docs
 
-If you need delegate examples, `edgetpu_compiler`, or TensorFlow Lite interoperability, use `docs/legacy_compatibility.md`.
+- `docs/index.md`
+- `docs/examples.md`
+- `docs/legacy_compatibility.md`
+- `docs/archive_index.md`

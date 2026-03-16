@@ -103,7 +103,7 @@ Pipeline output mirrors Dense flow:
 
 Conv payload-layout probing:
 
-- `tools/conv_layout_probe.py`
+- `tools/archive/conv_layout_probe.py`
 - initial recovered 1x1 channel-mixer mapping candidate:
   - `offset = 512 + ((ic // 4) * 256) + (oc * 4) + (ic % 4)`
 
