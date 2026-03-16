@@ -43,3 +43,16 @@ Dense artifacts without widening any current native-control claim.
 - Dense baseline/gated usbmon scenarios:
   `replay-csr-snapshot-20260225T141800Z/baseline_snapshot`
   `replay-csr-snapshot-20260225T141800Z/dense_gate_snapshot`
+
+## Batch 1 result
+
+- inventory rows: `399`
+- explicit stale-reference rows: `2`
+- normalized captures: `6`
+- direct verified `hash_eq_target=true` rows: `1`
+
+The stored March 16 completion-demo artifacts remain structurally useful but do
+not carry colocated root summaries in this workspace copy, so their imported
+status remains bounded to structural normalization. The tail-proof row preserves
+the direct DUT hash evidence, and the Dense baseline/gated usbmon pair preserves
+the historical perturbation distinction.

@@ -1,0 +1,71 @@
+{
+  "artifacts": {
+    "dut_logs": [],
+    "eo_patchspec": {
+      "copied": "false",
+      "path": "",
+      "sha256": ""
+    },
+    "metadata_json": {
+      "copied": "false",
+      "path": "/home/rpc/coral-re-autoresearch/arsenal/coral-usb-oxidized-lab/traces/dense-template-1024x1024-20260222T062017Z/dense_1024x1024_quant.metadata.json",
+      "sha256": "2fa9419662a45c7fd3afbeff49f58922fc6d539a1a33058c3d4b9f1c8f835766"
+    },
+    "model": {
+      "copied": "false",
+      "path": "/home/rpc/coral-re-autoresearch/arsenal/coral-usb-oxidized-lab/traces/dense-template-1024x1024-20260222T062017Z/dense_1024x1024_quant.tflite",
+      "sha256": "ade8882eee42d98f3b1ae289022aeab6012530820db78e24f833068e8032b187"
+    },
+    "param_stream": {
+      "copied": "false",
+      "path": "",
+      "sha256": ""
+    },
+    "serialized_executable": {
+      "copied": "false",
+      "path": "/home/rpc/coral-re-autoresearch/arsenal/coral-usb-oxidized-lab/traces/dense-template-1024x1024-20260222T062017Z/extract/package_000/serialized_executable_000.bin",
+      "sha256": "9408c0c30a1046c3c204dd5d5fd1f984c6cf296e614854d22c8887982e1b1ac9"
+    },
+    "usbmon_logs": []
+  },
+  "capture_id": "dense_template_1024x1024_stock",
+  "capture_version": 1,
+  "comparison": {
+    "baseline_capture_id": "",
+    "comparison_class": "dense_stock_vs_perturbed",
+    "nearest_counterexample_id": "dense_gate_snapshot_20260225_before"
+  },
+  "decision": {
+    "keep_discard": "keep",
+    "reason": "historical dense template source for stock/native comparison"
+  },
+  "firmware": {
+    "path": "",
+    "provenance_note": "template pipeline artifact has no colocated firmware record",
+    "sha256": ""
+  },
+  "frontier": "00_trace_contract",
+  "identity": {
+    "family": "dense_template",
+    "operator": "dense",
+    "regime": "",
+    "shape": "1024x1024"
+  },
+  "outcome": {
+    "dut_hash": "",
+    "exact_failure_mode": "",
+    "hash_eq_target": "unknown",
+    "transport_admission": "unknown"
+  },
+  "provenance": {
+    "repo_commit": "8fb11cc0e012e9f5e691a70ecd69d326db23ca58",
+    "repo_path": "/home/rpc/coral-re-autoresearch/coral-usb-oxidized",
+    "workspace_root": "/home/rpc/coral-re-autoresearch"
+  },
+  "source": {
+    "imported_at_utc": "2026-03-16T17:48:00Z",
+    "kind": "historical_dense_template",
+    "root": "/home/rpc/coral-re-autoresearch/arsenal/coral-usb-oxidized-lab/traces/dense-template-1024x1024-20260222T062017Z",
+    "run_id": "dense-template-1024x1024-20260222T062017Z"
+  }
+}

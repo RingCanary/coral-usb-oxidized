@@ -713,7 +713,7 @@ def import_dense_template(spec: dict[str, str], capture_dir: Path, evidence_dir:
         if path:
             copy_text_evidence(path, evidence_dir)
     metadata_json = read_json(metadata_path) if metadata_path else {}
-    model_path = Path(str(metadata_json.get("output_path", ""))) if metadata_json else None
+    model_path = first_match(spec["source_path"], "*_quant.tflite")
     exec_path = spec["source_path"] / "extract" / "package_000" / "serialized_executable_000.bin"
     metadata = {
         "capture_id": spec["capture_id"],
@@ -867,10 +867,10 @@ def import_dense_usbmon(spec: dict[str, str], capture_dir: Path, evidence_dir: P
             "operator": "dense",
         },
         "outcome": {
-            "transport_admission": summary_values.get("command_exit", "unknown"),
+            "transport_admission": command_exit_label(summary_values),
             "dut_hash": "",
             "hash_eq_target": "unknown",
-            "exact_failure_mode": f"command_exit_{summary_values.get('command_exit', 'unknown')}",
+            "exact_failure_mode": command_exit_label(summary_values),
         },
         "comparison": {
             "baseline_capture_id": spec["baseline_capture_id"],
@@ -917,7 +917,7 @@ def import_dense_usbmon(spec: dict[str, str], capture_dir: Path, evidence_dir: P
         "params_id": "",
         "params_path": "",
         "trace_kind": "artifact_import",
-        "transport_admission": summary_values.get("command_exit", "unknown"),
+        "transport_admission": command_exit_label(summary_values),
         "dut_hash": "",
         "hash_eq_target": "unknown",
         "nearest_counterexample_id": spec["nearest_counterexample_id"],
@@ -931,11 +931,11 @@ def import_dense_usbmon(spec: dict[str, str], capture_dir: Path, evidence_dir: P
         "Normalize dense usbmon scenario while preserving baseline vs gated distinction",
         "",
         "",
-        summary_values.get("command_exit", "unknown"),
+        command_exit_label(summary_values),
         "unknown",
         "imported_structural",
         "trace_contract_dense_usbmon",
-        f"command_exit_{summary_values.get('command_exit', 'unknown')}",
+        command_exit_label(summary_values),
         relativize_to_repo(capture_dir / "SUMMARY.md"),
         spec["baseline_capture_id"],
         spec["nearest_counterexample_id"],
@@ -977,6 +977,32 @@ def normalize_legacy_path(raw: str) -> Path | None:
         if candidate.exists():
             return candidate
     return path
+
+
+def resolve_source_relative_path(raw: object, source_root: Path) -> Path | None:
+    text = str(raw or "")
+    if not text:
+        return None
+    path = Path(text)
+    if path.is_absolute():
+        return path if path.exists() else normalize_legacy_path(text)
+    candidate = source_root / path
+    if candidate.exists():
+        return candidate
+    basename_candidate = source_root / path.name
+    if basename_candidate.exists():
+        return basename_candidate
+    workspace_candidate = WORKSPACE_ROOT / path
+    if workspace_candidate.exists():
+        return workspace_candidate
+    return path
+
+
+def command_exit_label(summary_values: dict[str, str]) -> str:
+    value = summary_values.get("command_exit", "")
+    if not value:
+        return "unknown"
+    return f"command_exit_{value}"
 
 
 def ledger_row(

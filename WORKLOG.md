@@ -5,6 +5,7 @@ Concise event wise / epoch wise logs of activities, marked by epoch timestamp ( 
 
 ## 2026-03-16
 - [epoch:1773683095] Frontier 00 scaffolded a repo-local `captures/` normalization surface for historical Conv Phase 4-7 and Dense artifacts, added schema/import wrappers plus explicit stale-reference handling, and extended the generic ledger header with capture-level provenance fields. This checkpoint is historical-only and does not widen any control claim.
+- [epoch:1773683186] Frontier 00 Batch 1 imported `399` inventory rows with `2` explicit stale-reference rows, normalized `6` representative Conv/Dense captures into `captures/`, and wrote the first contract ledger. The strongest direct retained proof in this batch is the Phase 7 tail recovery row (`hash_eq_target=true`); the imported completion-demo rows remain structural-only because the stored run copies do not include colocated root summaries.
 
 ## 2026-03-01
 - [epoch:1772342379] Revist by user, and some cleanup, verbose logs marked archive and moved to `docs/`

@@ -1,0 +1,87 @@
+{
+  "artifacts": {
+    "dut_logs": [
+      {
+        "copied": "false",
+        "path": "/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/traces/analysis/phase7-p32-tail-dut-proof-20260316T145105Z/dut/h12_w176_native_completion.log",
+        "sha256": "c985403d7daa57dcbb1ca0d6c4bc34b66d3b548096c4fd2816122885b61cdfae"
+      },
+      {
+        "copied": "false",
+        "path": "/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/traces/analysis/phase7-p32-tail-dut-proof-20260316T145105Z/dut/h12_w176_target_baseline.log",
+        "sha256": "74e1c4b5c5977fcaa69c205e6a1a5b4d4306ae26bd8847fe47b4fc6acb004a8a"
+      }
+    ],
+    "eo_patchspec": {
+      "copied": "false",
+      "path": "/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/traces/analysis/phase7-p32-tail-dut-proof-20260316T145105Z/cases/h12_w176/eo.patchspec",
+      "sha256": "4aa52f513831720c689ff03b69671dbb5e40a6c8e174a05ac44a3017edf1405a"
+    },
+    "metadata_json": {
+      "copied": "false",
+      "path": "",
+      "sha256": ""
+    },
+    "model": {
+      "copied": "false",
+      "path": "",
+      "sha256": ""
+    },
+    "param_stream": {
+      "copied": "false",
+      "path": "/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/traces/analysis/phase7-p32-tail-dut-proof-20260316T145105Z/cases/h12_w176/native_param.bin",
+      "sha256": "60dbc1618fa13c307f1aa3b2f117c5e1d9695aa852f8e720a9fc4acf0271aca7"
+    },
+    "serialized_executable": {
+      "copied": "false",
+      "path": "",
+      "sha256": ""
+    },
+    "usbmon_logs": []
+  },
+  "capture_id": "conv_phase7_tail_p32_h12_w176_recovered",
+  "capture_version": 1,
+  "comparison": {
+    "baseline_capture_id": "conv_phase7_overwide_p32_h12_w176_structural",
+    "comparison_class": "recovery_pair",
+    "nearest_counterexample_id": "conv_phase7_overwide_p32_h12_w176_structural"
+  },
+  "decision": {
+    "keep_discard": "keep",
+    "reason": "direct tail recovery proof with summary and param parity"
+  },
+  "firmware": {
+    "path": "/home/rpc/coral-re-autoresearch/arsenal/coral-usb-oxidized-lab/apex_latest_single_ep.bin",
+    "provenance_note": "directly recorded in tail-proof summary",
+    "sha256": "3b07311b174b81fd14fd2c887f40d646c0ebf2f140cc5ee5cf8befa0f3e3dc7f"
+  },
+  "frontier": "00_trace_contract",
+  "identity": {
+    "family": "phase7_tail_proof",
+    "operator": "conv2d_k3_same_bias_off",
+    "regime": "p32",
+    "shape": "h12_w176"
+  },
+  "notes": {
+    "param_verify": {
+      "model": "conv2d_12x176x32_to_32_k3_s1_same height=12 width=176 kernel_size=3 in_channels=32 out_channels=32 weight_tensor_index=2 stored_shape=[32, 3, 3, 32] stream_len=9472 byte_equal=true mismatch_count=0 verify_against=/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/traces/analysis/phase7-p32-tail-dut-proof-20260316T145105Z/cases/h12_w176/compiler_param.bin out=/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/traces/analysis/phase7-p32-tail-dut-proof-20260316T145105Z/cases/h12_w176/native_param.bin"
+    }
+  },
+  "outcome": {
+    "dut_hash": "0x00435b5db3e2d027",
+    "exact_failure_mode": "",
+    "hash_eq_target": "true",
+    "transport_admission": "pass"
+  },
+  "provenance": {
+    "repo_commit": "8fb11cc0e012e9f5e691a70ecd69d326db23ca58",
+    "repo_path": "/home/rpc/coral-re-autoresearch/coral-usb-oxidized",
+    "workspace_root": "/home/rpc/coral-re-autoresearch"
+  },
+  "source": {
+    "imported_at_utc": "2026-03-16T17:48:00Z",
+    "kind": "historical_phase7_tail_case",
+    "root": "/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/traces/analysis/phase7-p32-tail-dut-proof-20260316T145105Z/cases/h12_w176",
+    "run_id": "phase7-p32-tail-dut-proof-20260316T145105Z"
+  }
+}

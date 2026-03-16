@@ -1,0 +1,75 @@
+{
+  "artifacts": {
+    "dut_logs": [],
+    "eo_patchspec": {
+      "copied": "false",
+      "path": "/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/traces/analysis/phase4-conv2d-k3-completion-demo-20260316T114632Z/p32/h12_w176/eo.patchspec",
+      "sha256": "dd804b2063ea5feb57ffc47bee192dc5e02c48a7d07e5c69563684c348f38696"
+    },
+    "metadata_json": {
+      "copied": "false",
+      "path": "/home/rpc/coral-re-autoresearch/coral-usb-oxidized/templates/phase7_conv2d_k3_h12_corridor_6512/p32/targets/h12_w176/conv2d_12x176x32_to_32_k3_s1_same_quant.metadata.json",
+      "sha256": "c0e0d837f171037c18993e9d36b46d961b6ac27023c6f544cfdb128cc8d1d732"
+    },
+    "model": {
+      "copied": "false",
+      "path": "/home/rpc/coral-re-autoresearch/coral-usb-oxidized/templates/phase7_conv2d_k3_h12_corridor_6512/p32/targets/h12_w176/conv2d_12x176x32_to_32_k3_s1_same_quant.tflite",
+      "sha256": "78db31ef9cc5a5ad01e326affdc16724bc162bdb83d652ad90015fc1e91b9a2e"
+    },
+    "param_stream": {
+      "copied": "false",
+      "path": "/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/traces/analysis/phase4-conv2d-k3-completion-demo-20260316T114632Z/p32/h12_w176/target_param_stream.bin",
+      "sha256": "d14bc0e0ee095d96d717b680d03100e0efe508a33660362fe4d7f2d5dc4af0df"
+    },
+    "serialized_executable": {
+      "copied": "false",
+      "path": "",
+      "sha256": ""
+    },
+    "usbmon_logs": []
+  },
+  "capture_id": "conv_phase7_overwide_p32_h12_w176_structural",
+  "capture_version": 1,
+  "comparison": {
+    "baseline_capture_id": "conv_phase6_p32_h8_w128_structural",
+    "comparison_class": "historical_structural_pair",
+    "nearest_counterexample_id": "conv_phase7_tail_p32_h12_w176_recovered"
+  },
+  "decision": {
+    "keep_discard": "keep",
+    "reason": "structural historical import; direct run summary absent"
+  },
+  "firmware": {
+    "path": "",
+    "provenance_note": "historical completion-demo case has no colocated firmware summary",
+    "sha256": ""
+  },
+  "frontier": "00_trace_contract",
+  "identity": {
+    "family": "phase7_conv2d_k3_h12_corridor_6512_v1",
+    "operator": "conv2d_k3_same_bias_off",
+    "regime": "p32",
+    "shape": "h12_w176"
+  },
+  "notes": {
+    "anchor_ref": "/home/rpc/coral-re-autoresearch/coral-usb-oxidized/templates/phase7_conv2d_k3_h12_corridor_6512/p32/anchor/conv2d_12x128x32_to_32_k3_s1_same_quant.metadata.json",
+    "compiled_model": "/home/rpc/coral-re-autoresearch/coral-usb-oxidized/templates/phase7_conv2d_k3_h12_corridor_6512/p32/targets/h12_w176/conv2d_12x176x32_to_32_k3_s1_same_quant_edgetpu.tflite"
+  },
+  "outcome": {
+    "dut_hash": "",
+    "exact_failure_mode": "summary_missing",
+    "hash_eq_target": "unknown",
+    "transport_admission": "unknown"
+  },
+  "provenance": {
+    "repo_commit": "8fb11cc0e012e9f5e691a70ecd69d326db23ca58",
+    "repo_path": "/home/rpc/coral-re-autoresearch/coral-usb-oxidized",
+    "workspace_root": "/home/rpc/coral-re-autoresearch"
+  },
+  "source": {
+    "imported_at_utc": "2026-03-16T17:48:00Z",
+    "kind": "historical_conv_case",
+    "root": "/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/traces/analysis/phase4-conv2d-k3-completion-demo-20260316T114632Z/p32/h12_w176",
+    "run_id": "phase4-conv2d-k3-completion-demo-20260316T114632Z"
+  }
+}

@@ -1,0 +1,8 @@
+run_id=phase7-p32-tail-dut-proof-20260316T145105Z
+repo=/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src
+firmware=/home/rpc/coral-re-autoresearch/arsenal/coral-usb-oxidized-lab/apex_latest_single_ep.bin
+anchor_model=/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/templates/phase7_conv2d_k3_h12_corridor_6512/p32/anchor/conv2d_12x128x32_to_32_k3_s1_same_quant_edgetpu.tflite
+all_hash_eq_target=true
+h12_w176 baseline_hash=0x00435b5db3e2d027 native_hash=0x00435b5db3e2d027 hash_eq_target=true
+h12_w184 baseline_hash=0xab3d663846659ce0 native_hash=0xab3d663846659ce0 hash_eq_target=true
+h12_w192 baseline_hash=0x74ec3d24a028affd native_hash=0x74ec3d24a028affd hash_eq_target=true

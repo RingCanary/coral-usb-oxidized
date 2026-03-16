@@ -1,0 +1,48 @@
+{
+  "tool": "extract_edgetpu_package.py",
+  "generated_at_utc": "2026-02-22T06:20:19+00:00",
+  "input": {
+    "path": "traces/dense-template-1024x1024-20260222T062017Z/dense_1024x1024_quant_edgetpu.tflite",
+    "size": 1090176,
+    "sha256": "0895d2d5c5633fbcce644fa2829158143333dea4a11ca5e0a7bad16f1a9d707f"
+  },
+  "scan": {
+    "dwn1_candidate_root_offsets": [
+      296
+    ],
+    "candidate_count": 1,
+    "valid_package_count": 1,
+    "rejected_candidates": []
+  },
+  "packages": [
+    {
+      "index": 0,
+      "root_offset": 296,
+      "identifier_offset": 300,
+      "min_runtime_version": 14,
+      "keypair_version": 0,
+      "compiler_version": "cl/",
+      "virtual_chip_id": 0,
+      "model_identifier": "",
+      "signature_size": 0,
+      "multi_chip_package_count": 0,
+      "serialized_multi_executable_size": 1085440,
+      "serialized_multi_executable_sha256": "d87b5ee730155999d487ffd119977048067d7c601f1118af222984cefc41ef3e",
+      "serialized_multi_executable_path": "package_000/serialized_multi_executable.bin",
+      "serialized_executables": [
+        {
+          "index": 0,
+          "size": 16384,
+          "sha256": "9408c0c30a1046c3c204dd5d5fd1f984c6cf296e614854d22c8887982e1b1ac9",
+          "path": "package_000/serialized_executable_000.bin"
+        },
+        {
+          "index": 1,
+          "size": 1056768,
+          "sha256": "7764a84c1f54c21b56ad82edc88dab42975590c935cd1e1a1189b0e51c9c0ad0",
+          "path": "package_000/serialized_executable_001.bin"
+        }
+      ]
+    }
+  ]
+}

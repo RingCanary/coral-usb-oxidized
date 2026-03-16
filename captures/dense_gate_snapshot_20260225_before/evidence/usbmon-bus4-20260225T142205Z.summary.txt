@@ -1,0 +1,26 @@
+USBMON Capture Summary
+start_utc=2026-02-25T14:22:05Z
+end_utc=2026-02-25T14:25:51Z
+duration_seconds=226
+bus=4
+capture_file=traces/replay-csr-snapshot-20260225T141800Z/dense_gate_snapshot/usbmon-bus4-20260225T142205Z.log
+command=bash -lc set\ -euo\ pipefail\;\ cd\ ~/coral-usb-oxidized-lab\;\ eval\ \"\$\(./tools/bootstrap_arch_stack.sh\ print-env\)\"\;\ cargo\ run\ --example\ rusb_serialized_exec_replay\ --\ --model\ templates/dense_2048x2048_quant_edgetpu.tflite\ --firmware\ ./apex_latest_single_ep.bin\ --parameters-tag\ 2\ --param-stream-max-bytes\ 65536\ --param-stream-chunk-size\ 1024\ --param-submit-bulk-in-lanes\ 1\ --param-submit-event-lanes\ 1\ --param-submit-interrupt-lanes\ 1\ --param-submit-buffer-size\ 256\ --param-submit-timeout-ms\ 10\ --param-submit-event-poll-ms\ 1\ --input-bytes\ 2048\ --output-bytes\ 2048\ --param-csr-snapshot-start-bytes\ 30720\ --param-csr-snapshot-end-bytes\ 34816\ --param-csr-snapshot-every-chunks\ 1\ --param-csr-snapshot-on-error\ --param-gate-window-start-bytes\ 28672\ --param-gate-window-end-bytes\ 34816\ --param-gate-window-step-bytes\ 256\ --param-gate-placement\ before
+command_exit=1
+total_lines=130995
+negative_status_lines=86735
+
+Event counts (field 3):
+  C 65497
+  S 65498
+
+Transfer-direction prefix counts (first 2 chars of field 4):
+  Bi 86550
+  Bo 76
+  Ci 623
+  Co 466
+  Ii 43280
+
+Device id counts (parsed from field 4):
+  001 52
+  023 186
+  024 130757

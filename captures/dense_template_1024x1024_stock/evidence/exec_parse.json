@@ -1,0 +1,634 @@
+{
+  "directories": {
+    "traces/dense-template-1024x1024-20260222T062017Z/extract/package_000": {
+      "executables": [
+        {
+          "inferred_role": "instruction_only",
+          "instruction_total_bytes": 9872,
+          "parameters_size_bytes": 0,
+          "path": "traces/dense-template-1024x1024-20260222T062017Z/extract/package_000/serialized_executable_000.bin",
+          "size_bytes": 16384,
+          "type_name": "EXECUTION_ONLY"
+        },
+        {
+          "inferred_role": "parameter_heavy",
+          "instruction_total_bytes": 2608,
+          "parameters_size_bytes": 1048576,
+          "path": "traces/dense-template-1024x1024-20260222T062017Z/extract/package_000/serialized_executable_001.bin",
+          "size_bytes": 1056768,
+          "type_name": "PARAMETER_CACHING"
+        }
+      ],
+      "multi_executable": {
+        "path": "traces/dense-template-1024x1024-20260222T062017Z/extract/package_000/serialized_multi_executable.bin",
+        "serialized_executable_count": 2,
+        "serialized_executable_prefix16": [
+          "980e0000000000000000000000000000",
+          "200f0000000000000000000000000000"
+        ],
+        "serialized_executable_sha256": [
+          "9408c0c30a1046c3c204dd5d5fd1f984c6cf296e614854d22c8887982e1b1ac9",
+          "7764a84c1f54c21b56ad82edc88dab42975590c935cd1e1a1189b0e51c9c0ad0"
+        ],
+        "serialized_executable_sizes": [
+          16384,
+          1056768
+        ],
+        "sha256": "d87b5ee730155999d487ffd119977048067d7c601f1118af222984cefc41ef3e",
+        "size_bytes": 1085440
+      },
+      "path": "traces/dense-template-1024x1024-20260222T062017Z/extract/package_000",
+      "size_correlation": {
+        "exact_match": true,
+        "file_sizes": [
+          16384,
+          1056768
+        ],
+        "multi_sizes": [
+          16384,
+          1056768
+        ],
+        "sum_file_sizes": 1073152,
+        "sum_multi_sizes": 1073152
+      }
+    }
+  },
+  "generated_at_utc": "2026-02-22T06:20:19+00:00",
+  "input_paths": [
+    "traces/dense-template-1024x1024-20260222T062017Z/extract/package_000"
+  ],
+  "report_count": 2,
+  "reports": [
+    {
+      "batch_size": 1,
+      "chip": "beagle",
+      "dma_hints": {
+        "by_any_hint_type": {
+          "DmaDescriptorHint": 2,
+          "InstructionHint": 1,
+          "InterruptHint": 1
+        },
+        "by_direction": {
+          "INFEED": 2,
+          "OUTFEED": 2
+        },
+        "dma_descriptor_count": 2,
+        "dma_descriptor_offset_max": null,
+        "dma_descriptor_offset_min": null,
+        "dma_descriptor_size_max": 1024,
+        "dma_descriptor_size_min": 1024,
+        "dma_descriptor_total_bytes": 2048,
+        "fully_deterministic": true,
+        "hint_count": 4,
+        "hints_omitted": 0,
+        "hints_preview": [
+          {
+            "any_hint_type": 2,
+            "any_hint_type_name": "InstructionHint",
+            "detail": {
+              "instruction_chunk_index": null
+            },
+            "direction": 0,
+            "direction_name": "INFEED"
+          },
+          {
+            "any_hint_type": 1,
+            "any_hint_type_name": "DmaDescriptorHint",
+            "detail": {
+              "meta": {
+                "batch": 0,
+                "desc": 1,
+                "desc_name": "BASE_ADDRESS_INPUT_ACTIVATION",
+                "name": "serving_default_input:0",
+                "position": 0,
+                "position_name": "LOWER_32BIT"
+              },
+              "offset_in_bytes": null,
+              "size_in_bytes": 1024
+            },
+            "direction": 0,
+            "direction_name": "INFEED"
+          },
+          {
+            "any_hint_type": 1,
+            "any_hint_type_name": "DmaDescriptorHint",
+            "detail": {
+              "meta": {
+                "batch": 0,
+                "desc": 0,
+                "desc_name": "BASE_ADDRESS_OUTPUT_ACTIVATION",
+                "name": "StatefulPartitionedCall:0",
+                "position": 0,
+                "position_name": "LOWER_32BIT"
+              },
+              "offset_in_bytes": null,
+              "size_in_bytes": 1024
+            },
+            "direction": 1,
+            "direction_name": "OUTFEED"
+          },
+          {
+            "any_hint_type": 3,
+            "any_hint_type_name": "InterruptHint",
+            "detail": {
+              "interrupt_type": null,
+              "interrupt_type_name": "UNKNOWN_None"
+            },
+            "direction": 1,
+            "direction_name": "OUTFEED"
+          }
+        ],
+        "present": true
+      },
+      "estimated_cycles": null,
+      "estimated_cycles_64bit": null,
+      "inferred_role": "instruction_only",
+      "input_layers": {
+        "count": 1,
+        "dims_yxz": [
+          [
+            1,
+            1,
+            1024
+          ]
+        ],
+        "layers": [
+          {
+            "any_layer": {},
+            "any_layer_type": 2,
+            "any_layer_type_name": "InputLayer",
+            "cache_on_dram": false,
+            "data_type": 8,
+            "data_type_name": "SIGNED_FIXED_POINT8",
+            "dims_yxz": [
+              1,
+              1,
+              1024
+            ],
+            "execution_count_per_inference": 1,
+            "name": "serving_default_input:0",
+            "numerics": {
+              "dequantization_factor": 0.007843079045414925,
+              "zero_point": 128
+            },
+            "shape": {
+              "extents": [],
+              "ranges": [],
+              "rank": 0
+            },
+            "size_bytes": 1024
+          }
+        ]
+      },
+      "instruction_bitstreams": {
+        "chunks": [
+          {
+            "bitstream_prefix16": "800f009c090000000000000000000000",
+            "bitstream_sha256": "d7ef0a961f7c0c55c8b304fe4ee995d0289b422d4ec147e4a17eb2000cbc446c",
+            "bitstream_size": 9872,
+            "field_offset_count": 8,
+            "field_offsets_by_desc": {
+              "BASE_ADDRESS_INPUT_ACTIVATION": 2,
+              "BASE_ADDRESS_OUTPUT_ACTIVATION": 2,
+              "BASE_ADDRESS_PARAMETER": 2,
+              "BASE_ADDRESS_SCRATCH": 2
+            },
+            "field_offsets_by_name": {
+              "StatefulPartitionedCall:0": 2,
+              "serving_default_input:0": 2
+            },
+            "field_offsets_by_position": {
+              "LOWER_32BIT": 4,
+              "UPPER_32BIT": 4
+            },
+            "field_offsets_omitted": 0,
+            "field_offsets_preview": [
+              {
+                "meta": {
+                  "batch": 0,
+                  "desc": 2,
+                  "desc_name": "BASE_ADDRESS_PARAMETER",
+                  "name": "",
+                  "position": 0,
+                  "position_name": "LOWER_32BIT"
+                },
+                "offset_bit": 582
+              },
+              {
+                "meta": {
+                  "batch": 0,
+                  "desc": 2,
+                  "desc_name": "BASE_ADDRESS_PARAMETER",
+                  "name": "",
+                  "position": 1,
+                  "position_name": "UPPER_32BIT"
+                },
+                "offset_bit": 710
+              },
+              {
+                "meta": {
+                  "batch": 0,
+                  "desc": 3,
+                  "desc_name": "BASE_ADDRESS_SCRATCH",
+                  "name": "",
+                  "position": 0,
+                  "position_name": "LOWER_32BIT"
+                },
+                "offset_bit": 838
+              },
+              {
+                "meta": {
+                  "batch": 0,
+                  "desc": 3,
+                  "desc_name": "BASE_ADDRESS_SCRATCH",
+                  "name": "",
+                  "position": 1,
+                  "position_name": "UPPER_32BIT"
+                },
+                "offset_bit": 966
+              },
+              {
+                "meta": {
+                  "batch": 0,
+                  "desc": 1,
+                  "desc_name": "BASE_ADDRESS_INPUT_ACTIVATION",
+                  "name": "serving_default_input:0",
+                  "position": 1,
+                  "position_name": "UPPER_32BIT"
+                },
+                "offset_bit": 1862
+              },
+              {
+                "meta": {
+                  "batch": 0,
+                  "desc": 1,
+                  "desc_name": "BASE_ADDRESS_INPUT_ACTIVATION",
+                  "name": "serving_default_input:0",
+                  "position": 0,
+                  "position_name": "LOWER_32BIT"
+                },
+                "offset_bit": 1990
+              },
+              {
+                "meta": {
+                  "batch": 0,
+                  "desc": 0,
+                  "desc_name": "BASE_ADDRESS_OUTPUT_ACTIVATION",
+                  "name": "StatefulPartitionedCall:0",
+                  "position": 1,
+                  "position_name": "UPPER_32BIT"
+                },
+                "offset_bit": 61382
+              },
+              {
+                "meta": {
+                  "batch": 0,
+                  "desc": 0,
+                  "desc_name": "BASE_ADDRESS_OUTPUT_ACTIVATION",
+                  "name": "StatefulPartitionedCall:0",
+                  "position": 0,
+                  "position_name": "LOWER_32BIT"
+                },
+                "offset_bit": 61510
+              }
+            ]
+          }
+        ],
+        "count": 1,
+        "size_stats": {
+          "avg": 9872.0,
+          "count": 1,
+          "max": 9872,
+          "min": 9872
+        },
+        "total_bytes": 9872
+      },
+      "marker_hits": {
+        "cmd_004c0200_01000000": {
+          "count": 0,
+          "offsets": [],
+          "pattern_hex": "004c020001000000"
+        },
+        "cmd_20720300": {
+          "count": 0,
+          "offsets": [],
+          "pattern_hex": "20720300"
+        },
+        "cmd_50270000": {
+          "count": 0,
+          "offsets": [],
+          "pattern_hex": "50270000"
+        },
+        "hdr_800f0080dc000000": {
+          "count": 0,
+          "offsets": [],
+          "pattern_hex": "800f0080dc000000"
+        },
+        "hdr_800f00cc09000000": {
+          "count": 0,
+          "offsets": [],
+          "pattern_hex": "800f00cc09000000"
+        },
+        "hdr_800f00f409000000": {
+          "count": 0,
+          "offsets": [],
+          "pattern_hex": "800f00f409000000"
+        }
+      },
+      "name": "model",
+      "output_layers": {
+        "count": 1,
+        "dims_yxz": [
+          [
+            1,
+            1,
+            1024
+          ]
+        ],
+        "layers": [
+          {
+            "any_layer": {
+              "layout": {
+                "tile_byte_offset_len": 16,
+                "x_local_byte_offset_len": 1,
+                "x_local_row_size_len": 1,
+                "x_to_tile_len": 1,
+                "y_local_offset_len": 1,
+                "y_to_tile_len": 1
+              },
+              "shape_info": {}
+            },
+            "any_layer_type": 1,
+            "any_layer_type_name": "OutputLayer",
+            "cache_on_dram": false,
+            "data_type": 8,
+            "data_type_name": "SIGNED_FIXED_POINT8",
+            "dims_yxz": [
+              1,
+              1,
+              1024
+            ],
+            "execution_count_per_inference": 1,
+            "name": "StatefulPartitionedCall:0",
+            "numerics": {
+              "dequantization_factor": 0.007843079045414925,
+              "zero_point": 128
+            },
+            "shape": {
+              "extents": [
+                1,
+                1024
+              ],
+              "ranges": [
+                {
+                  "end": 0,
+                  "start": 0
+                },
+                {
+                  "end": 1023,
+                  "start": 0
+                }
+              ],
+              "rank": 2
+            },
+            "size_bytes": 1024
+          }
+        ]
+      },
+      "parameter_caching_token": 6255940548135484234,
+      "parameters": {
+        "prefix16": "",
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "path": "traces/dense-template-1024x1024-20260222T062017Z/extract/package_000/serialized_executable_000.bin",
+      "relocations": {
+        "by_desc": {
+          "BASE_ADDRESS_INPUT_ACTIVATION": 2,
+          "BASE_ADDRESS_OUTPUT_ACTIVATION": 2,
+          "BASE_ADDRESS_PARAMETER": 2,
+          "BASE_ADDRESS_SCRATCH": 2
+        },
+        "by_position": {
+          "LOWER_32BIT": 4,
+          "UPPER_32BIT": 4
+        },
+        "named_ref_preview": {
+          "StatefulPartitionedCall:0": 2,
+          "serving_default_input:0": 2
+        },
+        "total_field_offsets": 8
+      },
+      "root_table_offset": 3736,
+      "root_vtable_len": 34,
+      "scratch_size_bytes": 0,
+      "serialized_model": {
+        "prefix16": "",
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "sha256": "9408c0c30a1046c3c204dd5d5fd1f984c6cf296e614854d22c8887982e1b1ac9",
+      "size_bytes": 16384,
+      "type": 2,
+      "type_name": "EXECUTION_ONLY",
+      "use_tpu_dram_for_parameters": false,
+      "used_narrow_memory_bytes_per_tile": 1600,
+      "version": 0
+    },
+    {
+      "batch_size": 1,
+      "chip": "beagle",
+      "dma_hints": {
+        "by_any_hint_type": {
+          "DmaDescriptorHint": 1,
+          "InstructionHint": 1,
+          "InterruptHint": 1
+        },
+        "by_direction": {
+          "INFEED": 2,
+          "OUTFEED": 1
+        },
+        "dma_descriptor_count": 1,
+        "dma_descriptor_offset_max": null,
+        "dma_descriptor_offset_min": null,
+        "dma_descriptor_size_max": 1048576,
+        "dma_descriptor_size_min": 1048576,
+        "dma_descriptor_total_bytes": 1048576,
+        "fully_deterministic": true,
+        "hint_count": 3,
+        "hints_omitted": 0,
+        "hints_preview": [
+          {
+            "any_hint_type": 2,
+            "any_hint_type_name": "InstructionHint",
+            "detail": {
+              "instruction_chunk_index": null
+            },
+            "direction": 0,
+            "direction_name": "INFEED"
+          },
+          {
+            "any_hint_type": 1,
+            "any_hint_type_name": "DmaDescriptorHint",
+            "detail": {
+              "meta": {
+                "batch": 0,
+                "desc": 2,
+                "desc_name": "BASE_ADDRESS_PARAMETER",
+                "name": "",
+                "position": 0,
+                "position_name": "LOWER_32BIT"
+              },
+              "offset_in_bytes": null,
+              "size_in_bytes": 1048576
+            },
+            "direction": 0,
+            "direction_name": "INFEED"
+          },
+          {
+            "any_hint_type": 3,
+            "any_hint_type_name": "InterruptHint",
+            "detail": {
+              "interrupt_type": null,
+              "interrupt_type_name": "UNKNOWN_None"
+            },
+            "direction": 1,
+            "direction_name": "OUTFEED"
+          }
+        ],
+        "present": true
+      },
+      "estimated_cycles": null,
+      "estimated_cycles_64bit": null,
+      "inferred_role": "parameter_heavy",
+      "input_layers": {
+        "count": 0,
+        "dims_yxz": [],
+        "layers": []
+      },
+      "instruction_bitstreams": {
+        "chunks": [
+          {
+            "bitstream_prefix16": "800f0084020000000000000000000000",
+            "bitstream_sha256": "63101acb9b34d7d038c1060581cdbbd2da13de6d2dc9e02dfd1cbebb0b6d0237",
+            "bitstream_size": 2608,
+            "field_offset_count": 2,
+            "field_offsets_by_desc": {
+              "BASE_ADDRESS_PARAMETER": 2
+            },
+            "field_offsets_by_name": {},
+            "field_offsets_by_position": {
+              "LOWER_32BIT": 1,
+              "UPPER_32BIT": 1
+            },
+            "field_offsets_omitted": 0,
+            "field_offsets_preview": [
+              {
+                "meta": {
+                  "batch": 0,
+                  "desc": 2,
+                  "desc_name": "BASE_ADDRESS_PARAMETER",
+                  "name": "",
+                  "position": 0,
+                  "position_name": "LOWER_32BIT"
+                },
+                "offset_bit": 582
+              },
+              {
+                "meta": {
+                  "batch": 0,
+                  "desc": 2,
+                  "desc_name": "BASE_ADDRESS_PARAMETER",
+                  "name": "",
+                  "position": 1,
+                  "position_name": "UPPER_32BIT"
+                },
+                "offset_bit": 710
+              }
+            ]
+          }
+        ],
+        "count": 1,
+        "size_stats": {
+          "avg": 2608.0,
+          "count": 1,
+          "max": 2608,
+          "min": 2608
+        },
+        "total_bytes": 2608
+      },
+      "marker_hits": {
+        "cmd_004c0200_01000000": {
+          "count": 0,
+          "offsets": [],
+          "pattern_hex": "004c020001000000"
+        },
+        "cmd_20720300": {
+          "count": 0,
+          "offsets": [],
+          "pattern_hex": "20720300"
+        },
+        "cmd_50270000": {
+          "count": 0,
+          "offsets": [],
+          "pattern_hex": "50270000"
+        },
+        "hdr_800f0080dc000000": {
+          "count": 0,
+          "offsets": [],
+          "pattern_hex": "800f0080dc000000"
+        },
+        "hdr_800f00cc09000000": {
+          "count": 0,
+          "offsets": [],
+          "pattern_hex": "800f00cc09000000"
+        },
+        "hdr_800f00f409000000": {
+          "count": 0,
+          "offsets": [],
+          "pattern_hex": "800f00f409000000"
+        }
+      },
+      "name": "Unknown",
+      "output_layers": {
+        "count": 0,
+        "dims_yxz": [],
+        "layers": []
+      },
+      "parameter_caching_token": 6255940548135484234,
+      "parameters": {
+        "prefix16": "ff80808080ff80808080ff80808080ff",
+        "sha256": "38d84b8da258efeba63e2c7e5e589144715b4be3add00603a85c78a1e7e22e7f",
+        "size_bytes": 1048576
+      },
+      "path": "traces/dense-template-1024x1024-20260222T062017Z/extract/package_000/serialized_executable_001.bin",
+      "relocations": {
+        "by_desc": {
+          "BASE_ADDRESS_PARAMETER": 2
+        },
+        "by_position": {
+          "LOWER_32BIT": 1,
+          "UPPER_32BIT": 1
+        },
+        "named_ref_preview": {},
+        "total_field_offsets": 2
+      },
+      "root_table_offset": 3872,
+      "root_vtable_len": 34,
+      "scratch_size_bytes": 0,
+      "serialized_model": {
+        "prefix16": "",
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "sha256": "7764a84c1f54c21b56ad82edc88dab42975590c935cd1e1a1189b0e51c9c0ad0",
+      "size_bytes": 1056768,
+      "type": 1,
+      "type_name": "PARAMETER_CACHING",
+      "use_tpu_dram_for_parameters": false,
+      "used_narrow_memory_bytes_per_tile": null,
+      "version": 0
+    }
+  ],
+  "tool": "parse_edgetpu_executable.py"
+}

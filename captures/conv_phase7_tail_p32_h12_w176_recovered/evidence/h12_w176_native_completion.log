@@ -1,0 +1,28 @@
+Model: /home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/templates/phase7_conv2d_k3_h12_corridor_6512/p32/anchor/conv2d_12x128x32_to_32_k3_s1_same_quant_edgetpu.tflite
+Descriptor tags: instr=0(Instructions), params=2(Parameters), input=1(InputActivations)
+Parameter stream override: source=file:/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/traces/analysis/phase7-p32-tail-dut-proof-20260316T145105Z/cases/h12_w176/native_param.bin exec_idx=1 len=9472 source_fnv=eea594a56f009c82 before_fnv=935ee134c417c80c after_fnv=eea594a56f009c82
+Extracted executables: 2
+  pkg=0 exec=0 type=2(EXECUTION_ONLY) payload=16384 bytes instr_chunks=1 param_stream=0 param_region=4096..4096 (0 bytes)
+  pkg=0 exec=1 type=1(PARAMETER_CACHING) payload=16384 bytes instr_chunks=1 param_stream=9472 param_region=4096..13568 (9472 bytes)
+Instruction patch source: path=/home/rpc/coral-re-autoresearch/arsenal/coral-rusb-replay-src/traces/analysis/phase7-p32-tail-dut-proof-20260316T145105Z/cases/h12_w176/eo.patchspec payload_lens=1 rule_count=481
+  source patch len=6512 entries=481 first=Some((242, 145)) last=Some((6080, 16))
+Instruction patch merged: sources=1 payload_lens=1 rule_count=481
+  merged patch len=6512 entries=481 first=Some((242, 145)) last=Some((6080, 16))
+Instruction patch compatibility: payload lengths validated against extracted executable chunks
+Using USB device: bus=2 addr=3 id=18d1:9302 runtime=true
+Reset-before-claim enabled; issuing reset, sleeping 1200 ms, and reopening
+Post-reset device: bus=2 addr=3 id=18d1:9302 runtime=true
+Applying edgetpuxray runtime setup sequence (38 steps, include_reads=false, verify_reads=false)
+Bootstrap phase (known-good order): send PARAMETER_CACHING streams before EXECUTION_ONLY run chunks
+  PARAMETER_CACHING executable idx=1 chunks=1 params=9472 bytes
+    instr chunk 0 (688 bytes)
+  Bootstrap event read skipped (known-good order defers EXECUTION_ONLY+input to run phase)
+Execution executable: idx=0 type=2(EXECUTION_ONLY) payload=16384 bytes
+RUN 1
+  run instr chunk 0 (6512 bytes)
+  run: instr patch chunk=0 len=6512 rules=481 changed=479 fnv_before=213558a52c345fa6 fnv_after=b99a8fa1213c5810
+  Input: bytes=67584 fnv1a64=0x6b055426f7b89a2c head=[00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 0a, 0b, 0c, 0d, 0e, 0f]
+  Event: tag=4 offset=0x0000000000000000 length=0
+  Output: bytes=67584 fnv1a64=0x00435b5db3e2d027 head=[5a, 9a, 7a, 7b, 71, 7c, 8e, 7e, 61, 6a, 89, 8b, 7a, 8a, 7c, 83]
+  Run timing: run_ms=6.216
+Run timing summary: runs=1 avg_ms=6.216 min_ms=6.216 max_ms=6.216

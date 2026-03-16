@@ -1,0 +1,15 @@
+Dense Template Pipeline Summary
+out_dir=traces/dense-template-1024x1024-20260222T062017Z
+quant_model=traces/dense-template-1024x1024-20260222T062017Z/dense_1024x1024_quant.tflite
+compiled_model=traces/dense-template-1024x1024-20260222T062017Z/dense_1024x1024_quant_edgetpu.tflite
+compiler=/home/bhav/.local/bin/edgetpu_compiler
+python_version=3.9
+tensorflow_cpu_version=2.10.1
+numpy_version=1.23.5
+extract_dir=traces/dense-template-1024x1024-20260222T062017Z/extract
+parse_text=traces/dense-template-1024x1024-20260222T062017Z/exec_parse.txt
+parse_json=traces/dense-template-1024x1024-20260222T062017Z/exec_parse.json
+inspect_text=traces/dense-template-1024x1024-20260222T062017Z/tensorizer_inspect.txt
+inspect_json=traces/dense-template-1024x1024-20260222T062017Z/tensorizer_inspect.json
+bench_compiled_log=traces/dense-template-1024x1024-20260222T062017Z/bench_compiled.log
+bench_patched_log=traces/dense-template-1024x1024-20260222T062017Z/bench_patched.log

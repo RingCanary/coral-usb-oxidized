@@ -1,0 +1,48 @@
+{
+  "tool": "generate_dense_quant_tflite.py",
+  "model_name": "dense_1024x1024",
+  "output_path": "traces/dense-template-1024x1024-20260222T062017Z/dense_1024x1024_quant.tflite",
+  "output_sha256": "ade8882eee42d98f3b1ae289022aeab6012530820db78e24f833068e8032b187",
+  "input_dim": 1024,
+  "output_dim": 1024,
+  "init_mode": "identity",
+  "diag_scale": 1.0,
+  "hot_row": 0,
+  "hot_col": 0,
+  "hot_value": 1.0,
+  "use_bias": false,
+  "seed": 1337,
+  "rep_samples": 256,
+  "rep_range": 1.0,
+  "kernel_shape": [
+    1024,
+    1024
+  ],
+  "kernel_sha256": "c9356390b870f5f90db89f2a722f7dd54ddbd59a260382c25aa259150c9fe7f0",
+  "kernel_min": 0.0,
+  "kernel_max": 1.0,
+  "input_tensor": {
+    "name": "serving_default_input:0",
+    "shape": [
+      1,
+      1024
+    ],
+    "dtype": "<class 'numpy.int8'>",
+    "quantization": [
+      0.007843079045414925,
+      0
+    ]
+  },
+  "output_tensor": {
+    "name": "StatefulPartitionedCall:0",
+    "shape": [
+      1,
+      1024
+    ],
+    "dtype": "<class 'numpy.int8'>",
+    "quantization": [
+      0.007843079045414925,
+      0
+    ]
+  }
+}
