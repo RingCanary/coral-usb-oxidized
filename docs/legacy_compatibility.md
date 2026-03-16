@@ -34,9 +34,9 @@ Using any of the following in the active artifact-creation loop means Phase 4 co
 
 - `cargo run --features legacy-runtime --example ...`
 - `cargo run --features legacy-runtime --example cpu_vs_edgetpu_mvp -- --help`
-- `tools/archive/bootstrap_edgetpu_compiler.sh`
-- `tools/archive/dense_template_pipeline.sh`
-- `tools/archive/conv_template_pipeline.sh`
-- `tools/archive/multiop_template_pipeline.sh`
+- `tools/bootstrap_edgetpu_compiler.sh`
+- `tools/dense_template_pipeline.sh`
+- `tools/conv_template_pipeline.sh`
+- `tools/multiop_template_pipeline.sh`
 
 Treat them as compatibility surfaces, not as the repo front door.

@@ -6,6 +6,7 @@ cd "$REPO_ROOT"
 
 mapfile -t TOOL_PATHS < <(
   rg -n --no-heading -o 'tools/[A-Za-z0-9_./-]+' README.md docs examples src scripts tools/*.sh tools/archive/*.sh 2>/dev/null \
+    | grep -v '/$' \
     | awk -F: '{print $NF}' \
     | sort -u
 )

@@ -177,7 +177,7 @@ Key outcomes:
      - `traces/phase-b-diff-256-vs-512-exec0/exec_chunk_diff_report.json`
      - `traces/phase-b-diff-256-vs-512-exec0/chunk_dump_manifest.json`
 
-### External findings ingestion (`coral_research_findings-1/2`)
+### External findings ingestion
 
 1. Verified key claims against upstream/public sources (`libedgetpu` and
    `libredgetpu`):
