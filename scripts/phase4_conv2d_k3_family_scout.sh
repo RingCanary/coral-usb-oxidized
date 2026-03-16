@@ -9,11 +9,45 @@ mkdir -p "$OUT_DIR"
 
 echo "run_id=$RUN_ID"
 
-cases=(
-  "32 32 64 64"
-  "32 32 64 128"
-  "32 32 128 64"
-)
+MODE="${MODE:-fixed}"
+SAME_PRODUCT="${SAME_PRODUCT:-1024}"
+HEIGHTS_CSV="${HEIGHTS_CSV:-1,2,4,8,16,32,64,128}"
+CHANNELS_CSV="${CHANNELS_CSV:-64}"
+OUT_CHANNELS_CSV="${OUT_CHANNELS_CSV:-}"
+
+cases=()
+
+if [[ "$MODE" == "sameprod" ]]; then
+  IFS=',' read -r -a heights <<<"$HEIGHTS_CSV"
+  IFS=',' read -r -a channels <<<"$CHANNELS_CSV"
+  if [[ -n "$OUT_CHANNELS_CSV" ]]; then
+    IFS=',' read -r -a out_channels <<<"$OUT_CHANNELS_CSV"
+  else
+    out_channels=("${channels[@]}")
+  fi
+  if (( ${#channels[@]} != ${#out_channels[@]} )); then
+    echo "CHANNELS_CSV and OUT_CHANNELS_CSV length mismatch" >&2
+    exit 1
+  fi
+  for idx in "${!channels[@]}"; do
+    ic="${channels[$idx]}"
+    oc="${out_channels[$idx]}"
+    for H in "${heights[@]}"; do
+      if (( H <= 0 )) || (( SAME_PRODUCT % H != 0 )); then
+        echo "invalid height for same-product scan: $H (same_product=$SAME_PRODUCT)" >&2
+        exit 1
+      fi
+      W=$((SAME_PRODUCT / H))
+      cases+=("$H $W $ic $oc")
+    done
+  done
+else
+  cases=(
+    "32 32 64 64"
+    "32 32 64 128"
+    "32 32 128 64"
+  )
+fi
 
 printf "case_id\theight\twidth\tin_channels\tout_channels\tkernel_size\teo_instr\tpc_instr\tparam_bytes\tinput_bytes\toutput_bytes\n" > "$OUT_DIR/size_table.tsv"
 
@@ -60,9 +94,11 @@ with open(tsv_path, 'a', encoding='utf-8') as f:
 PY
 done
 
-python3 - <<'PY' "$OUT_DIR/size_table.tsv" "$OUT_DIR/SUMMARY.txt" "$OUT_DIR/families.json"
+python3 - <<'PY' "$OUT_DIR/size_table.tsv" "$OUT_DIR/SUMMARY.txt" "$OUT_DIR/families.json" "$MODE" "$SAME_PRODUCT"
 import csv, json, pathlib, sys
 rows = list(csv.DictReader(open(sys.argv[1]), delimiter='\t'))
+mode = sys.argv[4]
+same_product = sys.argv[5]
 families = {}
 for row in rows:
     key = f"k{row['kernel_size']}_eo{row['eo_instr']}_pc{row['pc_instr']}_param{row['param_bytes']}"
@@ -78,6 +114,8 @@ for row in rows:
 pathlib.Path(sys.argv[3]).write_text(json.dumps({'families': families}, indent=2) + '\n')
 with open(sys.argv[2], 'w', encoding='utf-8') as f:
     f.write(f"run_id={pathlib.Path(sys.argv[1]).parent.name}\n")
+    f.write(f"mode={mode}\n")
+    f.write(f"same_product={same_product}\n")
     f.write(f"case_count={len(rows)}\n")
     f.write(f"family_count={len(families)}\n")
     for key, vals in sorted(families.items()):

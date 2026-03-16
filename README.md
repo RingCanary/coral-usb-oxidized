@@ -17,6 +17,7 @@ If you are working on the current native path, start with:
 
 - `docs/active_path.md`
 - `docs/phase4_conv2d_k3_completion_2026-03-16.md`
+- `docs/phase5_conv2d_k3_6496_boundary_scan_2026-03-16.md`
 - `docs/phase4_completion_control_plan_2026-03-07.md`
 - `docs/phase4_conv2d_k3_param_region_2026-03-07.md`
 - `docs/phase4_conv2d_k3_native_param_materialize_2026-03-07.md`
@@ -28,6 +29,7 @@ Current bounded completion status:
 - Phase 4 is now complete for the bounded single-op Conv2D `k=3`, `same`, same-product family rooted at `16x64`
 - active completion assets live under `templates/phase4_conv2d_k3_sameprod_6512/`
 - the one-command Pi proof is `scripts/phase4_conv2d_k3_completion_demo.sh`
+- Phase 5 boundary discovery currently shows `8x128` as a singleton `EO=6496` island on the scanned p64 power-of-two same-product axis; no nontrivial `6496` family has been frozen yet
 
 ## Raspberry Pi 5 setup
 
