@@ -86,6 +86,24 @@ pub struct Conv1x1QuantParams {
     pub weight_zero_points: Vec<i64>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ConvQuantizedWeights {
+    pub subgraph_index: usize,
+    pub weight_tensor_index: usize,
+    pub weight_buffer_index: usize,
+    pub kernel_size: usize,
+    pub in_channels: usize,
+    pub out_channels: usize,
+    pub stored_shape: Vec<i32>,
+    pub quantized_dimension: i32,
+    pub input_scale: f32,
+    pub output_scale: f32,
+    pub weight_scales: Vec<f32>,
+    pub weight_zero_points: Vec<i64>,
+    // Canonicalized to [out_channel][kernel_y][kernel_x][in_channel].
+    pub weight_bytes_oc_kh_kw_ic: Vec<u8>,
+}
+
 #[derive(Debug)]
 pub(crate) struct PackageView {
     executables: Vec<ExecutableView>,
@@ -503,6 +521,28 @@ pub fn extract_tflite_conv1x1_quant_params(
     in_channels: usize,
     out_channels: usize,
 ) -> Result<Conv1x1QuantParams, DenseGemmError> {
+    let generic =
+        extract_tflite_conv_quantized_weights(blob, subgraph_index, 1, in_channels, out_channels)?;
+    Ok(Conv1x1QuantParams {
+        subgraph_index: generic.subgraph_index,
+        weight_tensor_index: generic.weight_tensor_index,
+        weight_buffer_index: generic.weight_buffer_index,
+        stored_shape: generic.stored_shape,
+        quantized_dimension: generic.quantized_dimension,
+        input_scale: generic.input_scale,
+        output_scale: generic.output_scale,
+        weight_scales: generic.weight_scales,
+        weight_zero_points: generic.weight_zero_points,
+    })
+}
+
+pub fn extract_tflite_conv_quantized_weights(
+    blob: &[u8],
+    subgraph_index: usize,
+    kernel_size: usize,
+    in_channels: usize,
+    out_channels: usize,
+) -> Result<ConvQuantizedWeights, DenseGemmError> {
     let model_table = parse_root_table(blob, 0, Some(TFL3_IDENTIFIER))?;
     let subgraphs = read_vector_table_offsets(&model_table, 2)?;
     if subgraph_index >= subgraphs.len() {
@@ -536,12 +576,24 @@ pub fn extract_tflite_conv1x1_quant_params(
 
     let input_scale = tensor_scale_from_offset(blob, tensors[input_tensor_index])?;
     let output_scale = tensor_scale_from_offset(blob, tensors[output_tensor_index])?;
-    let expected_len = in_channels
-        .checked_mul(out_channels)
-        .ok_or_else(|| invalid_template("conv1x1 expected_len overflow"))?;
+    let expected_len = kernel_size
+        .checked_mul(kernel_size)
+        .and_then(|v| v.checked_mul(in_channels))
+        .and_then(|v| v.checked_mul(out_channels))
+        .ok_or_else(|| invalid_template("conv expected_len overflow"))?;
     let accepted_shapes = [
-        vec![out_channels as i32, 1, 1, in_channels as i32],
-        vec![1, 1, in_channels as i32, out_channels as i32],
+        vec![
+            out_channels as i32,
+            kernel_size as i32,
+            kernel_size as i32,
+            in_channels as i32,
+        ],
+        vec![
+            kernel_size as i32,
+            kernel_size as i32,
+            in_channels as i32,
+            out_channels as i32,
+        ],
     ];
 
     for (tensor_index, tensor_table_offset) in tensors.iter().copied().enumerate() {
@@ -577,23 +629,94 @@ pub fn extract_tflite_conv1x1_quant_params(
         {
             continue;
         }
-        return Ok(Conv1x1QuantParams {
+        let stored =
+            blob[buffer_region.start..buffer_region.end].to_vec();
+        let canonical_weights = canonicalize_conv_weight_bytes(
+            &stored,
+            &shape,
+            kernel_size,
+            in_channels,
+            out_channels,
+        )?;
+        return Ok(ConvQuantizedWeights {
             subgraph_index,
             weight_tensor_index: tensor_index,
             weight_buffer_index: buffer_index,
+            kernel_size,
+            in_channels,
+            out_channels,
             stored_shape: shape,
             quantized_dimension,
             input_scale,
             output_scale,
             weight_scales,
             weight_zero_points,
+            weight_bytes_oc_kh_kw_ic: canonical_weights,
         });
     }
 
     Err(invalid_template(format!(
-        "no candidate 1x1 Conv2D weight tensor found with shapes {:?} and buffer_size={}",
+        "no candidate Conv2D weight tensor found with shapes {:?} and buffer_size={}",
         accepted_shapes, expected_len
     )))
+}
+
+fn canonicalize_conv_weight_bytes(
+    stored: &[u8],
+    shape: &[i32],
+    kernel_size: usize,
+    in_channels: usize,
+    out_channels: usize,
+) -> Result<Vec<u8>, DenseGemmError> {
+    let expected_len = kernel_size
+        .checked_mul(kernel_size)
+        .and_then(|v| v.checked_mul(in_channels))
+        .and_then(|v| v.checked_mul(out_channels))
+        .ok_or_else(|| invalid_template("conv canonicalize expected_len overflow"))?;
+    if stored.len() != expected_len {
+        return Err(invalid_template(format!(
+            "conv weight length mismatch: expected {}, got {}",
+            expected_len,
+            stored.len()
+        )));
+    }
+    let canonical_shape = [
+        out_channels as i32,
+        kernel_size as i32,
+        kernel_size as i32,
+        in_channels as i32,
+    ];
+    let transposed_shape = [
+        kernel_size as i32,
+        kernel_size as i32,
+        in_channels as i32,
+        out_channels as i32,
+    ];
+    if shape == canonical_shape {
+        return Ok(stored.to_vec());
+    }
+    if shape != transposed_shape {
+        return Err(invalid_template(format!(
+            "unsupported Conv2D weight shape {:?} for kernel_size={} in_channels={} out_channels={}",
+            shape, kernel_size, in_channels, out_channels
+        )));
+    }
+
+    let mut out = vec![0u8; expected_len];
+    for oc in 0..out_channels {
+        for ky in 0..kernel_size {
+            for kx in 0..kernel_size {
+                for ic in 0..in_channels {
+                    let src_idx = (((ky * kernel_size + kx) * in_channels + ic) * out_channels)
+                        + oc;
+                    let dst_idx = (((oc * kernel_size + ky) * kernel_size + kx) * in_channels)
+                        + ic;
+                    out[dst_idx] = stored[src_idx];
+                }
+            }
+        }
+    }
+    Ok(out)
 }
 
 pub(crate) fn inspect_packages(blob: &[u8]) -> Vec<PackageView> {

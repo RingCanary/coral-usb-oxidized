@@ -1,8 +1,11 @@
 # Tools
 
-This directory is pruned in a compatibility-safe way.
+This directory is split between the active native RE path and compatibility/archive surfaces.
 
-## Active tool implementations
+## Active Phase 4 path
+
+These are still on the live path for pure-rusb replay, native RE, or bounded
+Phase 4 materialization work.
 
 Core USB workflow:
 
@@ -16,7 +19,10 @@ Core USB workflow:
 - `test_usb_command_dispatch.sh`
 - `usb_wedge_diag.sh`
 
-Live compile/RE paths still used by `src/` or `scripts/`:
+## Transitional compiler-assisted tooling
+
+These are still referenced by active research scripts, but they are not the
+target end-state for Phase 4 completion/control.
 
 - `generate_dense_quant_tflite.py`
 - `dense_template_pipeline.sh`
@@ -29,7 +35,10 @@ Live compile/RE paths still used by `src/` or `scripts/`:
 - `edgetpu_delegate_smoke.sh`
 - `edgetpu_delegate_smoke.c`
 
-## Archived but shimmed
+## Compatibility/archive shims
+
+These top-level paths remain only as compatibility forwards into `tools/archive/`.
+They should not be treated as the active repo surface.
 
 The following top-level tool paths are compatibility shims forwarding to `tools/archive/`:
 

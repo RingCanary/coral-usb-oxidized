@@ -23,8 +23,11 @@ cc = "1.2.16"
 
 [features]
 default = []
+# Compatibility-only surface for delegate/TFLite/libedgetpu examples.
+# The active Phase 4 path should build and run without this feature.
 legacy-runtime = []
 
+# Compatibility-only example surface below this point.
 [[example]]
 name = "basic_usage"
 required-features = ["legacy-runtime"]

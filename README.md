@@ -2,15 +2,34 @@
 
 Rust SDK/driver layer for Google Coral USB Accelerator:
 
-- pure-rusb control/data-plane tooling (no legacy runtime linkage)
-- optional legacy delegate/TFLite interoperability paths
+- active path: pure-rusb control/data-plane tooling and native RE/materialization helpers
+- compatibility path: legacy delegate/TFLite/compiler interoperability when explicitly needed
 
 ## What this crate provides
 
-- Coral USB detection (`1a6e:089a` and `18d1:9302`)
-- EdgeTPU delegate creation through `edgetpu_c.h`
-- TensorFlow Lite C API wrappers for model/interpreter/tensor operations
-- Example programs for device verification and delegate/TFLite flows
+- Pure-`rusb` Coral USB detection and runtime control (`1a6e:089a`, `18d1:9302`)
+- Native replay, extraction, patching, and RE helpers for executable/parameter-state work
+- Compatibility-only `legacy-runtime` examples for delegate/TFLite interop
+
+## Start here
+
+If you are working on the current native path, start with:
+
+- `docs/active_path.md`
+- `docs/phase4_completion_control_plan_2026-03-07.md`
+- `docs/phase4_conv2d_k3_param_region_2026-03-07.md`
+- `docs/phase4_conv2d_k3_native_param_materialize_2026-03-07.md`
+- `docs/phase4_conv2d_k3_eo_localization_2026-03-07.md`
+- `WORKLOG.md`
+
+Current bounded completion target:
+
+- single-op Conv2D
+- `kernel_size=3`
+- `stride=1`
+- `padding=same`
+- `bias=off`
+- same-product spatial moves
 
 ## Raspberry Pi 5 setup
 
@@ -22,27 +41,7 @@ sudo apt-get install -y \
   git curl build-essential pkg-config libusb-1.0-0-dev clang llvm-dev libclang-dev gnupg
 ```
 
-### 2) Install EdgeTPU runtime (modern apt keyring flow)
-
-```bash
-sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | \
-  sudo gpg --dearmor -o /etc/apt/keyrings/coral-edgetpu.gpg
-echo "deb [signed-by=/etc/apt/keyrings/coral-edgetpu.gpg] https://packages.cloud.google.com/apt coral-edgetpu-stable main" | \
-  sudo tee /etc/apt/sources.list.d/coral-edgetpu.list >/dev/null
-sudo apt-get update
-sudo apt-get install -y libedgetpu1-std libedgetpu-dev
-```
-
-### 3) Install TensorFlow Lite runtime/dev library
-
-```bash
-sudo apt-get install -y libtensorflow-lite-dev
-```
-
-On Debian/Raspberry Pi OS this typically installs `libtensorflow-lite.so` under `/usr/lib/aarch64-linux-gnu`.
-
-### 4) USB permissions (required for non-root delegate creation)
+### 2) USB permissions
 
 ```bash
 cat <<'EOF' | sudo tee /etc/udev/rules.d/71-edgetpu.rules >/dev/null
@@ -56,7 +55,7 @@ sudo udevadm trigger
 
 You need a new login session after `usermod -aG`.
 
-### 5) Build and smoke test
+### 3) Build and smoke test the active pure-rusb path
 
 ```bash
 cargo check --lib
@@ -64,18 +63,27 @@ cargo run --example rusb_control_plane_probe -- --verbose-configs
 cargo run --example rusb_serialized_exec_replay -- --help
 ```
 
-For legacy delegate/TFLite examples, enable `legacy-runtime`:
+### 4) Legacy compatibility stack (only if explicitly needed)
+
+Install this only for compatibility examples that require `legacy-runtime`, TensorFlow Lite, or `libedgetpu`.
 
 ```bash
-cargo run --features legacy-runtime --example basic_usage
-cargo run --features legacy-runtime --example simple_delegate
-cargo run --features legacy-runtime --example tflite_test
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/coral-edgetpu.gpg
+echo "deb [signed-by=/etc/apt/keyrings/coral-edgetpu.gpg] https://packages.cloud.google.com/apt coral-edgetpu-stable main" | \
+  sudo tee /etc/apt/sources.list.d/coral-edgetpu.list >/dev/null
+sudo apt-get update
+sudo apt-get install -y libedgetpu1-std libedgetpu-dev libtensorflow-lite-dev
 ```
+
+Legacy usage details are in `docs/legacy_compatibility.md`.
 
 ## Linking behavior
 
 With `--features legacy-runtime`, the build script links `libedgetpu` and a
-TensorFlow Lite C runtime from these locations:
+TensorFlow Lite C runtime from these locations. This is a compatibility path,
+not the active Phase 4 runtime path.
 
 - `/usr/lib`
 - `/usr/local/lib`
@@ -94,7 +102,8 @@ By default, TensorFlow Lite linking prefers `libtensorflowlite_c.so` when
 present, otherwise falls back to distro naming (`libtensorflow-lite.so`).
 
 Without `legacy-runtime`, no `libedgetpu`/`libtensorflowlite*` link flags are
-added. This is the pure-rusb mode for protocol RE and direct transport work.
+added. This is the active pure-rusb mode for protocol RE, replay, and native
+materialization work.
 
 ## Device behavior
 
@@ -107,6 +116,8 @@ Both IDs are expected and should be included in udev rules.
 
 ## Examples
 
+Active pure-rusb/native path:
+
 ```bash
 cargo run --example rusb_control_plane_probe -- --verbose-configs
 cargo run --example rusb_serialized_exec_replay -- --help
@@ -114,7 +125,7 @@ cargo run --example rusb_param_glitch_fuzz -- --help
 cargo run --example rust_dense_template_compile -- --help
 ```
 
-Legacy delegate/TFLite/GEMM examples (requires `legacy-runtime`):
+Compatibility-only legacy delegate/TFLite/GEMM examples (requires `legacy-runtime`):
 
 ```bash
 cargo run --features legacy-runtime --example basic_usage
@@ -128,6 +139,9 @@ cargo run --features legacy-runtime --example gemm_int8_dynamic -- <dense_templa
 ```
 
 ## Offline EdgeTPU package extractor
+
+This remains useful for inspecting compiler-produced artifacts during RE, but it
+is not part of the active native artifact-creation path.
 
 Use the standalone extractor to inspect `DWN1` package(s) embedded inside
 `*_edgetpu.tflite` files and dump serialized executable blobs.
@@ -160,6 +174,10 @@ This decodes instruction chunk sizes, relocation metadata (`field_offsets`),
 layer metadata, and parameter payload sizes from `serialized_executable_*.bin`.
 
 ## USB tracing toolkit
+
+This list still mixes active runtime/control helpers with transitional
+compiler-assisted research helpers. For the stricter taxonomy, see
+`tools/README.md`.
 
 For protocol-level and syscall-level capture helpers, use:
 

@@ -40,7 +40,8 @@ pub use crate::family_profile::{
 pub use crate::flatbuffer::{
     executable_type_name, extract_instruction_chunk_from_serialized_executable,
     extract_serialized_executables_from_tflite, extract_tflite_conv1x1_quant_params,
-    Conv1x1QuantParams, SerializedExecutableBlob,
+    extract_tflite_conv_quantized_weights, Conv1x1QuantParams, ConvQuantizedWeights,
+    SerializedExecutableBlob,
 };
 pub use crate::function_gemma::{
     FunctionGemmaDims, FunctionGemmaError, FunctionGemmaLayerLinearNames, FunctionGemmaLinearStage,
