@@ -14,6 +14,7 @@ SAME_PRODUCT="${SAME_PRODUCT:-1024}"
 HEIGHTS_CSV="${HEIGHTS_CSV:-1,2,4,8,16,32,64,128}"
 CHANNELS_CSV="${CHANNELS_CSV:-64}"
 OUT_CHANNELS_CSV="${OUT_CHANNELS_CSV:-}"
+CASES_CSV="${CASES_CSV:-}"
 
 cases=()
 
@@ -40,6 +41,23 @@ if [[ "$MODE" == "sameprod" ]]; then
       W=$((SAME_PRODUCT / H))
       cases+=("$H $W $ic $oc")
     done
+  done
+elif [[ "$MODE" == "explicit" ]]; then
+  [[ -n "$CASES_CSV" ]] || {
+    echo "CASES_CSV is required when MODE=explicit" >&2
+    exit 1
+  }
+  IFS=',' read -r -a explicit_cases <<<"$CASES_CSV"
+  for entry in "${explicit_cases[@]}"; do
+    [[ "$entry" =~ ^([0-9]+)x([0-9]+):([0-9]+):([0-9]+)$ ]] || {
+      echo "invalid explicit case: $entry (expected HxW:IC:OC)" >&2
+      exit 1
+    }
+    H="${BASH_REMATCH[1]}"
+    W="${BASH_REMATCH[2]}"
+    ic="${BASH_REMATCH[3]}"
+    oc="${BASH_REMATCH[4]}"
+    cases+=("$H $W $ic $oc")
   done
 else
   cases=(
@@ -94,7 +112,12 @@ with open(tsv_path, 'a', encoding='utf-8') as f:
 PY
 done
 
-python3 - <<'PY' "$OUT_DIR/size_table.tsv" "$OUT_DIR/SUMMARY.txt" "$OUT_DIR/families.json" "$MODE" "$SAME_PRODUCT"
+SUMMARY_SAME_PRODUCT="$SAME_PRODUCT"
+if [[ "$MODE" == "explicit" ]]; then
+  SUMMARY_SAME_PRODUCT="mixed"
+fi
+
+python3 - <<'PY' "$OUT_DIR/size_table.tsv" "$OUT_DIR/SUMMARY.txt" "$OUT_DIR/families.json" "$MODE" "$SUMMARY_SAME_PRODUCT"
 import csv, json, pathlib, sys
 rows = list(csv.DictReader(open(sys.argv[1]), delimiter='\t'))
 mode = sys.argv[4]
