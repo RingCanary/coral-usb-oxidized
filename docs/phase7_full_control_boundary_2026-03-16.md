@@ -66,12 +66,17 @@ Conv2D:
 - Phase 5 completed a bounded mixed-product `fixed_height=8` `EO=6496` family
 - Phase 6 widened that `H=8` family to the full checked-in corridor
   `8x72..8x192` across `p32/p64/p128`
+- Phase 7 completed a second bounded mixed-product `fixed_height=12`
+  `EO=6512` corridor `12x64..12x168` across `p32/p64/p128`
+- the excluded `12x176/184/192` tail is now localized to a native `p32`
+  parameter-materialization gap, not an EO-family gap
 
 References:
 
 - `docs/phase4_conv2d_k3_completion_2026-03-16.md`
 - `docs/phase5_conv2d_k3_h8_band_completion_2026-03-16.md`
 - `docs/phase6_conv2d_k3_h8_corridor_completion_2026-03-16.md`
+- `docs/phase7_conv2d_k3_h12_corridor_completion_2026-03-16.md`
 
 This is stronger than compiler-assisted replay control: the active bounded path
 materializes params and EO natively and reproduces target hashes on DUT.
@@ -216,8 +221,10 @@ Until that closes, the repo does not have a general native Dense codegen story.
 
 For Conv2D, the next frontier is:
 
-- test whether the `schema_version=2` corridor model generalizes beyond
-  `fixed_height=8`
+- extend beyond the now-proven `fixed_height=8` and bounded `fixed_height=12`
+  corridors
+- close the localized native `p32` parameter-materialization gap at
+  `12x176/184/192`
 - reduce lookup residue toward a smaller reusable law
 - determine whether adjacent geometry bands can also be frozen and emitted
   natively

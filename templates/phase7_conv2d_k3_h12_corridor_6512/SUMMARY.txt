@@ -1,0 +1,54 @@
+family_id=phase7_conv2d_k3_h12_corridor_6512_v1
+family_mode=fixed_height_band
+fixed_height=12
+source_artifact=traces/analysis/phase4-conv2d-k3-family-scout-20260316T114108Z
+lookup_cap=96
+predict_mode=threepoint
+[p32] channels=32
+  h12_w64: source=rule_lookup lookup_rules=0
+  h12_w72: source=rule_lookup lookup_rules=53
+  h12_w80: source=rule_lookup lookup_rules=36
+  h12_w88: source=rule_lookup lookup_rules=87
+  h12_w96: source=rule_lookup lookup_rules=26
+  h12_w104: source=rule_lookup lookup_rules=59
+  h12_w112: source=rule_lookup lookup_rules=35
+  h12_w120: source=rule_lookup lookup_rules=75
+  h12_w128: source=noop lookup_rules=0
+  h12_w136: source=rule_lookup lookup_rules=61
+  h12_w144: source=rule_lookup lookup_rules=34
+  h12_w152: source=rule_lookup lookup_rules=91
+  h12_w160: source=rule_lookup lookup_rules=32
+  h12_w168: source=rule_lookup lookup_rules=62
+  max_lookup_rules=91
+[p64] channels=64
+  h12_w64: source=rule_lookup lookup_rules=0
+  h12_w72: source=rule_lookup lookup_rules=25
+  h12_w80: source=rule_lookup lookup_rules=13
+  h12_w88: source=rule_lookup lookup_rules=24
+  h12_w96: source=rule_lookup lookup_rules=15
+  h12_w104: source=rule_lookup lookup_rules=21
+  h12_w112: source=rule_lookup lookup_rules=20
+  h12_w120: source=rule_lookup lookup_rules=19
+  h12_w128: source=noop lookup_rules=0
+  h12_w136: source=rule_lookup lookup_rules=29
+  h12_w144: source=rule_lookup lookup_rules=11
+  h12_w152: source=rule_lookup lookup_rules=22
+  h12_w160: source=rule_lookup lookup_rules=13
+  h12_w168: source=rule_lookup lookup_rules=20
+  max_lookup_rules=29
+[p128] channels=128
+  h12_w64: source=rule_lookup lookup_rules=0
+  h12_w72: source=rule_lookup lookup_rules=28
+  h12_w80: source=rule_lookup lookup_rules=20
+  h12_w88: source=rule_lookup lookup_rules=27
+  h12_w96: source=rule_lookup lookup_rules=9
+  h12_w104: source=rule_lookup lookup_rules=21
+  h12_w112: source=rule_lookup lookup_rules=19
+  h12_w120: source=rule_lookup lookup_rules=21
+  h12_w128: source=noop lookup_rules=0
+  h12_w136: source=rule_lookup lookup_rules=26
+  h12_w144: source=rule_lookup lookup_rules=15
+  h12_w152: source=rule_lookup lookup_rules=25
+  h12_w160: source=rule_lookup lookup_rules=11
+  h12_w168: source=rule_lookup lookup_rules=21
+  max_lookup_rules=28

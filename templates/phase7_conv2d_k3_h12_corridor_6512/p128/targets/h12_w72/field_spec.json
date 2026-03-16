@@ -1,0 +1,101 @@
+{
+  "offset_rules": [
+    {
+      "lane": "lane32",
+      "offset": 1096,
+      "policy": "endpoint",
+      "model": "const",
+      "domain": "s",
+      "bits": 8,
+      "bit_range": [
+        8,
+        15
+      ]
+    },
+    {
+      "lane": "lane16",
+      "offset": 3778,
+      "policy": "endpoint",
+      "model": "tile-linear",
+      "domain": "s",
+      "bits": 8,
+      "bit_range": [
+        0,
+        7
+      ]
+    },
+    {
+      "lane": "lane32",
+      "offset": 3816,
+      "policy": "endpoint",
+      "model": "tile-linear",
+      "domain": "s",
+      "bits": 8,
+      "bit_range": [
+        0,
+        7
+      ]
+    },
+    {
+      "lane": "lane16",
+      "offset": 4078,
+      "policy": "endpoint",
+      "model": "tile-linear",
+      "domain": "s",
+      "bits": 8,
+      "bit_range": [
+        0,
+        7
+      ]
+    },
+    {
+      "lane": "lane32",
+      "offset": 4164,
+      "policy": "endpoint",
+      "model": "tile-linear",
+      "domain": "s",
+      "bits": 4,
+      "bit_range": [
+        11,
+        14
+      ]
+    },
+    {
+      "lane": "lane32",
+      "offset": 4168,
+      "policy": "endpoint",
+      "model": "tile-linear",
+      "domain": "u",
+      "bits": 8,
+      "bit_range": [
+        24,
+        31
+      ]
+    },
+    {
+      "lane": "lane32",
+      "offset": 4172,
+      "policy": "endpoint",
+      "model": "tile-linear",
+      "domain": "mod",
+      "bits": 8,
+      "bit_range": [
+        8,
+        15
+      ]
+    },
+    {
+      "lane": "lane32",
+      "offset": 4180,
+      "policy": "endpoint",
+      "model": "tile-linear",
+      "domain": "mod",
+      "bits": 2,
+      "bit_range": [
+        26,
+        27
+      ]
+    }
+  ],
+  "residue_rules": []
+}
