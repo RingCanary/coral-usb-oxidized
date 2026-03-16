@@ -80,6 +80,7 @@ pub(crate) struct Config {
     pub(crate) post_reset_sleep_ms: u64,
     pub(crate) firmware_path: Option<String>,
     pub(crate) input_file: Option<String>,
+    pub(crate) input_batch_file: Option<String>,
     pub(crate) weights_row_major_u8_file: Option<String>,
     pub(crate) weights_row_major_i8_file: Option<String>,
     pub(crate) weights_pattern_index_mod: bool,
@@ -168,6 +169,7 @@ pub(crate) fn usage(program: &str) {
     println!("  --timeout-ms N            USB timeout ms (default: 6000)");
     println!("  --chunk-size N            Descriptor chunk size (default: 1048576)");
     println!("  --input-file PATH         Use raw input bytes from file instead of ramp");
+    println!("  --input-batch-file PATH   Use runs*input_bytes raw bytes; row i is sent on run i");
     println!("  --weights-row-major-u8-file PATH  Build parameter stream from row-major u8 weights using family profile shape");
     println!("  --weights-row-major-i8-file PATH  Build parameter stream from row-major i8 weights using family profile shape");
     println!("  --weights-pattern-index-mod       Build row-major synthetic weights value=i%modulus (requires --family-profile)");
@@ -489,6 +491,7 @@ pub(crate) fn parse_args_from(args: Vec<String>) -> Result<Config, Box<dyn Error
         post_reset_sleep_ms: 600,
         firmware_path: None,
         input_file: None,
+        input_batch_file: None,
         weights_row_major_u8_file: None,
         weights_row_major_i8_file: None,
         weights_pattern_index_mod: false,
@@ -612,6 +615,14 @@ pub(crate) fn parse_args_from(args: Vec<String>) -> Result<Config, Box<dyn Error
                 config.input_file = Some(
                     args.get(i)
                         .ok_or("--input-file requires value")?
+                        .to_string(),
+                );
+            }
+            "--input-batch-file" => {
+                i += 1;
+                config.input_batch_file = Some(
+                    args.get(i)
+                        .ok_or("--input-batch-file requires value")?
                         .to_string(),
                 );
             }
@@ -1157,6 +1168,18 @@ pub(crate) fn parse_args_from(args: Vec<String>) -> Result<Config, Box<dyn Error
             )
             .into());
         }
+    }
+    if let Some(path) = config.input_batch_file.as_ref() {
+        if !Path::new(path).is_file() {
+            return Err(format!(
+                "--input-batch-file path does not exist or is not a file: {}",
+                path
+            )
+            .into());
+        }
+    }
+    if config.input_file.is_some() && config.input_batch_file.is_some() {
+        return Err("choose only one input source: --input-file | --input-batch-file".into());
     }
 
     let weight_source_count = (config.weights_row_major_u8_file.is_some() as usize)

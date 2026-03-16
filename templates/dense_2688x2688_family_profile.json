@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "profile_id": "dense_2688_square_anchor",
+  "anchor_model": "dense_2688x2688_quant_edgetpu.tflite",
+  "stored_weight_shape": [2688, 2688],
+  "replay_defaults": {
+    "input_bytes": 2688,
+    "output_bytes": 2688,
+    "bootstrap_known_good_order": true
+  },
+  "notes": "Square 2688x2688 dense anchor profile for replay benchmarks with synthetic row-major weight streams."
+}

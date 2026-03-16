@@ -53,7 +53,31 @@ fn choose_execution_executable<'a>(
     Err("no EXECUTION_ONLY or STAND_ALONE executable found".into())
 }
 
-fn load_input(config: &Config) -> Result<Vec<u8>, Box<dyn Error>> {
+fn load_inputs(config: &Config) -> Result<Vec<Vec<u8>>, Box<dyn Error>> {
+    if let Some(path) = &config.input_batch_file {
+        let data = std::fs::read(path)?;
+        let expected_len = config
+            .runs
+            .checked_mul(config.input_bytes)
+            .ok_or("input batch size overflow")?;
+        if data.len() != expected_len {
+            return Err(format!(
+                "input batch file size mismatch: expected {} bytes (= runs {} * input_bytes {}), got {} ({})",
+                expected_len,
+                config.runs,
+                config.input_bytes,
+                data.len(),
+                path
+            )
+            .into());
+        }
+        let mut batches = Vec::with_capacity(config.runs);
+        for chunk in data.chunks_exact(config.input_bytes) {
+            batches.push(chunk.to_vec());
+        }
+        return Ok(batches);
+    }
+
     if let Some(path) = &config.input_file {
         let data = std::fs::read(path)?;
         if data.len() != config.input_bytes {
@@ -64,14 +88,14 @@ fn load_input(config: &Config) -> Result<Vec<u8>, Box<dyn Error>> {
             )
             .into());
         }
-        return Ok(data);
+        return Ok((0..config.runs).map(|_| data.clone()).collect());
     }
 
     let mut data = vec![0u8; config.input_bytes];
     for (idx, byte) in data.iter_mut().enumerate() {
         *byte = (idx % 251) as u8;
     }
-    Ok(data)
+    Ok((0..config.runs).map(|_| data.clone()).collect())
 }
 
 fn fnv1a64(bytes: &[u8]) -> u64 {
@@ -2709,7 +2733,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .collect();
     let run_exe = choose_execution_executable(&executables, config.exec_index)?;
 
-    let input_bytes = load_input(&config)?;
+    let input_batches = load_inputs(&config)?;
 
     let mut instruction_patch_sources: Vec<String> = Vec::new();
     if let Some(spec_path) = config.instruction_patch_spec.as_ref() {
@@ -3069,7 +3093,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             if !run_exe.parameters_stream.is_empty() {
                 send_parameter_payload(&driver, config, &run_exe.parameters_stream, "run param")?;
             }
-            driver.send_descriptor_payload_raw(config.input_activations_tag, &input_bytes)?;
+            let input_bytes = &input_batches[run];
+            let input_hash = fnv1a64(input_bytes);
+            println!(
+                "  Input: bytes={} fnv1a64=0x{:016x} head={:02x?}",
+                input_bytes.len(),
+                input_hash,
+                &input_bytes[..input_bytes.len().min(16)]
+            );
+            driver.send_descriptor_payload_raw(config.input_activations_tag, input_bytes)?;
 
             match driver.read_event_packet() {
                 Ok(event) => println!(
@@ -3112,7 +3144,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .fold(f64::NEG_INFINITY, f64::max);
             println!(
                 "Run timing summary: runs={} avg_ms={:.3} min_ms={:.3} max_ms={:.3}",
-                run_ms_values.len(), avg, min, max
+                run_ms_values.len(),
+                avg,
+                min,
+                max
             );
         }
 
